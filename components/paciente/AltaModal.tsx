@@ -75,7 +75,7 @@ export default function AltaModal({ paciente, exames, periodos, onClose, onAltaC
       <div class="info">
         <p><strong>Nome:</strong> ${paciente.nome}</p>
         <p><strong>Data de Nascimento:</strong> ${fmtData(paciente.data_nascimento)} (${calcAge(paciente.data_nascimento)})</p>
-        <p><strong>Plano:</strong> ${paciente.planoSaude ?? paciente.plano_saude}</p>
+        <p><strong>Plano:</strong> ${paciente.plano_saude}</p>
         <p><strong>Internação:</strong> ${fmtData(paciente.data_internacao)} às ${paciente.hora_internacao}</p>
         ${paciente.hipoteses ? `<p><strong>Hipóteses:</strong> ${paciente.hipoteses}</p>` : ''}
       </div>
