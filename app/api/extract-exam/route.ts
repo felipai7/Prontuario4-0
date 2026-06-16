@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export async function POST(request: NextRequest) {
-  // Auth check
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
@@ -14,6 +14,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { base64, mediaType } = body
 
+    const genAI = new GoogleGenerativeAI(apiKey)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+
     const prompt =
       'Analise este resultado de exame médico e retorne APENAS um JSON válido ' +
       '(sem markdown, sem texto extra) com este formato:\n' +
@@ -23,33 +26,13 @@ export async function POST(request: NextRequest) {
       '"observacoes":"texto ou null"}\n' +
       'Use conhecimento médico padrão para "alterado" quando não há referência explícita.'
 
-    // Prepare content for Google's format
     const imagePart = {
-      inlineData: {
-        mimeType: mediaType,
-        data: base64,
-      }
+      inlineData: { mimeType: mediaType, data: base64 }
     }
 
-    const textPart = { text: prompt }
+    const result = await model.generateContent([imagePart, prompt])
+    const raw = result.response.text().trim()
 
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-        body: JSON.stringify({
-          contents: [{
-            parts: [imagePart, textPart]
-          }]
-        })
-      }
-    )
-
-    const data = await res.json()
-    if (!res.ok) throw new Error(data?.error?.message || `HTTP ${res.status}`)
-
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
     let parsed: any = null
     const m = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
     try { parsed = JSON.parse(m ? m[1].trim() : raw) } catch {}
