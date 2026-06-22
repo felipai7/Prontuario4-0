@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleGenAI } from '@google/genai'
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -14,8 +14,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { base64, mediaType } = body
 
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' })
+    const ai = new GoogleGenAI({ apiKey })
 
     const prompt =
       'Analise este resultado de exame médico e retorne APENAS um JSON válido ' +
@@ -26,12 +25,15 @@ export async function POST(request: NextRequest) {
       '"observacoes":"texto ou null"}\n' +
       'Use conhecimento médico padrão para "alterado" quando não há referência explícita.'
 
-    const imagePart = {
-      inlineData: { mimeType: mediaType, data: base64 }
-    }
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        { inlineData: { mimeType: mediaType, data: base64 } },
+        prompt,
+      ],
+    })
 
-    const result = await model.generateContent([imagePart, prompt])
-    const raw = result.response.text().trim()
+    const raw = response.text?.trim() ?? ''
 
     let parsed: any = null
     const m = raw.match(/```(?:json)?\s*([\s\S]*?)```/)

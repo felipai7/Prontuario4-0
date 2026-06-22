@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { calcAcumuladoTotal, calcAcumuladoMovel, fmtData } from '@/lib/utils'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleGenAI } from '@google/genai'
 import type { Paciente, Exame, PeriodoBalanco } from '@/types'
 
 export async function POST(request: NextRequest) {
@@ -43,10 +43,12 @@ export async function POST(request: NextRequest) {
       `BALANÇO HÍDRICO:\n${bhSummary}\n\n` +
       `Redija resumo de alta com: motivo de internação, evolução clínica, achados laboratoriais, balanço hídrico, condições de alta. Linguagem médica formal.`
 
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' })
-    const result = await model.generateContent(prompt)
-    const texto = result.response.text().trim()
+    const ai = new GoogleGenAI({ apiKey })
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [prompt],
+    })
+    const texto = response.text?.trim() ?? ''
 
     return NextResponse.json({ texto })
   } catch (e: any) {
