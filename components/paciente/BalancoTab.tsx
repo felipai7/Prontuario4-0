@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import {
   calcAguaEndogena, calcPerdasInsensiveis, calcBalanco,
   calcAcumuladoTotal, calcAcumuladoMovel, calcFirstPeriod, calcNextPeriod,
-  fmtTurno, colorParcial, pad
+  fmtTurno, colorParcial
 } from '@/lib/utils'
 import type { Paciente, PeriodoBalanco, ToastData } from '@/types'
 
@@ -15,205 +15,360 @@ interface Props {
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
 }
 
-const CAMPOS_GANHO  = ['venoso','oral_enteral'] as const
-const CAMPOS_PERDA  = ['diurese','dialise','febre','evacuacao','dreno','vomitos','sne_sng','ostomia'] as const
-const LABELS: Record<string, string> = {
-  venoso:'Venoso', oral_enteral:'Oral/Enteral', agua_endogena:'Água Endógena (auto)',
-  diurese:'Diurese', dialise:'UF Diálise', febre:'Febre', evacuacao:'Evacuação',
-  dreno:'Dreno', vomitos:'Vômitos', sne_sng:'SNE/SNG', ostomia:'Ostomia',
-  perdas_insensiveis:'Perdas Insensíveis (auto)',
+// ── Arithmetic expression evaluator ──────────────────────────────────────────
+function evalMath(expr: string): number {
+  const clean = (expr ?? '').trim()
+  if (!clean || clean === '0') return 0
+  if (!/^[\d\s+\-*/().]+$/.test(clean)) return parseFloat(clean) || 0
+  try {
+    const result = new Function('return (' + clean + ')')()
+    if (typeof result === 'number' && isFinite(result)) return Math.max(0, Math.round(result * 10) / 10)
+  } catch {}
+  return parseFloat(clean) || 0
 }
 
+// ── Row definitions ───────────────────────────────────────────────────────────
+type RowType = 'gain' | 'loss' | 'auto' | 'sub-gain' | 'sub-loss' | 'parcial' | 'acum'
+type RowDef  = { key: string; label: string; type: RowType }
+
+const ROWS: RowDef[] = [
+  { key: 'venoso',             label: 'Venoso',              type: 'gain' },
+  { key: 'oral_enteral',       label: 'Oral/Enteral',        type: 'gain' },
+  { key: 'agua_endogena',      label: 'Água Endógena',       type: 'auto' },
+  { key: '__total_ganhos',     label: 'TOTAL GANHOS',        type: 'sub-gain' },
+  { key: 'diurese',            label: 'Diurese',             type: 'loss' },
+  { key: 'dialise',            label: 'UF Diálise',          type: 'loss' },
+  { key: 'febre',              label: 'Febre',               type: 'loss' },
+  { key: 'evacuacao',          label: 'Evacuação',           type: 'loss' },
+  { key: 'dreno',              label: 'Dreno',               type: 'loss' },
+  { key: 'vomitos',            label: 'Vômitos',             type: 'loss' },
+  { key: 'sne_sng',            label: 'SNG/SNE',             type: 'loss' },
+  { key: 'ostomia',            label: 'Ostomia',             type: 'loss' },
+  { key: 'perdas_insensiveis', label: 'Perdas Insensíveis',  type: 'auto' },
+  { key: '__total_perdas',     label: 'TOTAL PERDAS',        type: 'sub-loss' },
+  { key: '__parcial',          label: 'Parcial 12h',         type: 'parcial' },
+  { key: '__acumulado',        label: 'Acumulado',           type: 'acum' },
+]
+
+function getVal(key: string, p: PeriodoBalanco, acum: number): number {
+  switch (key) {
+    case '__total_ganhos': return p.venoso + p.oral_enteral + p.agua_endogena
+    case '__total_perdas': return p.diurese + p.dialise + p.febre + p.evacuacao + p.dreno + p.vomitos + p.sne_sng + p.ostomia + p.perdas_insensiveis
+    case '__parcial':      return calcBalanco(p).parcial
+    case '__acumulado':    return acum
+    default:               return (p as any)[key] ?? 0
+  }
+}
+
+function cellCls(type: RowType, value: number): string {
+  if (type === 'sub-gain')  return 'bg-emerald-50 text-emerald-800 font-bold'
+  if (type === 'sub-loss')  return 'bg-red-50 text-red-800 font-bold'
+  if (type === 'gain')      return 'text-emerald-700'
+  if (type === 'loss')      return 'text-red-600'
+  if (type === 'auto')      return 'text-slate-400 italic'
+  // parcial / acum — colour by sign/magnitude
+  if (value > 500)          return 'bg-red-100 text-red-700 font-bold'
+  if (value > 0)            return 'text-orange-500 font-semibold'
+  if (value > -500)         return 'text-emerald-600 font-semibold'
+  return 'bg-blue-50 text-blue-700 font-bold'
+}
+
+function fmtVal(type: RowType, value: number): string {
+  if (type === 'parcial' || type === 'acum')
+    return `${value > 0 ? '+' : ''}${value.toFixed(0)}`
+  return value === 0 ? '0' : value.toFixed(0)
+}
+
+// ── Form state ────────────────────────────────────────────────────────────────
 type FormState = {
   venoso: string; oral_enteral: string;
   diurese: string; dialise: string; febre: string; evacuacao: string;
   dreno: string; vomitos: string; sne_sng: string; ostomia: string;
 }
-
 function emptyForm(): FormState {
-  return { venoso:'0', oral_enteral:'0', diurese:'0', dialise:'0', febre:'0', evacuacao:'0', dreno:'0', vomitos:'0', sne_sng:'0', ostomia:'0' }
+  return { venoso:'0', oral_enteral:'0', diurese:'0', dialise:'0', febre:'0',
+           evacuacao:'0', dreno:'0', vomitos:'0', sne_sng:'0', ostomia:'0' }
 }
 
-export default function BalancoTab({ paciente, periodos, onRefresh, showToast }: Props) {
-  const supabase  = createClient()
-  const [adding,  setAdding]  = useState(false)
-  const [form,    setForm]    = useState<FormState>(emptyForm())
-  const [saving,  setSaving]  = useState(false)
+const CAMPOS_GANHO = ['venoso','oral_enteral'] as const
+const CAMPOS_PERDA = ['diurese','dialise','febre','evacuacao','dreno','vomitos','sne_sng','ostomia'] as const
+const LABELS: Record<string, string> = {
+  venoso:'Venoso', oral_enteral:'Oral/Enteral',
+  diurese:'Diurese', dialise:'UF Diálise', febre:'Febre', evacuacao:'Evacuação',
+  dreno:'Dreno', vomitos:'Vômitos', sne_sng:'SNG/SNE', ostomia:'Ostomia',
+}
 
-  // Determine next period spec
-  // Normalise to HH:MM before appending :00 — avoids "T12:00:00:00" if stored with seconds
+// ── Component ─────────────────────────────────────────────────────────────────
+export default function BalancoTab({ paciente, periodos, onRefresh, showToast }: Props) {
+  const supabase = createClient()
+
+  const [formMode,        setFormMode]        = useState<'add' | 'edit' | null>(null)
+  const [editingPeriodo,  setEditingPeriodo]  = useState<PeriodoBalanco | null>(null)
+  const [form,            setForm]            = useState<FormState>(emptyForm())
+  const [saving,          setSaving]          = useState(false)
+
+  const setField = (k: keyof FormState, v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  // Periods sorted chronologically (oldest first = left column)
+  const sorted = [...periodos].sort((a, b) =>
+    new Date(a.inicio).getTime() - new Date(b.inicio).getTime()
+  )
+
+  // Running accumulator per period
+  const acumulados = sorted.reduce<number[]>((acc, p, i) => {
+    const prev = i === 0 ? 0 : acc[i - 1]
+    return [...acc, prev + calcBalanco(p).parcial]
+  }, [])
+
+  // Next period spec for "add" mode
   const horaHHMM    = (paciente.hora_internacao ?? '12:00').substring(0, 5)
   const admissionISO = `${paciente.data_internacao}T${horaHHMM}:00`
-  const isFirstPeriod = periodos.length === 0
-  const periodSpec = isFirstPeriod
-    ? calcFirstPeriod(admissionISO)
-    : calcNextPeriod(periodos[periodos.length - 1].fim)
 
-  const peso    = paciente.peso_kg ?? 70
-  const aguaEnd = calcAguaEndogena(periodSpec.horas)
-  const perdIns = calcPerdasInsensiveis(peso, periodSpec.horas)
+  let periodSpec: ReturnType<typeof calcFirstPeriod> | null = null
+  try {
+    periodSpec = periodos.length === 0
+      ? calcFirstPeriod(admissionISO)
+      : calcNextPeriod(periodos[periodos.length - 1].fim)
+  } catch {}
 
-  const setField = (k: keyof FormState, v: string) =>
-    setForm(f => ({ ...f, [k]: v }))
+  const peso   = paciente.peso_kg ?? 70
+  const horas  = formMode === 'edit' && editingPeriodo
+    ? editingPeriodo.horas_periodo
+    : (periodSpec?.horas ?? 12)
+  const aguaEnd = calcAguaEndogena(horas)
+  const perdIns = calcPerdasInsensiveis(peso, horas)
 
+  // ── Add new period ──
   const handleSave = async () => {
+    if (!periodSpec) return
     setSaving(true)
-    const toNum = (v: string) => parseFloat(v) || 0
     const { error } = await supabase.from('periodos_balanco').insert({
       paciente_id:        paciente.id,
       inicio:             periodSpec.inicio.toISOString(),
       fim:                periodSpec.fim.toISOString(),
       turno:              periodSpec.turno,
       horas_periodo:      periodSpec.horas,
-      venoso:             toNum(form.venoso),
-      oral_enteral:       toNum(form.oral_enteral),
+      venoso:             evalMath(form.venoso),
+      oral_enteral:       evalMath(form.oral_enteral),
       agua_endogena:      aguaEnd,
-      diurese:            toNum(form.diurese),
-      dialise:            toNum(form.dialise),
-      febre:              toNum(form.febre),
-      evacuacao:          toNum(form.evacuacao),
-      dreno:              toNum(form.dreno),
-      vomitos:            toNum(form.vomitos),
-      sne_sng:            toNum(form.sne_sng),
-      ostomia:            toNum(form.ostomia),
+      diurese:            evalMath(form.diurese),
+      dialise:            evalMath(form.dialise),
+      febre:              evalMath(form.febre),
+      evacuacao:          evalMath(form.evacuacao),
+      dreno:              evalMath(form.dreno),
+      vomitos:            evalMath(form.vomitos),
+      sne_sng:            evalMath(form.sne_sng),
+      ostomia:            evalMath(form.ostomia),
       perdas_insensiveis: perdIns,
     })
     setSaving(false)
-    if (error) { showToast('Erro ao salvar: ' + error.message, 'error'); return }
-    setAdding(false); setForm(emptyForm()); onRefresh()
-    showToast('Balanço registrado!')
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    cancelForm(); onRefresh(); showToast('Balanço registrado!')
+  }
+
+  // ── Edit existing period ──
+  const startEdit = (p: PeriodoBalanco) => {
+    setEditingPeriodo(p)
+    setForm({
+      venoso:       String(p.venoso),
+      oral_enteral: String(p.oral_enteral),
+      diurese:      String(p.diurese),
+      dialise:      String(p.dialise),
+      febre:        String(p.febre),
+      evacuacao:    String(p.evacuacao),
+      dreno:        String(p.dreno),
+      vomitos:      String(p.vomitos),
+      sne_sng:      String(p.sne_sng),
+      ostomia:      String(p.ostomia),
+    })
+    setFormMode('edit')
+  }
+
+  const handleUpdate = async () => {
+    if (!editingPeriodo) return
+    setSaving(true)
+    const { error } = await supabase.from('periodos_balanco').update({
+      venoso:             evalMath(form.venoso),
+      oral_enteral:       evalMath(form.oral_enteral),
+      agua_endogena:      aguaEnd,
+      diurese:            evalMath(form.diurese),
+      dialise:            evalMath(form.dialise),
+      febre:              evalMath(form.febre),
+      evacuacao:          evalMath(form.evacuacao),
+      dreno:              evalMath(form.dreno),
+      vomitos:            evalMath(form.vomitos),
+      sne_sng:            evalMath(form.sne_sng),
+      ostomia:            evalMath(form.ostomia),
+      perdas_insensiveis: perdIns,
+    }).eq('id', editingPeriodo.id)
+    setSaving(false)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    cancelForm(); onRefresh(); showToast('Balanço atualizado!')
+  }
+
+  const cancelForm = () => {
+    setFormMode(null); setEditingPeriodo(null); setForm(emptyForm())
   }
 
   const acTotal = calcAcumuladoTotal(periodos)
   const acMovel = calcAcumuladoMovel(periodos)
 
+  // ── Form spec for display ──
+  const formSpec = formMode === 'edit' && editingPeriodo
+    ? { label: fmtTurno(editingPeriodo.turno, editingPeriodo.inicio), sub: 'Editando registro existente' }
+    : periodSpec
+      ? { label: fmtTurno(periodSpec.turno, periodSpec.inicio.toISOString()), sub: `${periodSpec.horas.toFixed(1)}h de duração` }
+      : null
+
   return (
     <div className="space-y-4">
       {/* Summary cards */}
       <div className="grid grid-cols-3 gap-3">
-        <SummaryCard
-          label="Balanço Parcial"
-          value={periodos.length > 0 ? calcBalanco(periodos[periodos.length-1]).parcial : null}
-          sub="Último turno"
-        />
-        <SummaryCard label="Acumulado Total" value={periodos.length > 0 ? acTotal : null} sub="Desde admissão" />
-        <SummaryCard label="Acumulado Móvel" value={periodos.length > 0 ? acMovel : null} sub="Últimos 10 turnos (5 dias)" />
+        <SummaryCard label="Balanço Parcial"    value={periodos.length > 0 ? calcBalanco(periodos[periodos.length-1]).parcial : null} sub="Último turno"/>
+        <SummaryCard label="Acumulado Total"    value={periodos.length > 0 ? acTotal : null} sub="Desde admissão"/>
+        <SummaryCard label="Acumulado Móvel"    value={periodos.length > 0 ? acMovel : null} sub="Últimos 10 turnos (5 dias)"/>
       </div>
 
-      {/* Header */}
+      {/* Header row */}
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-slate-700">Registros ({periodos.length} turnos)</h3>
-        {!adding && (
-          <button onClick={() => setAdding(true)}
+        {formMode === null && (
+          <button
+            onClick={() => { if (periodSpec) { setFormMode('add') } else showToast('Não foi possível calcular o próximo turno', 'error') }}
             className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors">
             + Novo Turno
           </button>
         )}
+        {formMode !== null && (
+          <button onClick={cancelForm}
+            className="text-slate-500 hover:text-slate-700 text-sm font-semibold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
+            ✕ Cancelar
+          </button>
+        )}
       </div>
 
-      {/* Add form */}
-      {adding && (
+      {/* Add / Edit form */}
+      {formMode !== null && formSpec && (
         <div className="border-2 border-indigo-200 rounded-xl p-4 bg-indigo-50 space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-semibold text-indigo-900 text-sm">
-                {fmtTurno(periodSpec.turno, periodSpec.inicio.toISOString())}
-              </p>
-              <p className="text-xs text-indigo-600">{periodSpec.horas.toFixed(1)}h de duração</p>
+              <p className="font-semibold text-indigo-900 text-sm">{formSpec.label}</p>
+              <p className="text-xs text-indigo-600">{formSpec.sub}</p>
             </div>
-            <button onClick={() => { setAdding(false); setForm(emptyForm()) }}
-              className="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+            {formMode === 'edit' && (
+              <span className="bg-amber-100 text-amber-700 text-xs font-bold px-2 py-1 rounded-full">✏️ Editando</span>
+            )}
           </div>
 
-          {/* Ganhos */}
           <div>
             <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-2">🟢 Ganhos (mL)</p>
+            <p className="text-xs text-slate-500 mb-2 italic">Aceita expressões: ex. 200+100+50 = 350</p>
             <div className="grid grid-cols-2 gap-2">
               {CAMPOS_GANHO.map(k => (
-                <FormField key={k} label={LABELS[k]} value={form[k as keyof FormState]}
+                <ExprField key={k} label={LABELS[k]} value={form[k as keyof FormState]}
                   onChange={v => setField(k as keyof FormState, v)} />
               ))}
               <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-                <p className="text-xs text-emerald-700 font-medium">{LABELS.agua_endogena}</p>
-                <p className="font-bold text-emerald-800">{aguaEnd.toFixed(1)}</p>
+                <p className="text-xs text-emerald-700 font-medium">Água Endógena (auto)</p>
+                <p className="font-bold text-emerald-800">{aguaEnd.toFixed(1)} mL</p>
               </div>
             </div>
           </div>
 
-          {/* Perdas */}
           <div>
             <p className="text-xs font-bold text-red-600 uppercase tracking-wide mb-2">🔴 Perdas (mL)</p>
             <div className="grid grid-cols-2 gap-2">
               {CAMPOS_PERDA.map(k => (
-                <FormField key={k} label={LABELS[k]} value={form[k as keyof FormState]}
+                <ExprField key={k} label={LABELS[k]} value={form[k as keyof FormState]}
                   onChange={v => setField(k as keyof FormState, v)} />
               ))}
               <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                <p className="text-xs text-red-600 font-medium">{LABELS.perdas_insensiveis}</p>
-                <p className="font-bold text-red-700">{perdIns.toFixed(1)}</p>
-                {!paciente.peso_kg && <p className="text-xs text-red-400">Peso não registrado (usando 70 Kg)</p>}
+                <p className="text-xs text-red-600 font-medium">Perdas Insensíveis (auto)</p>
+                <p className="font-bold text-red-700">{perdIns.toFixed(1)} mL</p>
+                {!paciente.peso_kg && <p className="text-xs text-red-400">Usando 70 Kg</p>}
               </div>
             </div>
           </div>
 
-          <button onClick={handleSave} disabled={saving}
+          <button onClick={formMode === 'add' ? handleSave : handleUpdate} disabled={saving}
             className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors">
-            {saving ? 'Salvando...' : 'Registrar Balanço'}
+            {saving ? 'Salvando...' : formMode === 'add' ? 'Registrar Balanço' : 'Atualizar Balanço'}
           </button>
         </div>
       )}
 
-      {/* Periods table */}
-      {periodos.length === 0 && !adding ? (
+      {/* Empty state */}
+      {periodos.length === 0 && formMode === null && (
         <p className="text-slate-400 text-sm italic text-center py-8">Nenhum balanço registrado</p>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-100">
+      )}
+
+      {/* ── Transposed table ── */}
+      {sorted.length > 0 && (
+        <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+          <table className="min-w-max w-full text-xs border-separate border-spacing-0">
+            <thead>
               <tr>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600">Turno</th>
-                <th className="px-3 py-2 text-right text-xs font-semibold text-emerald-700">Ganhos</th>
-                <th className="px-3 py-2 text-right text-xs font-semibold text-red-600">Perdas</th>
-                <th className="px-3 py-2 text-right text-xs font-semibold text-slate-700">Parcial</th>
+                <th className="sticky left-0 z-20 bg-slate-100 px-3 py-2.5 text-left font-bold text-slate-700 border-b-2 border-r-2 border-slate-300 min-w-[150px]">
+                  Componente
+                </th>
+                {sorted.map((p, i) => (
+                  <th key={p.id} className="px-2 py-2 bg-slate-100 border-b-2 border-r border-slate-200 text-center min-w-[80px]">
+                    <p className="font-bold text-slate-800 text-xs whitespace-nowrap">
+                      {fmtTurno(p.turno, p.inicio)}
+                    </p>
+                    <button
+                      onClick={() => startEdit(p)}
+                      title="Editar este turno"
+                      className={`mt-1 text-indigo-400 hover:text-indigo-700 transition-colors text-xs ${formMode === 'edit' && editingPeriodo?.id === p.id ? 'text-amber-500' : ''}`}>
+                      ✏️
+                    </button>
+                  </th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {[...periodos].reverse().map((p, i) => {
-                const { ganhos, perdas, parcial } = calcBalanco(p)
+            <tbody>
+              {ROWS.map((row, rowIdx) => {
+                const isSub = row.type === 'sub-gain' || row.type === 'sub-loss'
+                const isSummary = row.type === 'parcial' || row.type === 'acum'
+                const rowBg = isSub ? '' : isSummary ? '' : rowIdx % 2 === 0 ? '#fff' : '#f8fafc'
                 return (
-                  <tr key={p.id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      <span className="text-xs">{fmtTurno(p.turno, p.inicio)}</span>
+                  <tr key={row.key}>
+                    <td
+                      className={`sticky left-0 z-10 px-3 py-2 border-r-2 border-b border-slate-200 whitespace-nowrap font-medium
+                        ${row.type === 'sub-gain' ? 'bg-emerald-100 text-emerald-800 font-bold' :
+                          row.type === 'sub-loss' ? 'bg-red-100 text-red-800 font-bold' :
+                          row.type === 'parcial'  ? 'bg-indigo-50 text-indigo-800 font-bold' :
+                          row.type === 'acum'     ? 'bg-slate-200 text-slate-800 font-bold' :
+                          row.type === 'auto'     ? 'text-slate-400 italic' :
+                          row.type === 'gain'     ? 'text-emerald-700' : 'text-red-600'}
+                      `}
+                      style={{ background: rowBg || undefined }}>
+                      {row.label}
                     </td>
-                    <td className="px-3 py-2 text-right text-emerald-700 font-medium">+{ganhos.toFixed(0)}</td>
-                    <td className="px-3 py-2 text-right text-red-600 font-medium">-{perdas.toFixed(0)}</td>
-                    <td className={`px-3 py-2 text-right font-bold ${colorParcial(parcial)}`}>
-                      {parcial > 0 ? '+' : ''}{parcial.toFixed(0)}
-                    </td>
+                    {sorted.map((p, i) => {
+                      const v = getVal(row.key, p, acumulados[i])
+                      const cls = cellCls(row.type, v)
+                      const isEditing = formMode === 'edit' && editingPeriodo?.id === p.id
+                      return (
+                        <td key={p.id}
+                          className={`px-2 py-2 text-center border-r border-b border-slate-100 text-xs ${cls} ${isEditing ? 'ring-1 ring-inset ring-amber-300' : ''}`}
+                          style={{ background: rowBg || undefined }}>
+                          {fmtVal(row.type, v)}
+                        </td>
+                      )
+                    })}
                   </tr>
                 )
               })}
             </tbody>
-            <tfoot className="bg-slate-100 border-t-2 border-slate-300">
-              <tr>
-                <td colSpan={3} className="px-3 py-2 text-xs font-bold text-slate-600">Acumulado Total</td>
-                <td className={`px-3 py-2 text-right font-bold ${colorParcial(acTotal)}`}>
-                  {acTotal > 0 ? '+' : ''}{acTotal.toFixed(0)} mL
-                </td>
-              </tr>
-              <tr>
-                <td colSpan={3} className="px-3 py-2 text-xs font-bold text-slate-600">Acumulado Móvel (10 turnos)</td>
-                <td className={`px-3 py-2 text-right font-bold ${colorParcial(acMovel)}`}>
-                  {acMovel > 0 ? '+' : ''}{acMovel.toFixed(0)} mL
-                </td>
-              </tr>
-            </tfoot>
           </table>
         </div>
       )}
     </div>
   )
 }
+
+// ── Sub-components ─────────────────────────────────────────────────────────────
 
 function SummaryCard({ label, value, sub }: { label: string; value: number | null; sub: string }) {
   const cls = value == null ? 'text-slate-300' : colorParcial(value)
@@ -228,15 +383,21 @@ function SummaryCard({ label, value, sub }: { label: string; value: number | nul
   )
 }
 
-function FormField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function ExprField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const preview  = evalMath(value)
+  const hasExpr  = value.trim() !== '' && value.trim() !== '0' && value !== String(preview) && /[+\-*/()]/.test(value)
   return (
     <div className="bg-white border border-slate-200 rounded-lg px-3 py-2">
       <p className="text-xs text-slate-500 mb-1">{label}</p>
       <input
-        type="number" value={value} onChange={e => onChange(e.target.value)}
-        min="0" step="1"
+        type="text" value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder="0"
         className="w-full text-sm font-semibold focus:outline-none bg-transparent"
       />
+      {hasExpr && (
+        <p className="text-xs text-indigo-500 mt-0.5">= {preview.toFixed(0)} mL</p>
+      )}
     </div>
   )
 }
