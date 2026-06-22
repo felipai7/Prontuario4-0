@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
       `Redija resumo de alta com: motivo de internação, evolução clínica, achados laboratoriais, balanço hídrico, condições de alta. Linguagem médica formal.`
 
     const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' })
     const result = await model.generateContent(prompt)
     const texto = result.response.text().trim()
 
