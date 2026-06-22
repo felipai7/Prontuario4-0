@@ -4,6 +4,25 @@ import { calcAcumuladoTotal, calcAcumuladoMovel, fmtData } from '@/lib/utils'
 import { GoogleGenAI } from '@google/genai'
 import type { Paciente, Exame, PeriodoBalanco } from '@/types'
 
+const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-8b']
+
+async function generateWithFallback(ai: GoogleGenAI, prompt: string): Promise<string> {
+  let lastErr: Error | null = null
+  for (const model of MODELS) {
+    try {
+      const response = await ai.models.generateContent({ model, contents: [prompt] })
+      return response.text?.trim() ?? ''
+    } catch (e: any) {
+      lastErr = e
+      if (!e.message?.includes('503') && !e.message?.includes('UNAVAILABLE') && !e.message?.includes('overload')) {
+        throw e
+      }
+      await new Promise(r => setTimeout(r, 1500))
+    }
+  }
+  throw lastErr
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -44,11 +63,7 @@ export async function POST(request: NextRequest) {
       `Redija resumo de alta com: motivo de internação, evolução clínica, achados laboratoriais, balanço hídrico, condições de alta. Linguagem médica formal.`
 
     const ai = new GoogleGenAI({ apiKey })
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [prompt],
-    })
-    const texto = response.text?.trim() ?? ''
+    const texto = await generateWithFallback(ai, prompt)
 
     return NextResponse.json({ texto })
   } catch (e: any) {

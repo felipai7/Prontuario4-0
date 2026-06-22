@@ -41,7 +41,9 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
   const [saving,  setSaving]  = useState(false)
 
   // Determine next period spec
-  const admissionISO = `${paciente.data_internacao}T${paciente.hora_internacao}:00`
+  // Normalise to HH:MM before appending :00 — avoids "T12:00:00:00" if stored with seconds
+  const horaHHMM    = (paciente.hora_internacao ?? '12:00').substring(0, 5)
+  const admissionISO = `${paciente.data_internacao}T${horaHHMM}:00`
   const isFirstPeriod = periodos.length === 0
   const periodSpec = isFirstPeriod
     ? calcFirstPeriod(admissionISO)

@@ -2,6 +2,26 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { GoogleGenAI } from '@google/genai'
 
+const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-8b']
+
+async function generateWithFallback(ai: GoogleGenAI, contents: any[]): Promise<string> {
+  let lastErr: Error | null = null
+  for (const model of MODELS) {
+    try {
+      const response = await ai.models.generateContent({ model, contents })
+      return response.text?.trim() ?? ''
+    } catch (e: any) {
+      lastErr = e
+      // Only retry on 503 / overload — other errors bubble out immediately
+      if (!e.message?.includes('503') && !e.message?.includes('UNAVAILABLE') && !e.message?.includes('overload')) {
+        throw e
+      }
+      await new Promise(r => setTimeout(r, 1500))
+    }
+  }
+  throw lastErr
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -25,15 +45,10 @@ export async function POST(request: NextRequest) {
       '"observacoes":"texto ou null"}\n' +
       'Use conhecimento médico padrão para "alterado" quando não há referência explícita.'
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [
-        { inlineData: { mimeType: mediaType, data: base64 } },
-        prompt,
-      ],
-    })
-
-    const raw = response.text?.trim() ?? ''
+    const raw = await generateWithFallback(ai, [
+      { inlineData: { mimeType: mediaType, data: base64 } },
+      prompt,
+    ])
 
     let parsed: any = null
     const m = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
