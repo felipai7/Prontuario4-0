@@ -13,18 +13,41 @@ interface Props {
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
 }
 
-type Step = 'confirm' | 'generating' | 'review' | 'done'
+type Step = 'confirm' | 'discharging' | 'alta_ok' | 'generating' | 'review'
 
 export default function AltaModal({ paciente, exames, periodos, onClose, onAltaConcedida, showToast }: Props) {
-  const supabase    = createClient()
-  const [step,      setStep]      = useState<Step>('confirm')
-  const [resumo,    setResumo]    = useState<string | null>(null)
-  const [deleting,  setDeleting]  = useState(false)
+  const supabase             = createClient()
+  const [step,               setStep]             = useState<Step>('confirm')
+  const [resumo,             setResumo]           = useState<string | null>(null)
+  const [resumoAltaId,       setResumoAltaId]     = useState<string | null>(null)
+  const [alreadyDischarged,  setAlreadyDischarged] = useState(false)
+  const [busy,               setBusy]             = useState(false)
 
-  const handleGenerate = async () => {
+  // Flow A: discharge immediately, no AI required
+  const handleAltaDireta = async () => {
+    setBusy(true)
+    setStep('discharging')
+    const { data } = await supabase.from('resumos_alta').insert({
+      paciente_nome:     paciente.nome,
+      data_internacao:   paciente.data_internacao,
+      paciente_snapshot: paciente,
+      exames_snapshot:   exames,
+      balanco_snapshot:  periodos,
+      texto_resumo:      null,
+    }).select('id').single()
+    setResumoAltaId(data?.id ?? null)
+    await supabase.from('pacientes').update({ ativo: false }).eq('id', paciente.id)
+    onAltaConcedida()
+    setAlreadyDischarged(true)
+    setBusy(false)
+    setStep('alta_ok')
+  }
+
+  // Flow B: generate AI summary first, then confirm discharge
+  const handleGenerateFirst = async () => {
     setStep('generating')
     try {
-      const res = await fetch('/api/gerar-resumo-alta', {
+      const res  = await fetch('/api/gerar-resumo-alta', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ paciente, exames, periodos }),
@@ -39,9 +62,31 @@ export default function AltaModal({ paciente, exames, periodos, onClose, onAltaC
     }
   }
 
-  const handleConfirmAlta = async () => {
-    setDeleting(true)
-    // Archive summary
+  // Optional post-discharge: generate AI report and update archive record
+  const handleGeneratePostAlta = async () => {
+    setStep('generating')
+    try {
+      const res  = await fetch('/api/gerar-resumo-alta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paciente, exames, periodos }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setResumo(data.texto)
+      if (resumoAltaId) {
+        await supabase.from('resumos_alta').update({ texto_resumo: data.texto }).eq('id', resumoAltaId)
+      }
+      setStep('review')
+    } catch (e: any) {
+      showToast('Erro ao gerar relatório: ' + e.message, 'error')
+      setStep('alta_ok')
+    }
+  }
+
+  // Confirm discharge WITH summary (Flow B — patient not yet discharged)
+  const handleConfirmAltaComResumo = async () => {
+    setBusy(true)
     await supabase.from('resumos_alta').insert({
       paciente_nome:     paciente.nome,
       data_internacao:   paciente.data_internacao,
@@ -50,11 +95,10 @@ export default function AltaModal({ paciente, exames, periodos, onClose, onAltaC
       balanco_snapshot:  periodos,
       texto_resumo:      resumo,
     })
-    // Soft-delete patient (ativo = false removes from bed, data preserved for archive)
     await supabase.from('pacientes').update({ ativo: false }).eq('id', paciente.id)
-
-    setDeleting(false)
     onAltaConcedida()
+    setBusy(false)
+    onClose()
   }
 
   const handlePrint = () => {
@@ -86,6 +130,8 @@ export default function AltaModal({ paciente, exames, periodos, onClose, onAltaC
     win.document.close()
   }
 
+  const canClose = step !== 'discharging' && step !== 'generating'
+
   return (
     <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
@@ -95,32 +141,72 @@ export default function AltaModal({ paciente, exames, periodos, onClose, onAltaC
             <h2 className="font-bold text-lg">Alta Médica</h2>
             <p className="text-red-100 text-sm">{paciente.nome}</p>
           </div>
-          {step !== 'generating' && (
+          {canClose && (
             <button onClick={onClose} className="text-white/70 hover:text-white w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/20">✕</button>
           )}
         </div>
 
         {/* Body */}
         <div className="overflow-y-auto flex-1 p-6">
+
+          {/* Step: confirm */}
           {step === 'confirm' && (
             <div className="space-y-4">
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-800">
-                <p className="font-semibold mb-1">⚠️ Antes de dar alta</p>
-                <p className="text-sm">Será gerado um resumo clínico com IA baseado em todos os exames e balanço hídrico registrados. O paciente será removido da UTI após a confirmação.</p>
-              </div>
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm space-y-1">
                 <p><strong>Paciente:</strong> {paciente.nome}</p>
                 <p><strong>Internado em:</strong> {fmtData(paciente.data_internacao)}</p>
                 <p><strong>Exames registrados:</strong> {exames.length}</p>
                 <p><strong>Turnos de BH:</strong> {periodos.length}</p>
               </div>
-              <button onClick={handleGenerate}
+
+              <button onClick={handleAltaDireta}
                 className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl transition-colors">
-                🤖 Gerar Resumo de Alta com IA
+                ✅ Dar Alta Agora
+              </button>
+
+              <div className="relative flex items-center">
+                <div className="flex-1 border-t border-slate-200" />
+                <span className="px-3 text-xs text-slate-400">ou</span>
+                <div className="flex-1 border-t border-slate-200" />
+              </div>
+
+              <button onClick={handleGenerateFirst}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition-colors text-sm">
+                🤖 Gerar Resumo com IA e Dar Alta
               </button>
             </div>
           )}
 
+          {/* Step: discharging */}
+          {step === 'discharging' && (
+            <div className="flex flex-col items-center justify-center py-12 space-y-4">
+              <div className="w-12 h-12 border-4 border-red-500 border-t-transparent rounded-full animate-spin" />
+              <p className="text-slate-600 font-medium">Concedendo alta...</p>
+            </div>
+          )}
+
+          {/* Step: alta_ok — discharged, optional AI report */}
+          {step === 'alta_ok' && (
+            <div className="space-y-4">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
+                <p className="text-3xl mb-2">✅</p>
+                <p className="font-bold text-emerald-800">Alta concedida com sucesso</p>
+                <p className="text-emerald-700 text-sm mt-1">{paciente.nome} foi removido da UTI</p>
+              </div>
+
+              <button onClick={handleGeneratePostAlta}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition-colors text-sm">
+                🤖 Gerar Relatório de Alta com IA
+              </button>
+
+              <button onClick={onClose}
+                className="w-full border border-slate-300 text-slate-600 font-medium py-2.5 rounded-xl hover:bg-slate-50 text-sm transition-colors">
+                Fechar sem relatório
+              </button>
+            </div>
+          )}
+
+          {/* Step: generating */}
           {step === 'generating' && (
             <div className="flex flex-col items-center justify-center py-12 space-y-4">
               <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
@@ -129,28 +215,41 @@ export default function AltaModal({ paciente, exames, periodos, onClose, onAltaC
             </div>
           )}
 
+          {/* Step: review */}
           {step === 'review' && resumo && (
             <div className="space-y-4">
               <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
                 <p className="font-bold text-emerald-800 mb-3">📋 Resumo Clínico Gerado</p>
                 <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">{resumo}</pre>
               </div>
-              <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-800 text-sm">
-                <p className="font-semibold mb-1">⚠️ Confirmação de Alta</p>
-                <p>O paciente <strong>{paciente.nome}</strong> será removido da UTI. O resumo ficará arquivado.</p>
-              </div>
+
+              {!alreadyDischarged && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-800 text-sm">
+                  <p className="font-semibold mb-1">⚠️ Confirmação de Alta</p>
+                  <p>O paciente <strong>{paciente.nome}</strong> será removido da UTI. O resumo ficará arquivado.</p>
+                </div>
+              )}
+
               <div className="flex gap-3">
                 <button onClick={handlePrint}
                   className="flex-1 border border-slate-300 text-slate-700 font-semibold py-2.5 rounded-xl hover:bg-slate-50 text-sm">
                   🖨️ Imprimir Resumo
                 </button>
-                <button onClick={handleConfirmAlta} disabled={deleting}
-                  className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl text-sm transition-colors">
-                  {deleting ? 'Processando...' : '✅ Confirmar Alta'}
-                </button>
+                {alreadyDischarged ? (
+                  <button onClick={onClose}
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-sm transition-colors">
+                    Fechar
+                  </button>
+                ) : (
+                  <button onClick={handleConfirmAltaComResumo} disabled={busy}
+                    className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl text-sm transition-colors">
+                    {busy ? 'Processando...' : '✅ Confirmar Alta'}
+                  </button>
+                )}
               </div>
             </div>
           )}
+
         </div>
       </div>
     </div>
