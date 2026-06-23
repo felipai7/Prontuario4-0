@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
       'Analise este resultado de exame médico laboratorial.\n' +
       'RESPONDA SOMENTE com um objeto JSON válido, sem texto antes ou depois, sem blocos markdown.\n' +
       'Formato obrigatório:\n' +
-      '{"data_exame":"DD/MM/AAAA ou null","tipo_exame":"nome do painel",' +
+      '{"data_exame":"DD/MM/AAAA HH:MM (inclua horário de coleta se disponível) ou DD/MM/AAAA ou null","tipo_exame":"nome do painel",' +
       '"resultados":[{"nome":"parâmetro","valor":"valor","unidade":"unidade ou null",' +
       '"referencia":"referência ou null","alterado":true/false,"direcao":"alto|baixo|normal|qualitativo"}],' +
       '"observacoes":"observações ou null"}\n' +

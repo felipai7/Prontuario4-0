@@ -21,59 +21,60 @@ const emptyResultado = (): ManualResultado => ({
 
 // ── Name normalisation (reduces duplicates across extractions) ────────────────
 const ALIASES: Array<[RegExp, string]> = [
-  // Hemograma – normalise case/accentuation variations
-  [/^hematócrit[oa]?$/i,                                       'Hematócrito'],
+  // Hemograma – normalise case/accentuation/suffix variations
+  [/^hematócrit[oa]?$|^hct$/i,                                 'Hematócrito'],
   [/^hemoglob[ia]n[ao]?s?$/i,                                  'Hemoglobina'],
   [/^hemácias?$/i,                                             'Hemácias'],
   [/^rdw(\s*[-–]?\s*(cv|sd))?(\s*%)?$/i,                      'RDW'],
   [/^vcm$|^volume\s+corpuscular\s+médio$|^v\.?c\.?m\.?$/i,    'VCM'],
   [/^hcm$|^hemoglobina\s+corpuscular\s+média$/i,               'HCM'],
   [/^chcm$|^concentração\s+de\s+hemoglob/i,                    'CHCM'],
-  [/^segmentados?\s*(\(?\s*%\s*\)?)?$/i,                       'Segmentados (%)'],
-  [/^neutrófilos?\s+segmentados?$/i,                            'Segmentados (%)'],
-  [/^bastonetes?\s*(\(?\s*%\s*\)?)?$/i,                        'Bastonetes (%)'],
-  [/^linfócitos?\s*(típicos?)?\s*(\(?\s*%\s*\)?)?$/i,          'Linfócitos (%)'],
-  [/^monócitos?\s*(\(?\s*%\s*\)?)?$/i,                         'Monócitos (%)'],
-  [/^eosinófilos?\s*(\(?\s*%\s*\)?)?$/i,                       'Eosinófilos (%)'],
-  [/^basófilos?\s*(\(?\s*%\s*\)?)?$/i,                         'Basófilos (%)'],
-  [/^linf[ao]?\.?\s*atípicos?$/i,                              'Linfócitos Atípicos'],
-  [/^neutr[oó]?\.?\s*totais?$/i,                               'Neutrófilos Totais'],
-  [/^blastos?(\s*%)?$/i,                                       'Blastos (%)'],
-  [/^promielócitos?(\s*%)?$/i,                                  'Promielócitos (%)'],
-  [/^mielócitos?(\s*%)?$/i,                                    'Mielócitos (%)'],
-  [/^metamielócitos?(\s*%)?$/i,                                 'Metamielócitos (%)'],
-  [/^plasmócitos?(\s*%)?$/i,                                   'Plasmócitos (%)'],
+  [/^segmentados?\s*(\(?\s*(%|abs)\s*\)?)?$/i,                 'Segmentados (%)'],
+  [/^neutrófilos?\s+segmentados?(\s*\(abs\))?$/i,               'Segmentados (%)'],
+  [/^bastonetes?\s*(\(?\s*(%|abs)\s*\)?)?$/i,                  'Bastonetes (%)'],
+  [/^linfócitos?\s*(típicos?)?\s*(\(?\s*(%|abs)\s*\)?)?$/i,    'Linfócitos (%)'],
+  [/^monócitos?\s*(\(?\s*(%|abs)\s*\)?)?$/i,                   'Monócitos (%)'],
+  [/^eosinófilos?\s*(\(?\s*(%|abs)\s*\)?)?$/i,                 'Eosinófilos (%)'],
+  [/^basófilos?\s*(\(?\s*(%|abs)\s*\)?)?$/i,                   'Basófilos (%)'],
+  [/^linf[ao]?\.?\s*atí?picos?\s*(\(abs\))?$/i,               'Linfócitos Atípicos'],
+  [/^neutr[oó]?\.?\s*totais?\s*(\(abs\))?$/i,                  'Neutrófilos Totais'],
+  [/^blastos?\s*(\(%\)|\(abs\)|%)?$/i,                         'Blastos (%)'],
+  [/^promielócitos?\s*(\(%\)|\(abs\)|%)?$/i,                   'Promielócitos (%)'],
+  [/^mielócitos?\s*(\(%\)|\(abs\)|%)?$/i,                      'Mielócitos (%)'],
+  [/^metamielócitos?\s*(\(%\)|\(abs\)|%)?$/i,                  'Metamielócitos (%)'],
+  [/^plasmócitos?\s*(\(%\)|\(abs\)|%)?$/i,                     'Plasmócitos (%)'],
   [/^mpv$|^volume\s+plaquetário\s+médio$/i,                    'MPV'],
   [/^plaquetas?$/i,                                            'Plaquetas'],
   [/^leucócitos?(\s+totais?)?$/i,                              'Leucócitos'],
-  // Eletrólitos
+  // Eletrólitos – include bare NA/K from gasometry panels
   [/^magnésio(\s+sérico)?$/i,                                  'Magnésio'],
-  [/^sódio(\s+sérico)?$/i,                                     'Sódio'],
-  [/^potássio(\s+sérico)?$/i,                                  'Potássio'],
+  [/^na$|^sódio(\s+sérico)?$/i,                                'Sódio'],
+  [/^k$|^potássio(\s+sérico)?$/i,                              'Potássio'],
   [/^fósforo(\s+sérico)?$/i,                                   'Fósforo'],
   // Renal
   [/^ur[eé]ia(\s+sérica)?$/i,                                  'Ureia'],
   [/^creatinin[ao]?(\s+sérica?)?$/i,                           'Creatinina'],
-  [/^taxa\s+(de\s+)?filtração\s+glomerular(\s+\w+)?$/i,        'TFG'],
-  // Gasometria – parametros medidos no aparelho junto com gases
-  [/^na\s*\(gasometria.*\)$/i,                                 'Na (Gasometria)'],
-  [/^k\s*\(gasometria.*\)$/i,                                  'K (Gasometria)'],
-  [/^glicose\s*\(gasometria.*\)$/i,                            'Glicose (Gasometria)'],
-  [/^hct\s*\(gasometria.*\)$/i,                                'Htc (Gasometria)'],
+  [/^taxa\s+(de\s+)?filtração\s+glomerular(\s+\w+)?$|etfg$/i,  'TFG'],
+  // Metabólico
+  [/^glicose(\s+\(gasometria.*\))?$/i,                         'Glicose'],
+  // Gasometria – remaining contextual params
+  [/^na\s*\(gasometria.*\)$/i,                                 'Sódio'],
+  [/^k\s*\(gasometria.*\)$/i,                                  'Potássio'],
+  [/^hct\s*\(gasometria.*\)$/i,                                'Hematócrito'],
   [/^be$|^base\s*excess$/i,                                    'BE'],
   [/^o2sat$|^sat(uração)?\s*(de\s+)?o\.?2\s*(%)?$/i,          'SatO2 (%)'],
   [/^hco3(\s*[\(/]bicarbonato\)?)?$|^bicarbonato(\s+padrão)?$/i, 'HCO3'],
   [/^gap\s+co2(\s*\(.+\))?$/i,                                 'GAP CO2'],
   // Inflamatório
-  [/^proteína\s+c\s+reativa$/i,                                'PCR'],
+  [/^proteína\s+c\s+reativa(\s*\(?pcr\)?)?$/i,                 'PCR'],
   // Coagulação
   [/^(rni|inr)$/i,                                              'INR/RNI'],
-  // Enzimas/Hepático
+  // Enzimas/Hepático + CK
   [/^tgo$|^ast$|^ast\s*[/]\s*tgo$/i,                          'TGO/AST'],
   [/^tgp$|^alt$|^alt\s*[/]\s*tgp$/i,                          'TGP/ALT'],
   [/^(dhl|ldh|desidrogenase\s+lática?)$/i,                     'LDH'],
   [/^ck[\s-]?mb(\s*[\(/]?\s*atividade\s*\)?)?$/i,              'CK-MB'],
-  [/^(ck|cpk)(\s+total)?$/i,                                   'CK Total'],
+  [/^(ck|cpk)(\s+total)?$|^creatino(fosfo)?quinase$/i,         'CK Total'],
   [/^gama[\s-]?gt$|^γ[\s-]?gt$/i,                              'Gama-GT'],
   [/^fosfatase\s+alcalina$/i,                                   'Fosfatase Alcalina'],
   // Cardíaco
@@ -94,12 +95,13 @@ type Category = { label: string; test: (n: string) => boolean }
 const CATEGORIES: Category[] = [
   { label: '🩸 Hemograma',       test: n => /hemácia|hemoglob|hematócrit|vcm|hcm|chcm|rdw|plaqueta|leucócit|neutrófi|segmentad|bastonet|linfócit|monócit|eosinófi|basófi|metamielo|mielócit|promielócit|blastos|plasmócit|mpv/i.test(n) },
   { label: '⚡ Eletrólitos',     test: n => /^sódio$|^potássio$|^cálcio|^magnésio$|^fósforo$|^cloro$/i.test(n) },
+  { label: '🍬 Metabólico',      test: n => /^glicose$|hba1c|insulina/i.test(n) },
   { label: '🫘 Renal',           test: n => /^ureia$|creatinin|^tfg$|filtração|ácido úrico/i.test(n) },
   { label: '🧪 Inflamatório',   test: n => /^pcr$|procalcitonin|ferritin|\bvhs\b/i.test(n) },
   { label: '🩻 Coagulação',     test: n => /tap\b|inr|rni|ttpa|fibrinogên|d[\s-]?dímero/i.test(n) },
-  { label: '🫀 Enzimas/Hepático', test: n => /tgo|tgp|fosfatase|ggt|bilirrubina|ldh|amilase|lipase|albumina|proteínas totais/i.test(n) },
-  { label: '🫀 Cardíaco',       test: n => /troponin|ck[\s-]?(mb|total)|cpk|\bbnp\b/i.test(n) },
-  { label: '💨 Gasometria',     test: n => /\bph\b|po2|pco2|hco3|\bbe\b|sato2|lactato|\bco2\b|gap co2|\(gasometria\)/i.test(n) },
+  { label: '🫀 Enzimas/Hepático', test: n => /tgo|tgp|fosfatase|ggt|bilirrubina|ldh|amilase|lipase|albumina|proteínas totais|ck[\s-]?(mb|total)|cpk/i.test(n) },
+  { label: '🫀 Cardíaco',       test: n => /troponin|\bbnp\b/i.test(n) },
+  { label: '💨 Gasometria',     test: n => /\bph\b|po2|pco2|hco3|\bbe\b|sato2|lactato|\bco2\b|gap co2/i.test(n) },
   { label: '⚗️ Hormônios',      test: n => /^tsh$|^t4l?$|^t3$|cortisol/i.test(n) },
 ]
 
@@ -257,26 +259,13 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
   const handleEvolucao = async () => {
     setEvoLoading(true); setEvoText(null)
     try {
-      const resumo = exames.map((ex, i) => {
-        const alts = (ex.resultados || []).filter(r => r.alterado)
-        const norm = (ex.resultados || []).filter(r => !r.alterado)
-        return `Exame ${i+1} — ${ex.tipo_exame} (${ex.data_exame || 'sem data'}):\n` +
-          (alts.length ? '  ALTERADOS: ' + alts.map(r => `${r.nome}: ${r.valor} ${r.unidade||''} [${r.direcao?.toUpperCase()}]`).join(', ') + '\n' : '') +
-          (norm.length ? '  Normais: '  + norm.map(r => `${r.nome}: ${r.valor} ${r.unidade||''}`).join(', ') : '')
-      }).join('\n\n')
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/api/evolucao-exames', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-6', max_tokens: 1000,
-          messages: [{ role: 'user', content:
-            `Médico assistente: analise evolução dos exames de ${paciente.nome}.\n` +
-            `Hipóteses: ${paciente.hipoteses || 'não informadas'}\n\n${resumo}\n\n` +
-            `Avaliação evolutiva objetiva: alterações relevantes, tendências, correlações, pontos de atenção.`
-          }]
-        })
+        body: JSON.stringify({ paciente, exames }),
       })
       const data = await res.json()
-      setEvoText(data.content?.[0]?.text || 'Sem resposta')
+      if (!res.ok) throw new Error(data.error)
+      setEvoText(data.texto || 'Sem resposta')
     } catch (e: any) { showToast('Erro: ' + e.message, 'error') }
     setEvoLoading(false)
   }
@@ -424,11 +413,18 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
                 <th className="sticky left-0 z-20 bg-slate-100 px-3 py-2.5 text-left font-bold text-slate-700 border-b-2 border-r-2 border-slate-300 min-w-[170px]">
                   Parâmetro
                 </th>
-                {comRes.map((ex, idx) => (
-                  <th key={ex.id} className="px-2 py-2 text-center bg-slate-100 border-b-2 border-r border-slate-200 font-semibold min-w-[70px] whitespace-nowrap">
-                    <p className="text-slate-500 font-normal text-xs leading-tight">{ex.data_exame ?? `Exame ${idx + 1}`}</p>
-                  </th>
-                ))}
+                {comRes.map((ex, idx) => {
+                  // data_exame may be "DD/MM/AAAA HH:MM" or "DD/MM/AAAA" or null
+                  const parts = ex.data_exame?.split(' ')
+                  const datePart = parts?.[0] ?? null
+                  const timePart = parts?.[1] ?? null
+                  return (
+                    <th key={ex.id} className="px-2 py-2 text-center bg-slate-100 border-b-2 border-r border-slate-200 font-semibold min-w-[70px] whitespace-nowrap">
+                      <p className="text-slate-700 font-semibold text-xs leading-tight">{datePart ?? `Exame ${idx + 1}`}</p>
+                      {timePart && <p className="text-slate-400 font-normal text-xs mt-0.5">{timePart}</p>}
+                    </th>
+                  )
+                })}
               </tr>
             </thead>
             <tbody>
