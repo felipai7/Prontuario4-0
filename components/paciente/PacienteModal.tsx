@@ -16,11 +16,18 @@ interface Props {
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
 }
 
-const ALAS: Record<string, string> = { 'uti-01': 'UTI 01', 'uti-02': 'UTI 02' }
+const ALAS_INFO = [
+  { id: 'uti-01' as const, nome: 'UTI 01', leitos: Array.from({length: 9},  (_, i) => i + 1)  },
+  { id: 'uti-02' as const, nome: 'UTI 02', leitos: Array.from({length: 10}, (_, i) => i + 10) },
+]
+const ALAS_MAP: Record<string, string> = { 'uti-01': 'UTI 01', 'uti-02': 'UTI 02' }
+const PLANOS = ['IPASGO', 'Unimed', 'Particular', 'Bradesco', 'Outros']
 
 type EditForm = {
-  nome: string; data_nascimento: string; plano_saude: string
+  nome: string; data_nascimento: string
+  plano: string; planoOu: string
   peso_kg: string; ala_id: 'uti-01' | 'uti-02'; numero_leito: string
+  hipoteses: string
 }
 
 export default function PacienteModal({ paciente, onClose, onAltaConcedida, showToast }: Props) {
@@ -32,15 +39,25 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
   const [showAlta, setShowAlta] = useState(false)
   const [pac,      setPac]      = useState<Paciente>(paciente)
   const [editing,  setEditing]  = useState(false)
-  const [editForm, setEditForm] = useState<EditForm>({
-    nome: paciente.nome,
-    data_nascimento: paciente.data_nascimento,
-    plano_saude: paciente.plano_saude,
-    peso_kg: String(paciente.peso_kg ?? ''),
-    ala_id: paciente.ala_id,
-    numero_leito: String(paciente.numero_leito),
-  })
-  const [saving, setSaving] = useState(false)
+  const hoje = new Date().toISOString().split('T')[0]
+
+  function makeEditForm(p: Paciente): EditForm {
+    const knownPlano = PLANOS.includes(p.plano_saude) ? p.plano_saude : 'Outros'
+    return {
+      nome: p.nome,
+      data_nascimento: p.data_nascimento,
+      plano: knownPlano,
+      planoOu: knownPlano === 'Outros' ? p.plano_saude : '',
+      peso_kg: String(p.peso_kg ?? ''),
+      ala_id: p.ala_id,
+      numero_leito: String(p.numero_leito),
+      hipoteses: p.hipoteses ?? '',
+    }
+  }
+
+  const [editForm,   setEditForm]   = useState<EditForm>(() => makeEditForm(paciente))
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({})
+  const [saving,     setSaving]     = useState(false)
 
   const loadData = async () => {
     setLoading(true)
@@ -62,20 +79,49 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
   }, [editing])
 
   const handleSaveEdit = async () => {
+    const errs: Record<string, string> = {}
+    if (!editForm.nome.trim()) errs.nome = 'Nome obrigatório'
+    if (!editForm.data_nascimento) errs.data_nascimento = 'Obrigatório'
+    else if (editForm.data_nascimento > hoje) errs.data_nascimento = 'Não pode ser futura'
+    if (!editForm.plano) errs.plano = 'Selecione um plano'
+    if (editForm.plano === 'Outros' && !editForm.planoOu.trim()) errs.planoOu = 'Informe o plano'
+    const novoLeito = parseInt(editForm.numero_leito, 10)
+    const alaInfo = ALAS_INFO.find(a => a.id === editForm.ala_id)
+    if (!alaInfo || !alaInfo.leitos.includes(novoLeito)) {
+      errs.numero_leito = `Leito inválido para ${alaInfo?.nome ?? 'UTI selecionada'}`
+    }
+    const pesoNum = editForm.peso_kg ? parseFloat(editForm.peso_kg) : null
+    if (pesoNum !== null && (pesoNum < 1 || pesoNum > 300)) errs.peso_kg = 'Peso inválido (1–300 Kg)'
+    setEditErrors(errs)
+    if (Object.keys(errs).length > 0) return
+
+    // Check target bed not occupied by another patient
+    if (novoLeito !== pac.numero_leito || editForm.ala_id !== pac.ala_id) {
+      const { data: ocupante } = await supabase.from('pacientes')
+        .select('id, nome').eq('ala_id', editForm.ala_id).eq('numero_leito', novoLeito).eq('ativo', true).single()
+      if (ocupante && ocupante.id !== pac.id) {
+        setEditErrors(e => ({ ...e, numero_leito: `Leito ocupado por ${ocupante.nome}` }))
+        return
+      }
+    }
+
     setSaving(true)
+    const planoFinal = editForm.plano === 'Outros' ? (editForm.planoOu.trim() || 'Outros') : editForm.plano
     const updates = {
       nome: editForm.nome.trim(),
       data_nascimento: editForm.data_nascimento,
-      plano_saude: editForm.plano_saude.trim(),
-      peso_kg: editForm.peso_kg ? parseFloat(editForm.peso_kg) : null,
+      plano_saude: planoFinal,
+      peso_kg: pesoNum,
       ala_id: editForm.ala_id,
-      numero_leito: parseInt(editForm.numero_leito, 10),
+      numero_leito: novoLeito,
+      hipoteses: editForm.hipoteses.trim() || null,
     }
     const { error } = await supabase.from('pacientes').update(updates).eq('id', pac.id)
     setSaving(false)
     if (error) { showToast('Erro ao salvar: ' + error.message, 'error'); return }
     setPac(p => ({ ...p, ...updates }))
     setEditing(false)
+    setEditErrors({})
     showToast('Dados do paciente atualizados!')
   }
 
@@ -85,7 +131,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     <>
       <div className="fixed inset-0 bg-black/60 z-40 flex items-start justify-center p-4 overflow-y-auto"
         onClick={e => e.target === e.currentTarget && onClose()}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl my-4 flex flex-col" style={{maxHeight:'95vh'}}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[1300px] my-2 flex flex-col" style={{maxHeight:'97vh'}}>
 
           {/* Header */}
           <div className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white px-6 py-4 rounded-t-2xl flex-shrink-0">
@@ -95,7 +141,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
                 <p className="text-indigo-200 text-sm mt-1">
                   📅 {fmtData(pac.data_nascimento)} ({calcAge(pac.data_nascimento)}) &nbsp;·&nbsp;
                   🏥 {pac.plano_saude} &nbsp;·&nbsp;
-                  🛏️ {ALAS[pac.ala_id]} — Leito {pad(pac.numero_leito)}
+                  🛏️ {ALAS_MAP[pac.ala_id]} — Leito {pad(pac.numero_leito)}
                 </p>
                 {pac.hipoteses && (
                   <p className="text-indigo-300 text-xs mt-1 italic">🩺 {pac.hipoteses}</p>
@@ -130,42 +176,52 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
               <div className="mt-4 bg-white/10 rounded-xl p-4 space-y-3">
                 <p className="text-xs font-bold text-white/80 uppercase tracking-wide">Editar dados do paciente</p>
                 <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-xs text-indigo-200 font-medium block mb-1">Nome completo</label>
-                    <input value={editForm.nome} onChange={e => setEditForm(f => ({...f, nome: e.target.value}))}
-                      className="w-full bg-white/20 text-white placeholder-white/40 border border-white/30 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-white/50"/>
-                  </div>
-                  <div>
-                    <label className="text-xs text-indigo-200 font-medium block mb-1">Plano de saúde</label>
-                    <input value={editForm.plano_saude} onChange={e => setEditForm(f => ({...f, plano_saude: e.target.value}))}
-                      className="w-full bg-white/20 text-white placeholder-white/40 border border-white/30 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-white/50"/>
-                  </div>
-                  <div>
-                    <label className="text-xs text-indigo-200 font-medium block mb-1">Data de nascimento</label>
-                    <input type="date" value={editForm.data_nascimento} onChange={e => setEditForm(f => ({...f, data_nascimento: e.target.value}))}
-                      className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-white/50"/>
-                  </div>
-                  <div>
-                    <label className="text-xs text-indigo-200 font-medium block mb-1">Peso (Kg)</label>
-                    <input type="number" step="0.1" value={editForm.peso_kg} onChange={e => setEditForm(f => ({...f, peso_kg: e.target.value}))}
-                      className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-white/50"/>
-                  </div>
-                  <div>
-                    <label className="text-xs text-indigo-200 font-medium block mb-1">UTI</label>
-                    <select value={editForm.ala_id} onChange={e => setEditForm(f => ({...f, ala_id: e.target.value as 'uti-01'|'uti-02'}))}
-                      className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-white/50">
-                      <option value="uti-01" className="text-slate-800">UTI 01</option>
-                      <option value="uti-02" className="text-slate-800">UTI 02</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs text-indigo-200 font-medium block mb-1">Número do leito</label>
-                    <input type="number" min="1" value={editForm.numero_leito} onChange={e => setEditForm(f => ({...f, numero_leito: e.target.value}))}
-                      className="w-full bg-white/20 text-white border border-white/30 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-white/50"/>
+                  <EF label="Nome completo" error={editErrors.nome}>
+                    <EInput value={editForm.nome} onChange={e => setEditForm(f => ({...f, nome: e.target.value}))}/>
+                  </EF>
+                  <EF label="Data de nascimento" error={editErrors.data_nascimento}>
+                    <EInput type="date" value={editForm.data_nascimento} max={hoje}
+                      onChange={e => setEditForm(f => ({...f, data_nascimento: e.target.value}))}/>
+                  </EF>
+                  <EF label="Plano de saúde" error={editErrors.plano ?? editErrors.planoOu}>
+                    <ESelect value={editForm.plano} onChange={e => setEditForm(f => ({...f, plano: e.target.value, planoOu: ''}))}>
+                      <option value="" className="text-slate-800">Selecione...</option>
+                      {PLANOS.map(p => <option key={p} value={p} className="text-slate-800">{p}</option>)}
+                    </ESelect>
+                    {editForm.plano === 'Outros' && (
+                      <EInput value={editForm.planoOu} onChange={e => setEditForm(f => ({...f, planoOu: e.target.value}))}
+                        placeholder="Nome do plano" className="mt-1"/>
+                    )}
+                  </EF>
+                  <EF label="Peso (Kg)" error={editErrors.peso_kg}>
+                    <EInput type="number" step="0.1" min="1" max="300" value={editForm.peso_kg}
+                      onChange={e => setEditForm(f => ({...f, peso_kg: e.target.value}))}/>
+                  </EF>
+                  <EF label="UTI">
+                    <ESelect value={editForm.ala_id}
+                      onChange={e => setEditForm(f => ({...f, ala_id: e.target.value as 'uti-01'|'uti-02', numero_leito: ''}))}>
+                      {ALAS_INFO.map(a => <option key={a.id} value={a.id} className="text-slate-800">{a.nome}</option>)}
+                    </ESelect>
+                  </EF>
+                  <EF label="Leito" error={editErrors.numero_leito}>
+                    <ESelect value={editForm.numero_leito}
+                      onChange={e => setEditForm(f => ({...f, numero_leito: e.target.value}))}>
+                      <option value="" className="text-slate-800">Selecione...</option>
+                      {(ALAS_INFO.find(a => a.id === editForm.ala_id)?.leitos ?? []).map(l => (
+                        <option key={l} value={String(l)} className="text-slate-800">Leito {String(l).padStart(2,'0')}</option>
+                      ))}
+                    </ESelect>
+                  </EF>
+                  <div className="col-span-2">
+                    <EF label="Hipóteses diagnósticas">
+                      <textarea value={editForm.hipoteses} onChange={e => setEditForm(f => ({...f, hipoteses: e.target.value}))}
+                        rows={2} placeholder="Ex: Insuficiência respiratória aguda, Sepse..."
+                        className="w-full bg-white/20 text-white placeholder-white/40 border border-white/30 rounded-lg px-3 py-1.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-white/50"/>
+                    </EF>
                   </div>
                 </div>
                 <div className="flex gap-2 justify-end">
-                  <button onClick={() => setEditing(false)}
+                  <button onClick={() => { setEditing(false); setEditErrors({}); setEditForm(makeEditForm(pac)) }}
                     className="px-4 py-1.5 text-sm text-white/70 hover:text-white border border-white/30 rounded-lg transition-colors">
                     Cancelar
                   </button>
@@ -217,4 +273,22 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
       )}
     </>
   )
+}
+
+const efCls = 'w-full bg-white/20 text-white placeholder-white/40 border border-white/30 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-white/50'
+
+function EF({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="text-xs text-indigo-200 font-medium block mb-1">{label}</label>
+      {children}
+      {error && <p className="text-red-300 text-xs mt-0.5">❌ {error}</p>}
+    </div>
+  )
+}
+function EInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return <input {...props} className={`${efCls} ${props.className ?? ''}`}/>
+}
+function ESelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return <select {...props} className={`${efCls} ${props.className ?? ''}`}/>
 }

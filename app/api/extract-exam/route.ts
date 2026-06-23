@@ -37,22 +37,31 @@ export async function POST(request: NextRequest) {
     const ai = new GoogleGenAI({ apiKey })
 
     const prompt =
-      'Analise este resultado de exame médico e retorne APENAS um JSON válido ' +
-      '(sem markdown, sem texto extra) com este formato:\n' +
+      'Analise este resultado de exame médico laboratorial.\n' +
+      'RESPONDA SOMENTE com um objeto JSON válido, sem texto antes ou depois, sem blocos markdown.\n' +
+      'Formato obrigatório:\n' +
       '{"data_exame":"DD/MM/AAAA ou null","tipo_exame":"nome do painel",' +
-      '"resultados":[{"nome":"parâmetro","valor":"valor","unidade":"ou null",' +
-      '"referencia":"ou null","alterado":true,"direcao":"alto|baixo|normal|qualitativo"}],' +
-      '"observacoes":"texto ou null"}\n' +
-      'Use conhecimento médico padrão para "alterado" quando não há referência explícita.'
+      '"resultados":[{"nome":"parâmetro","valor":"valor","unidade":"unidade ou null",' +
+      '"referencia":"referência ou null","alterado":true/false,"direcao":"alto|baixo|normal|qualitativo"}],' +
+      '"observacoes":"observações ou null"}\n' +
+      'Regras: inclua TODOS os parâmetros sem exceção; use conhecimento médico para "alterado" mesmo sem referência; ' +
+      '"direcao" = alto se acima do normal, baixo se abaixo, qualitativo se positivo/negativo/reagente; ' +
+      'data_exame é a data de COLETA (não liberação), null se ausente; ' +
+      'se houver múltiplos painéis no arquivo combine em um único JSON com todos os resultados.'
 
     const raw = await generateWithFallback(ai, [
       { inlineData: { mimeType: mediaType, data: base64 } },
       prompt,
     ])
 
-    let parsed: any = null
-    const m = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
-    try { parsed = JSON.parse(m ? m[1].trim() : raw) } catch {}
+    // Robust JSON extraction — try multiple strategies
+    function tryParse(s: string): any { try { return JSON.parse(s) } catch { return null } }
+    let parsed: any =
+      tryParse(raw) ??
+      (() => { const m = raw.match(/```(?:json)?\s*([\s\S]*?)```/); return m ? tryParse(m[1].trim()) : null })() ??
+      (() => { const m = raw.match(/\{[\s\S]*\}/); return m ? tryParse(m[0]) : null })() ??
+      (() => { const i = raw.indexOf('{'); return i >= 0 ? tryParse(raw.slice(i)) : null })() ??
+      null
 
     return NextResponse.json({
       tipo_exame:  parsed?.tipo_exame  || 'Exame',
