@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Paciente, ExameImagem, ToastData } from '@/types'
 
@@ -18,36 +18,17 @@ interface AiResult {
   conclusao: string | null
 }
 
-const BUCKET = 'exames-imagem'
-
 export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, showToast }: Props) {
   const supabase = createClient()
-  const fileRef = useRef<HTMLInputElement>(null)
+  const fileRef  = useRef<HTMLInputElement>(null)
 
-  const [uploading,    setUploading]    = useState(false)
-  const [aiResult,     setAiResult]     = useState<AiResult | null>(null)
-  const [pendingFile,  setPendingFile]  = useState<File | null>(null)
-  const [pendingB64,   setPendingB64]   = useState<string | null>(null)
-  const [tipoEdit,     setTipoEdit]     = useState('')
-  const [dataEdit,     setDataEdit]     = useState('')
-  const [saving,       setSaving]       = useState(false)
-  const [expandedId,   setExpandedId]   = useState<string | null>(null)
-  const [signedUrls,   setSignedUrls]   = useState<Record<string, string>>({})
-  const [deleting,     setDeleting]     = useState<string | null>(null)
-
-  // Generate signed URLs for all files
-  useEffect(() => {
-    if (!examesImagem.length) return
-    const gen = async () => {
-      const map: Record<string, string> = {}
-      await Promise.all(examesImagem.filter(e => e.arquivo_path).map(async e => {
-        const { data } = await supabase.storage.from(BUCKET).createSignedUrl(e.arquivo_path!, 3600)
-        if (data?.signedUrl) map[e.id] = data.signedUrl
-      }))
-      setSignedUrls(map)
-    }
-    gen()
-  }, [examesImagem])
+  const [uploading,   setUploading]  = useState(false)
+  const [aiResult,    setAiResult]   = useState<AiResult | null>(null)
+  const [tipoEdit,    setTipoEdit]   = useState('')
+  const [dataEdit,    setDataEdit]   = useState('')
+  const [saving,      setSaving]     = useState(false)
+  const [expandedId,  setExpandedId] = useState<string | null>(null)
+  const [deleting,    setDeleting]   = useState<string | null>(null)
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return
@@ -59,7 +40,6 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
         reader.onerror = rej
         reader.readAsDataURL(file)
       })
-      setPendingFile(file); setPendingB64(b64)
       const resp = await fetch('/api/extract-imagem', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ base64: b64, mediaType: file.type }),
@@ -71,61 +51,43 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
       setDataEdit(data.data_exame ?? '')
     } catch (err: any) { showToast('Erro: ' + err.message, 'error'); resetForm() }
     setUploading(false)
+    if (fileRef.current) fileRef.current.value = ''
   }
 
   const resetForm = () => {
-    setAiResult(null); setPendingFile(null); setPendingB64(null)
-    setTipoEdit(''); setDataEdit('')
+    setAiResult(null); setTipoEdit(''); setDataEdit('')
     if (fileRef.current) fileRef.current.value = ''
   }
 
   const handleSave = async () => {
-    if (!aiResult || !pendingFile) return
+    if (!aiResult) return
     if (!tipoEdit.trim()) { showToast('Informe o tipo de exame', 'error'); return }
     setSaving(true)
-    try {
-      // Upload file to storage
-      const ext = pendingFile.name.split('.').pop() ?? 'bin'
-      const filePath = `${paciente.id}/${Date.now()}.${ext}`
-      const { error: storErr } = await supabase.storage.from(BUCKET)
-        .upload(filePath, pendingFile, { cacheControl: '3600', upsert: false })
-      if (storErr) throw storErr
-
-      const { error: dbErr } = await supabase.from('exames_imagem').insert({
-        paciente_id: paciente.id,
-        tipo_exame: tipoEdit.trim(),
-        data_exame: dataEdit.trim() || null,
-        arquivo_path: filePath,
-        arquivo_nome: pendingFile.name,
-        resumo_ia: aiResult.resumo,
-        achados: { ...aiResult.achados, ...(aiResult.conclusao ? { '📋 Conclusão': aiResult.conclusao } : {}) },
-      })
-      if (dbErr) throw dbErr
-
-      showToast('Exame de imagem salvo!')
-      resetForm(); onRefresh()
-    } catch (err: any) { showToast('Erro: ' + err.message, 'error') }
+    const { error } = await supabase.from('exames_imagem').insert({
+      paciente_id: paciente.id,
+      tipo_exame:  tipoEdit.trim(),
+      data_exame:  dataEdit.trim() || null,
+      resumo_ia:   aiResult.resumo,
+      achados: { ...aiResult.achados, ...(aiResult.conclusao ? { '📋 Conclusão': aiResult.conclusao } : {}) },
+    })
     setSaving(false)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    showToast('Laudo salvo!')
+    resetForm(); onRefresh()
   }
 
   const handleDelete = async (ex: ExameImagem) => {
-    if (!confirm(`Excluir "${ex.tipo_exame}"? Esta ação não pode ser desfeita.`)) return
+    if (!confirm(`Excluir "${ex.tipo_exame}"?`)) return
     setDeleting(ex.id)
-    if (ex.arquivo_path) {
-      await supabase.storage.from(BUCKET).remove([ex.arquivo_path])
-    }
     const { error } = await supabase.from('exames_imagem').delete().eq('id', ex.id)
     setDeleting(null)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
-    showToast('Exame removido')
+    showToast('Laudo removido')
     onRefresh()
   }
 
   const sorted = [...examesImagem].sort((a, b) =>
     new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-
-  const isImage = (nome: string | null) =>
-    nome ? /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(nome) : false
 
   return (
     <div className="space-y-4">
@@ -139,8 +101,8 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
         </label>
       </div>
 
-      {/* AI result preview / form */}
-      {aiResult && pendingFile && (
+      {/* AI result preview / save form */}
+      {aiResult && (
         <div className="border-2 border-indigo-200 rounded-xl bg-indigo-50 p-4 space-y-3">
           <div className="flex items-start justify-between">
             <p className="text-sm font-bold text-indigo-900">🤖 IA extraiu os seguintes dados</p>
@@ -160,19 +122,17 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
             </div>
           </div>
 
-          {/* Resumo */}
           <div className="bg-white border border-indigo-100 rounded-lg p-3">
             <p className="text-xs font-bold text-indigo-700 mb-1.5">Resumo</p>
             <p className="text-sm text-slate-700 leading-relaxed">{aiResult.resumo}</p>
           </div>
 
-          {/* Achados */}
           {Object.keys(aiResult.achados).length > 0 && (
             <div className="bg-white border border-indigo-100 rounded-lg p-3 space-y-1.5">
-              <p className="text-xs font-bold text-indigo-700 mb-2">Achados detalhados</p>
+              <p className="text-xs font-bold text-indigo-700 mb-2">Achados</p>
               {Object.entries(aiResult.achados).map(([k, v]) => (
                 <div key={k} className="flex gap-2 text-xs">
-                  <span className="font-semibold text-slate-600 whitespace-nowrap min-w-[100px]">{k}:</span>
+                  <span className="font-semibold text-slate-600 whitespace-nowrap min-w-[110px]">{k}:</span>
                   <span className="text-slate-700">{v as string}</span>
                 </div>
               ))}
@@ -186,11 +146,11 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
           )}
 
           <div className="flex gap-2">
-            <button onClick={resetForm} className="flex-1 border border-slate-300 text-slate-600 text-sm font-semibold py-2 rounded-lg hover:bg-slate-50 transition-colors">
+            <button onClick={resetForm} className="flex-1 border border-slate-300 text-slate-600 text-sm font-semibold py-2 rounded-lg hover:bg-slate-50">
               Cancelar
             </button>
             <button onClick={handleSave} disabled={saving}
-              className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold py-2 rounded-lg transition-colors">
+              className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold py-2 rounded-lg">
               {saving ? '⏳ Salvando...' : '💾 Salvar Laudo'}
             </button>
           </div>
@@ -205,56 +165,31 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
       <div className="space-y-3">
         {sorted.map(ex => {
           const isExp   = expandedId === ex.id
-          const signUrl = signedUrls[ex.id]
-          const img     = isImage(ex.arquivo_nome)
           const achados = ex.achados ?? {}
 
           return (
             <div key={ex.id} className="border border-slate-200 rounded-xl bg-white shadow-sm overflow-hidden">
               <div className="flex items-start gap-3 p-3">
-
-                {/* Thumbnail / icon */}
-                <div className="w-14 h-14 rounded-lg flex-shrink-0 overflow-hidden bg-slate-100 flex items-center justify-center border border-slate-200">
-                  {signUrl && img ? (
-                    <img src={signUrl} alt={ex.tipo_exame} className="w-full h-full object-cover"/>
-                  ) : signUrl ? (
-                    <a href={signUrl} target="_blank" rel="noopener noreferrer" className="text-2xl" title="Abrir PDF">📄</a>
-                  ) : (
-                    <span className="text-2xl">{img ? '🖼️' : '📄'}</span>
-                  )}
+                <div className="w-10 h-10 rounded-lg flex-shrink-0 bg-indigo-50 flex items-center justify-center border border-indigo-100 text-xl">
+                  🩻
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="font-semibold text-slate-800 text-sm">{ex.tipo_exame}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        {ex.data_exame && <span className="mr-2">📅 {ex.data_exame}</span>}
-                        {ex.arquivo_nome && <span>📎 {ex.arquivo_nome}</span>}
-                      </p>
+                      {ex.data_exame && <p className="text-xs text-slate-400 mt-0.5">📅 {ex.data_exame}</p>}
                     </div>
-                    <div className="flex gap-1 flex-shrink-0">
-                      {signUrl && (
-                        <a href={signUrl} target="_blank" rel="noopener noreferrer"
-                          className="text-xs text-indigo-600 hover:text-indigo-800 border border-indigo-200 px-2 py-1 rounded-lg" title="Ver arquivo">
-                          🔗
-                        </a>
-                      )}
-                      <button onClick={() => handleDelete(ex)} disabled={deleting === ex.id}
-                        className="text-xs text-red-400 hover:text-red-700 border border-red-100 hover:border-red-300 px-2 py-1 rounded-lg transition-colors">
-                        {deleting === ex.id ? '⏳' : '🗑️'}
-                      </button>
-                    </div>
+                    <button onClick={() => handleDelete(ex)} disabled={deleting === ex.id}
+                      className="text-xs text-red-400 hover:text-red-700 border border-red-100 hover:border-red-300 px-2 py-1 rounded-lg transition-colors flex-shrink-0">
+                      {deleting === ex.id ? '⏳' : '🗑️'}
+                    </button>
                   </div>
 
-                  {/* Resumo */}
                   {ex.resumo_ia && (
-                    <p className="text-xs text-slate-600 mt-1.5 leading-relaxed line-clamp-2">
-                      {ex.resumo_ia}
-                    </p>
+                    <p className="text-xs text-slate-600 mt-1.5 leading-relaxed line-clamp-2">{ex.resumo_ia}</p>
                   )}
 
-                  {/* Expand toggle */}
                   {Object.keys(achados).length > 0 && (
                     <button onClick={() => setExpandedId(isExp ? null : ex.id)}
                       className="mt-1.5 text-xs text-indigo-500 hover:text-indigo-700 font-semibold">
@@ -264,7 +199,6 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
                 </div>
               </div>
 
-              {/* Expanded achados */}
               {isExp && (
                 <div className="border-t border-slate-100 bg-slate-50 px-4 py-3 space-y-1.5">
                   {Object.entries(achados).map(([k, v]) => (
