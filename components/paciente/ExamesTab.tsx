@@ -299,11 +299,6 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-slate-700">
           Exames ({exames.length})
-          {totalAlt > 0 && (
-            <span className="ml-2 bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">
-              ⚠️ {totalAlt} alterado{totalAlt > 1 ? 's' : ''}
-            </span>
-          )}
         </h3>
         <button onClick={() => adding ? resetAdding() : setAdding(true)}
           className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors">
@@ -416,11 +411,6 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
         </div>
       )}
 
-      {totalAlt > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-amber-800 text-sm font-medium">
-          ⚠️ {totalAlt} resultado{totalAlt > 1 ? 's' : ''} alterado{totalAlt > 1 ? 's' : ''}
-        </div>
-      )}
 
       {germeAlert && (
         <div className={`rounded-lg px-4 py-2.5 text-sm font-semibold flex items-start gap-2 ${
