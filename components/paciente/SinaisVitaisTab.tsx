@@ -140,7 +140,15 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
   const setRow = (idx: number, key: SvKey, raw: string) => {
     setRows(prev => {
       const next = [...prev]
-      const clamped = clampInput(key, raw)
+      next[idx] = { ...next[idx], [key]: raw }
+      return next
+    })
+  }
+
+  const blurRow = (idx: number, key: SvKey, raw: string) => {
+    const clamped = clampInput(key, raw)
+    if (clamped !== raw) setRows(prev => {
+      const next = [...prev]
       next[idx] = { ...next[idx], [key]: clamped }
       return next
     })
@@ -360,8 +368,8 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
                               min={col.min}
                               max={col.max}
                               value={isPamAuto ? autoP! : row[col.key]}
-                              onChange={e => setRow(idx, col.key, e.target.value)}
-                              onBlur={e => { if (e.target.value) setRow(idx, col.key, e.target.value) }}
+                              onChange={e => !isPamAuto && setRow(idx, col.key, e.target.value)}
+                              onBlur={e => !isPamAuto && blurRow(idx, col.key, e.target.value)}
                               placeholder="—"
                               readOnly={isPamAuto}
                               className={`w-full text-center text-sm font-semibold focus:outline-none rounded px-1 py-0.5

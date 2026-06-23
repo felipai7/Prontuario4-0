@@ -129,8 +129,6 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     showToast('Dados do paciente atualizados!')
   }
 
-  const totalAlt = exames.reduce((acc, ex) => acc + (ex.resultados?.filter(r => r.alterado).length ?? 0), 0)
-
   return (
     <>
       <div className="fixed inset-0 bg-black/60 z-40 flex items-start justify-center p-4 overflow-y-auto"
@@ -152,11 +150,6 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
                 )}
                 {pac.peso_kg && (
                   <p className="text-indigo-200 text-xs mt-0.5">⚖️ {pac.peso_kg} Kg</p>
-                )}
-                {totalAlt > 0 && (
-                  <span className="inline-block mt-1.5 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                    ⚠️ {totalAlt} resultado{totalAlt > 1 ? 's' : ''} alterado{totalAlt > 1 ? 's' : ''}
-                  </span>
                 )}
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">

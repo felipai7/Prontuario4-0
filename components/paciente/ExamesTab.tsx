@@ -103,8 +103,8 @@ const CATEGORIES: Category[] = [
   { label: '🫀 Cardíaco',       test: n => /troponin|\bbnp\b/i.test(n) },
   { label: '💨 Gasometria',     test: n => /\bph\b|po2|pco2|hco3|\bbe\b|sato2|lactato|\bco2\b|gap co2/i.test(n) },
   { label: '⚗️ Hormônios',      test: n => /^tsh$|^t4l?$|^t3$|cortisol/i.test(n) },
-  { label: '🦠 Microbiologia',  test: n => /swab|cultura|urocultura|hemocultura|micror?organism|bactéria\s+isolada|contagem\s+de\s+colon|antibiograma|amicacina|ampicilina|aztreonam|cefalexin|cefepim|cefotaxim|cefoxitin|ceftazidim|cefurox|ceftriaxon|ciprofloxacin|cloranfenic|ertapenem|gentamicin|levofloxacin|linezolid|meropenem|piperacilin|polimixin|tigeciclina|tobramicin|trimetoprim|vancomicin|colistin|fosfomicin/i.test(n) },
-  { label: '🔬 EAS/Urina',      test: n => /^cor$|^aspecto$|densidade|cetonas|^nitrito$|urobilinogênio|células\s+epiteliais|cilindros|cristais|bacteriúria|\(química\)|\(microscopia\)|\(sedimento\)|\(urin/i.test(n) },
+  { label: '🦠 Microbiologia',  test: n => /swab|cultura|urocultura|hemocultura|micror?organism|bactéria\s+isolada|contagem\s+(de\s+)?col[oô]n|antibiograma|amicacina|amoxicil|ampicil|sulbactam|aztreonam|cefalexin|cefepim|cefotaxim|cefoxitin|ceftazidim|cefurox|ceftriaxon|ciprofloxacin|cloranfenic|ertapenem|gentamicin|imipenem|levofloxacin|linezolid|meropenem|piperacilin|pip.*tazo|polimixin|tigeciclina|tobramicin|trimetoprim|trimet.*sulfa|sulfa.*trimet|vancomicin|colistin|fosfomicin/i.test(n) },
+  { label: '🔬 EAS/Urina',      test: n => /^cor$|^aspecto$|densidade|cetonas|^nitrito$|urobilinogênio|células\s+epiteliais|células\s+trans|células\s+tubulares|escamosas|cilindros|cristais|bacteriúria|^muco$|leveduras|^proteínas$|\(química\)|\(microscopia\)|\(sedimento\)|\(urin/i.test(n) },
 ]
 
 function getCategoryLabel(name: string): string {
@@ -192,7 +192,6 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
   })
 
   const tableRows = buildTableRows(allParams)
-  const totalAlt = exames.reduce((s, ex) => s + (ex.resultados?.filter(r => r.alterado).length ?? 0), 0)
 
   // Germe crítico detection
   const CRITICO_RE = /klebsiella|acinetobacter|pseudomonas|enterococcus|staphylococcus|candida|clostridioides|clostridium difficile|mrsa|esbl|kpc|vre|cre/i
