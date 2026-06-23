@@ -95,6 +95,19 @@ export interface SinalVital {
   updated_at: string
 }
 
+export interface DVA {
+  id: string
+  paciente_id: string
+  droga: string
+  concentracao_valor: number
+  concentracao_unidade: string
+  concentracao_label: string
+  fluxo_ml_h: number
+  ativo: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface ExameImagem {
   id: string
   paciente_id: string

@@ -34,14 +34,35 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
   const [mTipo,      setMTipo]      = useState('')
   const [mData,      setMData]      = useState('')
   const [mTexto,     setMTexto]     = useState('')
+  const [mDataErr,   setMDataErr]   = useState('')
   const [saving,     setSaving]     = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [deleting,   setDeleting]   = useState<string | null>(null)
 
   const resetForm = () => {
     setAiResult(null); setTipoEdit(''); setDataEdit('')
-    setMTipo(''); setMData(''); setMTexto('')
+    setMTipo(''); setMData(''); setMTexto(''); setMDataErr('')
     if (fileRef.current) fileRef.current.value = ''
+  }
+
+  const maskDate = (val: string): string => {
+    const d = val.replace(/\D/g, '').slice(0, 8)
+    if (d.length > 4) return d.slice(0,2) + '/' + d.slice(2,4) + '/' + d.slice(4)
+    if (d.length > 2) return d.slice(0,2) + '/' + d.slice(2)
+    return d
+  }
+
+  const validateDate = (s: string): string => {
+    if (!s.trim()) return 'Data obrigatória'
+    const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+    if (!m) return 'Formato inválido — use DD/MM/AAAA'
+    const day = parseInt(m[1]), month = parseInt(m[2]), year = parseInt(m[3])
+    if (month < 1 || month > 12) return 'Mês inválido'
+    if (day < 1 || day > 31) return 'Dia inválido'
+    if (year < 1900 || year > new Date().getFullYear() + 1) return 'Ano inválido'
+    const date = new Date(year, month - 1, day)
+    if (date.getDate() !== day || date.getMonth() !== month - 1) return 'Data não existe'
+    return ''
   }
 
   const handleModeChange = (m: Mode) => { setMode(m); resetForm() }
@@ -89,6 +110,8 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
 
   const handleSaveManual = async () => {
     if (!mTipo.trim()) { showToast('Informe o tipo de exame', 'error'); return }
+    const dateErr = validateDate(mData)
+    if (dateErr) { setMDataErr(dateErr); return }
     if (!mTexto.trim()) { showToast('Cole o texto do laudo', 'error'); return }
     setSaving(true)
     const { error } = await supabase.from('exames_imagem').insert({
@@ -210,9 +233,13 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
                     className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
                 </div>
                 <div>
-                  <label className="text-xs text-slate-500 font-medium block mb-1">Data</label>
-                  <input value={mData} onChange={e => setMData(e.target.value)} placeholder="DD/MM/AAAA"
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+                  <label className="text-xs text-slate-500 font-medium block mb-1">Data *</label>
+                  <input value={mData}
+                    onChange={e => { setMData(maskDate(e.target.value)); setMDataErr('') }}
+                    onBlur={e => setMDataErr(validateDate(e.target.value))}
+                    placeholder="DD/MM/AAAA"
+                    className={`w-full border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400 ${mDataErr ? 'border-red-400' : 'border-slate-300'}`}/>
+                  {mDataErr && <p className="text-xs text-red-500 mt-0.5">{mDataErr}</p>}
                 </div>
               </div>
               <div>
