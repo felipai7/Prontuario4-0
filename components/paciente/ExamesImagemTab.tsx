@@ -18,17 +18,33 @@ interface AiResult {
   conclusao: string | null
 }
 
+type Mode = 'ia' | 'manual'
+
 export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, showToast }: Props) {
   const supabase = createClient()
   const fileRef  = useRef<HTMLInputElement>(null)
 
-  const [uploading,   setUploading]  = useState(false)
-  const [aiResult,    setAiResult]   = useState<AiResult | null>(null)
-  const [tipoEdit,    setTipoEdit]   = useState('')
-  const [dataEdit,    setDataEdit]   = useState('')
-  const [saving,      setSaving]     = useState(false)
-  const [expandedId,  setExpandedId] = useState<string | null>(null)
-  const [deleting,    setDeleting]   = useState<string | null>(null)
+  const [formOpen,   setFormOpen]   = useState(false)
+  const [mode,       setMode]       = useState<Mode>('ia')
+  const [uploading,  setUploading]  = useState(false)
+  const [aiResult,   setAiResult]   = useState<AiResult | null>(null)
+  const [tipoEdit,   setTipoEdit]   = useState('')
+  const [dataEdit,   setDataEdit]   = useState('')
+  // manual mode fields
+  const [mTipo,      setMTipo]      = useState('')
+  const [mData,      setMData]      = useState('')
+  const [mTexto,     setMTexto]     = useState('')
+  const [saving,     setSaving]     = useState(false)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [deleting,   setDeleting]   = useState<string | null>(null)
+
+  const resetForm = () => {
+    setAiResult(null); setTipoEdit(''); setDataEdit('')
+    setMTipo(''); setMData(''); setMTexto('')
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
+  const handleModeChange = (m: Mode) => { setMode(m); resetForm() }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return
@@ -54,12 +70,7 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
     if (fileRef.current) fileRef.current.value = ''
   }
 
-  const resetForm = () => {
-    setAiResult(null); setTipoEdit(''); setDataEdit('')
-    if (fileRef.current) fileRef.current.value = ''
-  }
-
-  const handleSave = async () => {
+  const handleSaveIa = async () => {
     if (!aiResult) return
     if (!tipoEdit.trim()) { showToast('Informe o tipo de exame', 'error'); return }
     setSaving(true)
@@ -73,7 +84,24 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
     setSaving(false)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
     showToast('Laudo salvo!')
-    resetForm(); onRefresh()
+    resetForm(); setFormOpen(false); onRefresh()
+  }
+
+  const handleSaveManual = async () => {
+    if (!mTipo.trim()) { showToast('Informe o tipo de exame', 'error'); return }
+    if (!mTexto.trim()) { showToast('Cole o texto do laudo', 'error'); return }
+    setSaving(true)
+    const { error } = await supabase.from('exames_imagem').insert({
+      paciente_id: paciente.id,
+      tipo_exame:  mTipo.trim(),
+      data_exame:  mData.trim() || null,
+      resumo_ia:   mTexto.trim(),
+      achados:     null,
+    })
+    setSaving(false)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    showToast('Laudo salvo!')
+    resetForm(); setFormOpen(false); onRefresh()
   }
 
   const handleDelete = async (ex: ExameImagem) => {
@@ -92,72 +120,117 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
   return (
     <div className="space-y-4">
 
-      {/* Upload trigger */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-slate-700">Laudos de Imagem ({examesImagem.length})</h3>
-        <label className={`cursor-pointer flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
-          {uploading ? '⏳ Analisando...' : '+ Adicionar Laudo'}
-          <input ref={fileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleFileChange} disabled={uploading}/>
-        </label>
+        <button onClick={() => { setFormOpen(o => !o); resetForm() }}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors">
+          {formOpen ? '✕ Cancelar' : '+ Adicionar Laudo'}
+        </button>
       </div>
 
-      {/* AI result preview / save form */}
-      {aiResult && (
+      {/* Form */}
+      {formOpen && (
         <div className="border-2 border-indigo-200 rounded-xl bg-indigo-50 p-4 space-y-3">
-          <div className="flex items-start justify-between">
-            <p className="text-sm font-bold text-indigo-900">🤖 IA extraiu os seguintes dados</p>
-            <button onClick={resetForm} className="text-slate-400 hover:text-slate-700 text-lg leading-none">✕</button>
+          {/* Mode toggle */}
+          <div className="flex rounded-lg overflow-hidden border border-indigo-200">
+            <button onClick={() => handleModeChange('ia')}
+              className={`flex-1 py-2 text-sm font-semibold transition-colors ${mode === 'ia' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 hover:bg-indigo-50'}`}>
+              📷 Via foto / PDF
+            </button>
+            <button onClick={() => handleModeChange('manual')}
+              className={`flex-1 py-2 text-sm font-semibold transition-colors ${mode === 'manual' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 hover:bg-indigo-50'}`}>
+              ✏️ Inserir texto
+            </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs text-slate-500 font-medium block mb-1">Tipo de exame *</label>
-              <input value={tipoEdit} onChange={e => setTipoEdit(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
-            </div>
-            <div>
-              <label className="text-xs text-slate-500 font-medium block mb-1">Data do exame</label>
-              <input value={dataEdit} onChange={e => setDataEdit(e.target.value)} placeholder="DD/MM/AAAA"
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
-            </div>
-          </div>
-
-          <div className="bg-white border border-indigo-100 rounded-lg p-3">
-            <p className="text-xs font-bold text-indigo-700 mb-1.5">Resumo</p>
-            <p className="text-sm text-slate-700 leading-relaxed">{aiResult.resumo}</p>
-          </div>
-
-          {Object.keys(aiResult.achados).length > 0 && (
-            <div className="bg-white border border-indigo-100 rounded-lg p-3 space-y-1.5">
-              <p className="text-xs font-bold text-indigo-700 mb-2">Achados</p>
-              {Object.entries(aiResult.achados).map(([k, v]) => (
-                <div key={k} className="flex gap-2 text-xs">
-                  <span className="font-semibold text-slate-600 whitespace-nowrap min-w-[110px]">{k}:</span>
-                  <span className="text-slate-700">{v as string}</span>
-                </div>
-              ))}
-              {aiResult.conclusao && (
-                <div className="mt-2 pt-2 border-t border-indigo-100">
-                  <p className="text-xs font-bold text-indigo-700">Conclusão:</p>
-                  <p className="text-xs text-slate-700 mt-0.5">{aiResult.conclusao}</p>
-                </div>
-              )}
-            </div>
+          {/* IA mode */}
+          {mode === 'ia' && !aiResult && (
+            <label className={`flex items-center justify-center gap-2 w-full py-3 border-2 border-dashed border-indigo-300 rounded-lg cursor-pointer hover:border-indigo-500 hover:bg-white text-sm text-indigo-600 font-medium transition-all ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+              {uploading ? '⏳ Analisando com IA...' : '📁 Selecionar PDF ou Imagem'}
+              <input ref={fileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleFileChange} disabled={uploading}/>
+            </label>
           )}
 
-          <div className="flex gap-2">
-            <button onClick={resetForm} className="flex-1 border border-slate-300 text-slate-600 text-sm font-semibold py-2 rounded-lg hover:bg-slate-50">
-              Cancelar
-            </button>
-            <button onClick={handleSave} disabled={saving}
-              className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold py-2 rounded-lg">
-              {saving ? '⏳ Salvando...' : '💾 Salvar Laudo'}
-            </button>
-          </div>
+          {mode === 'ia' && aiResult && (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-slate-500 font-medium block mb-1">Tipo de exame *</label>
+                  <input value={tipoEdit} onChange={e => setTipoEdit(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 font-medium block mb-1">Data</label>
+                  <input value={dataEdit} onChange={e => setDataEdit(e.target.value)} placeholder="DD/MM/AAAA"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+                </div>
+              </div>
+              <div className="bg-white border border-indigo-100 rounded-lg p-3">
+                <p className="text-xs font-bold text-indigo-700 mb-1.5">Resumo extraído pela IA</p>
+                <p className="text-sm text-slate-700 leading-relaxed">{aiResult.resumo}</p>
+              </div>
+              {Object.keys(aiResult.achados).length > 0 && (
+                <div className="bg-white border border-indigo-100 rounded-lg p-3 space-y-1.5">
+                  <p className="text-xs font-bold text-indigo-700 mb-2">Achados</p>
+                  {Object.entries(aiResult.achados).map(([k, v]) => (
+                    <div key={k} className="flex gap-2 text-xs">
+                      <span className="font-semibold text-slate-600 whitespace-nowrap min-w-[110px]">{k}:</span>
+                      <span className="text-slate-700">{v as string}</span>
+                    </div>
+                  ))}
+                  {aiResult.conclusao && (
+                    <div className="mt-2 pt-2 border-t border-indigo-100">
+                      <p className="text-xs font-bold text-indigo-700">Conclusão:</p>
+                      <p className="text-xs text-slate-700 mt-0.5">{aiResult.conclusao}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button onClick={resetForm} className="flex-1 border border-slate-300 text-slate-600 text-sm font-semibold py-2 rounded-lg hover:bg-slate-50">
+                  Reenviar arquivo
+                </button>
+                <button onClick={handleSaveIa} disabled={saving}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold py-2 rounded-lg">
+                  {saving ? '⏳ Salvando...' : '💾 Salvar Laudo'}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Manual mode */}
+          {mode === 'manual' && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-slate-500 font-medium block mb-1">Tipo de exame *</label>
+                  <input value={mTipo} onChange={e => setMTipo(e.target.value)}
+                    placeholder="ex: Radiografia de Tórax"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 font-medium block mb-1">Data</label>
+                  <input value={mData} onChange={e => setMData(e.target.value)} placeholder="DD/MM/AAAA"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 font-medium block mb-1">Texto do laudo *</label>
+                <textarea value={mTexto} onChange={e => setMTexto(e.target.value)}
+                  rows={6} placeholder="Cole aqui o texto completo do laudo..."
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white resize-y focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+              </div>
+              <button onClick={handleSaveManual} disabled={saving}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold py-2.5 rounded-lg">
+                {saving ? '⏳ Salvando...' : '💾 Salvar Laudo'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      {examesImagem.length === 0 && !aiResult && (
+      {examesImagem.length === 0 && !formOpen && (
         <p className="text-slate-400 text-sm italic text-center py-8">Nenhum laudo de imagem registrado</p>
       )}
 
@@ -166,6 +239,7 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
         {sorted.map(ex => {
           const isExp   = expandedId === ex.id
           const achados = ex.achados ?? {}
+          const hasAchados = Object.keys(achados).length > 0
 
           return (
             <div key={ex.id} className="border border-slate-200 rounded-xl bg-white shadow-sm overflow-hidden">
@@ -173,7 +247,6 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
                 <div className="w-10 h-10 rounded-lg flex-shrink-0 bg-indigo-50 flex items-center justify-center border border-indigo-100 text-xl">
                   🩻
                 </div>
-
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <div>
@@ -187,19 +260,27 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
                   </div>
 
                   {ex.resumo_ia && (
-                    <p className="text-xs text-slate-600 mt-1.5 leading-relaxed line-clamp-2">{ex.resumo_ia}</p>
+                    <p className={`text-xs text-slate-600 mt-1.5 leading-relaxed ${!isExp ? 'line-clamp-2' : ''}`}>
+                      {ex.resumo_ia}
+                    </p>
                   )}
 
-                  {Object.keys(achados).length > 0 && (
+                  {hasAchados && (
                     <button onClick={() => setExpandedId(isExp ? null : ex.id)}
                       className="mt-1.5 text-xs text-indigo-500 hover:text-indigo-700 font-semibold">
                       {isExp ? '▲ Ocultar detalhes' : `▼ Ver ${Object.keys(achados).length} achado(s)`}
                     </button>
                   )}
+                  {!hasAchados && ex.resumo_ia && ex.resumo_ia.length > 120 && (
+                    <button onClick={() => setExpandedId(isExp ? null : ex.id)}
+                      className="mt-1.5 text-xs text-indigo-500 hover:text-indigo-700 font-semibold">
+                      {isExp ? '▲ Ocultar' : '▼ Ver texto completo'}
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {isExp && (
+              {isExp && hasAchados && (
                 <div className="border-t border-slate-100 bg-slate-50 px-4 py-3 space-y-1.5">
                   {Object.entries(achados).map(([k, v]) => (
                     <div key={k} className="flex gap-2 text-xs">
