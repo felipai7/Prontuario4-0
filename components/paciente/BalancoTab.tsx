@@ -220,13 +220,37 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
       {periodos.length > 0 && (
         <div className="grid grid-cols-2 gap-3">
           {/* Débito Urinário */}
-          <div className="bg-sky-50 border border-sky-200 rounded-xl p-3">
-            <p className="text-xs text-sky-600 font-semibold mb-1">💧 {duLabel}</p>
-            <p className="text-2xl font-black text-sky-800">{duTotal.toFixed(0)} mL</p>
-            {duHoras < 24 && duHoras > 0 && (
-              <p className="text-xs text-sky-400 mt-0.5">Dados de {duHoras.toFixed(0)}h disponíveis</p>
-            )}
-          </div>
+          {(() => {
+            const duMlKgH = duHoras > 0 ? duTotal / peso / duHoras : null
+            const isAnuria   = duMlKgH !== null && duMlKgH < 0.1
+            const isOliguria = duMlKgH !== null && duMlKgH >= 0.1 && duMlKgH < 0.5
+            const cardCls = isAnuria   ? 'bg-red-50 border-red-400' :
+                            isOliguria ? 'bg-orange-50 border-orange-300' :
+                                         'bg-sky-50 border-sky-200'
+            const labelCls = isAnuria   ? 'text-red-600' :
+                             isOliguria ? 'text-orange-600' : 'text-sky-600'
+            const valueCls = isAnuria   ? 'text-red-800' :
+                             isOliguria ? 'text-orange-700' : 'text-sky-800'
+            return (
+              <div className={`rounded-xl p-3 border ${cardCls}`}>
+                <p className={`text-xs font-semibold mb-1 ${labelCls}`}>💧 {duLabel}</p>
+                <p className={`text-2xl font-black ${valueCls}`}>{duTotal.toFixed(0)} mL</p>
+                {duMlKgH !== null && (
+                  <p className={`text-xs font-bold mt-1 ${valueCls}`}>
+                    {duMlKgH.toFixed(2)} mL/Kg/h
+                    {isAnuria   && <span className="ml-1.5 bg-red-600 text-white text-xs font-black px-1.5 py-0.5 rounded-full">🚨 ANÚRIA</span>}
+                    {isOliguria && <span className="ml-1.5 bg-orange-500 text-white text-xs font-black px-1.5 py-0.5 rounded-full">⚠️ OLIGÚRIA</span>}
+                  </p>
+                )}
+                {duHoras < 24 && duHoras > 0 && (
+                  <p className={`text-xs mt-0.5 opacity-70 ${labelCls}`}>Dados de {duHoras.toFixed(0)}h disponíveis</p>
+                )}
+                {!paciente.peso_kg && duMlKgH !== null && (
+                  <p className="text-xs text-slate-400 mt-0.5">Usando 70 Kg (peso não cadastrado)</p>
+                )}
+              </div>
+            )
+          })()}
 
           {/* Última Evacuação */}
           <div className={`rounded-xl p-3 border ${lastEvac ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>

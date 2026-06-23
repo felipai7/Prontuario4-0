@@ -21,32 +21,63 @@ const emptyResultado = (): ManualResultado => ({
 
 // ── Name normalisation (reduces duplicates across extractions) ────────────────
 const ALIASES: Array<[RegExp, string]> = [
-  [/^rdw(\s*[-–]?\s*(cv|sd))?(\s*%)?$/i,                     'RDW'],
-  [/^proteína\s+c\s+reativa$/i,                               'PCR'],
-  [/^taxa\s+(de\s+)?filtração\s+glomerular(\s+\w+)?$/i,       'TFG'],
-  [/^tgo$|^ast$|^ast\s*[/]\s*tgo$/i,                         'TGO/AST'],
-  [/^tgp$|^alt$|^alt\s*[/]\s*tgp$/i,                         'TGP/ALT'],
-  [/^(rni|inr)$/i,                                             'INR/RNI'],
-  [/^(dhl|ldh|desidrogenase\s+lática?)$/i,                    'LDH'],
-  [/^ck[\s-]?mb(\s*[\(/]?\s*atividade\s*\)?)?$/i,             'CK-MB'],
-  [/^(ck|cpk)(\s+total)?$/i,                                  'CK Total'],
-  [/^(pro[\s-]?)?bnp$/i,                                      'BNP'],
+  // Hemograma – normalise case/accentuation variations
+  [/^hematócrit[oa]?$/i,                                       'Hematócrito'],
+  [/^hemoglob[ia]n[ao]?s?$/i,                                  'Hemoglobina'],
+  [/^hemácias?$/i,                                             'Hemácias'],
+  [/^rdw(\s*[-–]?\s*(cv|sd))?(\s*%)?$/i,                      'RDW'],
+  [/^vcm$|^volume\s+corpuscular\s+médio$|^v\.?c\.?m\.?$/i,    'VCM'],
+  [/^hcm$|^hemoglobina\s+corpuscular\s+média$/i,               'HCM'],
+  [/^chcm$|^concentração\s+de\s+hemoglob/i,                    'CHCM'],
+  [/^segmentados?\s*(\(?\s*%\s*\)?)?$/i,                       'Segmentados (%)'],
+  [/^neutrófilos?\s+segmentados?$/i,                            'Segmentados (%)'],
+  [/^bastonetes?\s*(\(?\s*%\s*\)?)?$/i,                        'Bastonetes (%)'],
+  [/^linfócitos?\s*(típicos?)?\s*(\(?\s*%\s*\)?)?$/i,          'Linfócitos (%)'],
+  [/^monócitos?\s*(\(?\s*%\s*\)?)?$/i,                         'Monócitos (%)'],
+  [/^eosinófilos?\s*(\(?\s*%\s*\)?)?$/i,                       'Eosinófilos (%)'],
+  [/^basófilos?\s*(\(?\s*%\s*\)?)?$/i,                         'Basófilos (%)'],
+  [/^linf[ao]?\.?\s*atípicos?$/i,                              'Linfócitos Atípicos'],
+  [/^neutr[oó]?\.?\s*totais?$/i,                               'Neutrófilos Totais'],
+  [/^blastos?(\s*%)?$/i,                                       'Blastos (%)'],
+  [/^promielócitos?(\s*%)?$/i,                                  'Promielócitos (%)'],
+  [/^mielócitos?(\s*%)?$/i,                                    'Mielócitos (%)'],
+  [/^metamielócitos?(\s*%)?$/i,                                 'Metamielócitos (%)'],
+  [/^plasmócitos?(\s*%)?$/i,                                   'Plasmócitos (%)'],
+  [/^mpv$|^volume\s+plaquetário\s+médio$/i,                    'MPV'],
+  [/^plaquetas?$/i,                                            'Plaquetas'],
+  [/^leucócitos?(\s+totais?)?$/i,                              'Leucócitos'],
+  // Eletrólitos
+  [/^magnésio(\s+sérico)?$/i,                                  'Magnésio'],
+  [/^sódio(\s+sérico)?$/i,                                     'Sódio'],
+  [/^potássio(\s+sérico)?$/i,                                  'Potássio'],
+  [/^fósforo(\s+sérico)?$/i,                                   'Fósforo'],
+  // Renal
+  [/^ur[eé]ia(\s+sérica)?$/i,                                  'Ureia'],
+  [/^creatinin[ao]?(\s+sérica?)?$/i,                           'Creatinina'],
+  [/^taxa\s+(de\s+)?filtração\s+glomerular(\s+\w+)?$/i,        'TFG'],
+  // Gasometria – parametros medidos no aparelho junto com gases
+  [/^na\s*\(gasometria.*\)$/i,                                 'Na (Gasometria)'],
+  [/^k\s*\(gasometria.*\)$/i,                                  'K (Gasometria)'],
+  [/^glicose\s*\(gasometria.*\)$/i,                            'Glicose (Gasometria)'],
+  [/^hct\s*\(gasometria.*\)$/i,                                'Htc (Gasometria)'],
+  [/^be$|^base\s*excess$/i,                                    'BE'],
+  [/^o2sat$|^sat(uração)?\s*(de\s+)?o\.?2\s*(%)?$/i,          'SatO2 (%)'],
   [/^hco3(\s*[\(/]bicarbonato\)?)?$|^bicarbonato(\s+padrão)?$/i, 'HCO3'],
-  [/^sat(uração)?\s*(de\s+)?o\.?2\s*(%)?$/i,                  'SatO2 (%)'],
-  [/^segmentados?\s*(\(?\s*%\s*\)?)?$/i,                      'Segmentados (%)'],
-  [/^neutrófilos?\s+segmentados?$/i,                           'Segmentados (%)'],
-  [/^bastonetes?\s*(\(?\s*%\s*\)?)?$/i,                       'Bastonetes (%)'],
-  [/^linfócitos?\s*(típicos?)?\s*(\(?\s*%\s*\)?)?$/i,         'Linfócitos (%)'],
-  [/^monócitos?\s*(\(?\s*%\s*\)?)?$/i,                        'Monócitos (%)'],
-  [/^eosinófilos?\s*(\(?\s*%\s*\)?)?$/i,                      'Eosinófilos (%)'],
-  [/^basófilos?\s*(\(?\s*%\s*\)?)?$/i,                        'Basófilos (%)'],
-  [/^gama[\s-]?gt$|^γ[\s-]?gt$/i,                             'Gama-GT'],
-  [/^fosfatase\s+alcalina$/i,                                  'Fosfatase Alcalina'],
-  [/^vcm$|^volume\s+corpuscular\s+médio$/i,                   'VCM'],
-  [/^hcm$|^hemoglobina\s+corpuscular\s+média$/i,              'HCM'],
-  [/^chcm$|^concentração\s+de\s+hemoglob/i,                   'CHCM'],
-  [/^v\.?c\.?m\.?$/i,                                          'VCM'],
-  [/^gap\s+co2(\s*\(.+\))?$/i,                                'GAP CO2'],
+  [/^gap\s+co2(\s*\(.+\))?$/i,                                 'GAP CO2'],
+  // Inflamatório
+  [/^proteína\s+c\s+reativa$/i,                                'PCR'],
+  // Coagulação
+  [/^(rni|inr)$/i,                                              'INR/RNI'],
+  // Enzimas/Hepático
+  [/^tgo$|^ast$|^ast\s*[/]\s*tgo$/i,                          'TGO/AST'],
+  [/^tgp$|^alt$|^alt\s*[/]\s*tgp$/i,                          'TGP/ALT'],
+  [/^(dhl|ldh|desidrogenase\s+lática?)$/i,                     'LDH'],
+  [/^ck[\s-]?mb(\s*[\(/]?\s*atividade\s*\)?)?$/i,              'CK-MB'],
+  [/^(ck|cpk)(\s+total)?$/i,                                   'CK Total'],
+  [/^gama[\s-]?gt$|^γ[\s-]?gt$/i,                              'Gama-GT'],
+  [/^fosfatase\s+alcalina$/i,                                   'Fosfatase Alcalina'],
+  // Cardíaco
+  [/^(pro[\s-]?)?bnp$/i,                                       'BNP'],
 ]
 
 function canonicalize(name: string): string {
@@ -61,14 +92,14 @@ function canonicalize(name: string): string {
 type Category = { label: string; test: (n: string) => boolean }
 
 const CATEGORIES: Category[] = [
-  { label: '🩸 Hemograma',       test: n => /hemácia|hemoglob|hematócrit|vcm|hcm|chcm|rdw|plaqueta|leucócit|neutrófi|segmentad|bastonet|linfócit|monócit|eosinófi|basófi|metamielo/i.test(n) },
+  { label: '🩸 Hemograma',       test: n => /hemácia|hemoglob|hematócrit|vcm|hcm|chcm|rdw|plaqueta|leucócit|neutrófi|segmentad|bastonet|linfócit|monócit|eosinófi|basófi|metamielo|mielócit|promielócit|blastos|plasmócit|mpv/i.test(n) },
   { label: '⚡ Eletrólitos',     test: n => /^sódio$|^potássio$|^cálcio|^magnésio$|^fósforo$|^cloro$/i.test(n) },
-  { label: '🫘 Renal',           test: n => /ureia|creatinin|tfg|filtração|ácido úrico/i.test(n) },
+  { label: '🫘 Renal',           test: n => /^ureia$|creatinin|^tfg$|filtração|ácido úrico/i.test(n) },
   { label: '🧪 Inflamatório',   test: n => /^pcr$|procalcitonin|ferritin|\bvhs\b/i.test(n) },
   { label: '🩻 Coagulação',     test: n => /tap\b|inr|rni|ttpa|fibrinogên|d[\s-]?dímero/i.test(n) },
   { label: '🫀 Enzimas/Hepático', test: n => /tgo|tgp|fosfatase|ggt|bilirrubina|ldh|amilase|lipase|albumina|proteínas totais/i.test(n) },
   { label: '🫀 Cardíaco',       test: n => /troponin|ck[\s-]?(mb|total)|cpk|\bbnp\b/i.test(n) },
-  { label: '💨 Gasometria',     test: n => /\bph\b|po2|pco2|hco3|base excess|sato2|lactato|\bco2\b|gap co2/i.test(n) },
+  { label: '💨 Gasometria',     test: n => /\bph\b|po2|pco2|hco3|\bbe\b|sato2|lactato|\bco2\b|gap co2|\(gasometria\)/i.test(n) },
   { label: '⚗️ Hormônios',      test: n => /^tsh$|^t4l?$|^t3$|cortisol/i.test(n) },
 ]
 
