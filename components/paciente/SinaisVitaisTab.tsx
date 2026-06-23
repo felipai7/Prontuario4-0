@@ -135,6 +135,57 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
   const [saving,    setSaving]    = useState(false)
   const [importing, setImporting] = useState(false)
 
+  // Edit individual reading
+  const [editSv,     setEditSv]     = useState<SinalVital | null>(null)
+  const [editForm,   setEditForm]   = useState<RowInput>(emptyRow())
+  const [editSaving, setEditSaving] = useState(false)
+
+  const openEditSv = (sv: SinalVital) => {
+    setEditSv(sv)
+    setEditForm({
+      temperatura: sv.temperatura != null ? String(sv.temperatura) : '',
+      pas:  sv.pas  != null ? String(sv.pas)  : '',
+      pad:  sv.pad  != null ? String(sv.pad)  : '',
+      pam:  sv.pam  != null ? String(sv.pam)  : '',
+      fc:   sv.fc   != null ? String(sv.fc)   : '',
+      fr:   sv.fr   != null ? String(sv.fr)   : '',
+      sato2:sv.sato2 != null ? String(sv.sato2) : '',
+      hgt:  sv.hgt  != null ? String(sv.hgt)  : '',
+    })
+  }
+
+  const handleSaveEditSv = async () => {
+    if (!editSv) return
+    setEditSaving(true)
+    const ef = editForm
+    const pasN = parseFloat(ef.pas), padN = parseFloat(ef.pad)
+    const pamAuto = !isNaN(pasN) && !isNaN(padN) ? Math.round((pasN + 2 * padN) / 3) : null
+    const payload = {
+      temperatura: ef.temperatura ? parseFloat(ef.temperatura) : null,
+      pas:  ef.pas  ? parseInt(ef.pas)  : null,
+      pad:  ef.pad  ? parseInt(ef.pad)  : null,
+      pam:  ef.pam  ? parseInt(ef.pam)  : pamAuto,
+      fc:   ef.fc   ? parseInt(ef.fc)   : null,
+      fr:   ef.fr   ? parseInt(ef.fr)   : null,
+      sato2:ef.sato2? parseFloat(ef.sato2): null,
+      hgt:  ef.hgt  ? parseFloat(ef.hgt): null,
+    }
+    const { error } = await supabase.from('sinais_vitais').update(payload).eq('id', editSv.id)
+    setEditSaving(false)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    showToast('Leitura atualizada!')
+    setEditSv(null); onRefresh()
+  }
+
+  const handleDeleteSv = async (id: string) => {
+    if (!confirm('Excluir esta leitura?')) return
+    const { error } = await supabase.from('sinais_vitais').delete().eq('id', id)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    showToast('Leitura removida')
+    if (editSv?.id === id) setEditSv(null)
+    onRefresh()
+  }
+
   const hours = formTurno === 'diurno' ? DIURNO_HOURS : NOTURNO_HOURS
 
   const setRow = (idx: number, key: SvKey, raw: string) => {
@@ -411,13 +462,15 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
                   const isDiurno = sv.turno === 'diurno'
                   return (
                     <th key={sv.id}
-                      className={`px-2 py-1.5 text-center bg-slate-100 border-b-2 border-r border-slate-200 min-w-[52px] whitespace-nowrap ${shiftChange ? 'border-l-2 border-l-indigo-300' : ''}`}>
+                      className={`px-2 py-1.5 text-center bg-slate-100 border-b-2 border-r border-slate-200 min-w-[60px] whitespace-nowrap ${shiftChange ? 'border-l-2 border-l-indigo-300' : ''}`}>
                       <p className={`font-semibold text-xs ${isDiurno ? 'text-amber-600' : 'text-indigo-600'}`}>
                         {dt.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}
                       </p>
                       <p className="text-slate-400 font-normal text-xs">
                         {dt.toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit'})}
                       </p>
+                      <button onClick={() => openEditSv(sv)}
+                        className="text-indigo-300 hover:text-indigo-600 text-xs mt-0.5 px-1">✏️</button>
                     </th>
                   )
                 })}
@@ -452,6 +505,61 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Edit individual reading modal */}
+      {editSv && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={e => e.target === e.currentTarget && setEditSv(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="font-bold text-slate-800">
+                ✏️ Editando leitura — {new Date(editSv.horario).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}
+                {' '}{editSv.turno === 'diurno' ? '☀️' : '🌙'}
+              </p>
+              <button onClick={() => setEditSv(null)} className="text-slate-400 hover:text-slate-700 text-lg">✕</button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {COLS.map(col => {
+                const isPam = col.key === 'pam'
+                const pasN = parseFloat(editForm.pas), padN = parseFloat(editForm.pad)
+                const autoP = !isNaN(pasN) && !isNaN(padN) ? Math.round((pasN + 2*padN)/3) : null
+                const isPamAuto = isPam && editForm.pam === '' && autoP !== null
+                return (
+                  <div key={col.key} className="border border-slate-200 rounded-lg px-3 py-2">
+                    <p className="text-xs text-slate-500 mb-1">{col.label} <span className="text-slate-300">{col.unit}</span></p>
+                    <input
+                      type="number" step={col.step ?? '1'} min={col.min} max={col.max}
+                      value={isPamAuto ? autoP! : editForm[col.key]}
+                      readOnly={isPamAuto}
+                      onChange={e => !isPamAuto && setEditForm(f => ({...f, [col.key]: e.target.value}))}
+                      onBlur={e => {
+                        if (!isPamAuto) {
+                          const c = clampInput(col.key, e.target.value)
+                          if (c !== e.target.value) setEditForm(f => ({...f, [col.key]: c}))
+                        }
+                      }}
+                      placeholder="—"
+                      className={`w-full text-sm font-semibold focus:outline-none bg-transparent placeholder-slate-200 ${isPamAuto ? 'text-indigo-400' : ''}`}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => handleDeleteSv(editSv.id)}
+                className="px-4 py-2 text-sm text-red-500 hover:text-red-700 border border-red-100 hover:border-red-300 rounded-lg transition-colors">
+                🗑️ Excluir
+              </button>
+              <button onClick={() => setEditSv(null)} className="flex-1 border border-slate-300 text-slate-600 text-sm font-semibold py-2 rounded-lg hover:bg-slate-50">
+                Cancelar
+              </button>
+              <button onClick={handleSaveEditSv} disabled={editSaving}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold py-2 rounded-lg">
+                {editSaving ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

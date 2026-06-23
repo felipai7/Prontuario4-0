@@ -95,5 +95,17 @@ export interface SinalVital {
   updated_at: string
 }
 
+export interface ExameImagem {
+  id: string
+  paciente_id: string
+  tipo_exame: string
+  data_exame: string | null
+  arquivo_path: string | null
+  arquivo_nome: string | null
+  resumo_ia: string | null
+  achados: Record<string, string> | null
+  created_at: string
+}
+
 export type ToastType = 'success' | 'error' | 'warn'
 export interface ToastData { id: string; msg: string; tipo: ToastType }

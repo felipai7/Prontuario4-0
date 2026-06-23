@@ -193,6 +193,35 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
 
   const tableRows = buildTableRows(allParams)
 
+  // Delete / edit exam
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [editExame,  setEditExame]  = useState<{ id: string; tipo: string; data: string; obs: string } | null>(null)
+  const [editSaving, setEditSaving] = useState(false)
+
+  const handleDeleteExame = async (id: string) => {
+    if (!confirm('Excluir este exame? Esta ação não pode ser desfeita.')) return
+    setDeletingId(id)
+    const { error } = await supabase.from('exames').delete().eq('id', id)
+    setDeletingId(null)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    showToast('Exame removido')
+    onRefresh()
+  }
+
+  const handleSaveEditExame = async () => {
+    if (!editExame) return
+    setEditSaving(true)
+    const { error } = await supabase.from('exames').update({
+      tipo_exame: editExame.tipo.trim(),
+      data_exame: editExame.data.trim() || null,
+      observacoes: editExame.obs.trim() || null,
+    }).eq('id', editExame.id)
+    setEditSaving(false)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    showToast('Exame atualizado')
+    setEditExame(null); onRefresh()
+  }
+
   // Germe crítico detection
   const CRITICO_RE = /klebsiella|acinetobacter|pseudomonas|enterococcus|staphylococcus|candida|clostridioides|clostridium difficile|mrsa|esbl|kpc|vre|cre/i
   const MICRO_EXAM_RE = /cultura|swab|microbiologia|antibiograma|urocultura|hemocultura/i
@@ -441,14 +470,21 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
                   Parâmetro
                 </th>
                 {comRes.map((ex, idx) => {
-                  // data_exame may be "DD/MM/AAAA HH:MM" or "DD/MM/AAAA" or null
                   const parts = ex.data_exame?.split(' ')
                   const datePart = parts?.[0] ?? null
                   const timePart = parts?.[1] ?? null
                   return (
-                    <th key={ex.id} className="px-2 py-2 text-center bg-slate-100 border-b-2 border-r border-slate-200 font-semibold min-w-[70px] whitespace-nowrap">
+                    <th key={ex.id} className="px-2 py-2 text-center bg-slate-100 border-b-2 border-r border-slate-200 font-semibold min-w-[80px] whitespace-nowrap">
                       <p className="text-slate-700 font-semibold text-xs leading-tight">{datePart ?? `Exame ${idx + 1}`}</p>
                       {timePart && <p className="text-slate-400 font-normal text-xs mt-0.5">{timePart}</p>}
+                      <div className="flex justify-center gap-1 mt-1">
+                        <button onClick={() => setEditExame({ id: ex.id, tipo: ex.tipo_exame, data: ex.data_exame ?? '', obs: ex.observacoes ?? '' })}
+                          title="Editar" className="text-indigo-300 hover:text-indigo-600 text-xs px-1">✏️</button>
+                        <button onClick={() => handleDeleteExame(ex.id)} disabled={deletingId === ex.id}
+                          title="Excluir" className="text-red-200 hover:text-red-500 text-xs px-1">
+                          {deletingId === ex.id ? '⏳' : '✕'}
+                        </button>
+                      </div>
                     </th>
                   )
                 })}
@@ -497,14 +533,63 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
           <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Exames sem estruturação</p>
           {semRes.map(ex => (
             <div key={ex.id} className="border border-slate-200 rounded-xl p-3 bg-slate-50">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="font-semibold text-slate-800 text-sm">{ex.tipo_exame}</span>
-                {ex.data_exame && <span className="text-slate-400 text-xs">{ex.data_exame}</span>}
+              <div className="flex items-center justify-between mb-1 gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-semibold text-slate-800 text-sm truncate">{ex.tipo_exame}</span>
+                  {ex.data_exame && <span className="text-slate-400 text-xs flex-shrink-0">{ex.data_exame}</span>}
+                </div>
+                <div className="flex gap-1 flex-shrink-0">
+                  <button onClick={() => setEditExame({ id: ex.id, tipo: ex.tipo_exame, data: ex.data_exame ?? '', obs: ex.observacoes ?? '' })}
+                    className="text-xs text-indigo-400 hover:text-indigo-700 border border-indigo-100 hover:border-indigo-300 px-2 py-0.5 rounded-lg transition-colors">
+                    ✏️ Editar
+                  </button>
+                  <button onClick={() => handleDeleteExame(ex.id)} disabled={deletingId === ex.id}
+                    className="text-xs text-red-400 hover:text-red-700 border border-red-100 hover:border-red-300 px-2 py-0.5 rounded-lg transition-colors">
+                    {deletingId === ex.id ? '⏳' : '🗑️ Excluir'}
+                  </button>
+                </div>
               </div>
               {ex.raw_text && <pre className="text-xs text-slate-600 whitespace-pre-wrap font-mono mt-2">{ex.raw_text}</pre>}
               {ex.observacoes && <p className="text-xs text-slate-500 italic mt-2">💬 {ex.observacoes}</p>}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Edit exam modal */}
+      {editExame && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={e => e.target === e.currentTarget && setEditExame(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="font-bold text-slate-800">✏️ Editar exame</p>
+              <button onClick={() => setEditExame(null)} className="text-slate-400 hover:text-slate-700 text-lg">✕</button>
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 font-medium block mb-1">Tipo de exame</label>
+              <input value={editExame.tipo} onChange={e => setEditExame(x => x && ({...x, tipo: e.target.value}))}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 font-medium block mb-1">Data do exame</label>
+              <input value={editExame.data} onChange={e => setEditExame(x => x && ({...x, data: e.target.value}))}
+                placeholder="DD/MM/AAAA ou DD/MM/AAAA HH:MM"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 font-medium block mb-1">Observações</label>
+              <textarea value={editExame.obs} onChange={e => setEditExame(x => x && ({...x, obs: e.target.value}))}
+                rows={2} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setEditExame(null)} className="flex-1 border border-slate-300 text-slate-600 text-sm font-semibold py-2 rounded-lg hover:bg-slate-50">
+                Cancelar
+              </button>
+              <button onClick={handleSaveEditExame} disabled={editSaving}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold py-2 rounded-lg">
+                {editSaving ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

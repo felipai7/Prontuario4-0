@@ -4,11 +4,12 @@ import { createClient } from '@/lib/supabase/client'
 import ExamesTab       from './ExamesTab'
 import BalancoTab      from './BalancoTab'
 import SinaisVitaisTab from './SinaisVitaisTab'
+import ExamesImagemTab from './ExamesImagemTab'
 import AltaModal       from './AltaModal'
 import { fmtData, calcAge, pad } from '@/lib/utils'
-import type { Paciente, Exame, PeriodoBalanco, SinalVital, ToastData } from '@/types'
+import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, ToastData } from '@/types'
 
-type Tab = 'exames' | 'balanco' | 'sinais'
+type Tab = 'exames' | 'balanco' | 'sinais' | 'imagem'
 
 interface Props {
   paciente: Paciente
@@ -34,10 +35,11 @@ type EditForm = {
 export default function PacienteModal({ paciente, onClose, onAltaConcedida, showToast }: Props) {
   const supabase   = createClient()
   const [tab,      setTab]      = useState<Tab>('exames')
-  const [exames,   setExames]   = useState<Exame[]>([])
-  const [periodos, setPeriodos] = useState<PeriodoBalanco[]>([])
-  const [sinais,   setSinais]   = useState<SinalVital[]>([])
-  const [loading,  setLoading]  = useState(true)
+  const [exames,        setExames]       = useState<Exame[]>([])
+  const [periodos,      setPeriodos]     = useState<PeriodoBalanco[]>([])
+  const [sinais,        setSinais]       = useState<SinalVital[]>([])
+  const [examesImagem,  setExamesImagem] = useState<ExameImagem[]>([])
+  const [loading,       setLoading]      = useState(true)
   const [showAlta, setShowAlta] = useState(false)
   const [pac,      setPac]      = useState<Paciente>(paciente)
   const [editing,  setEditing]  = useState(false)
@@ -63,18 +65,33 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
 
   const loadData = async () => {
     setLoading(true)
-    const [exRes, bhRes, svRes] = await Promise.all([
+    const [exRes, bhRes, svRes, imgRes] = await Promise.all([
       supabase.from('exames').select('*').eq('paciente_id', pac.id).order('created_at'),
       supabase.from('periodos_balanco').select('*').eq('paciente_id', pac.id).order('inicio'),
       supabase.from('sinais_vitais').select('*').eq('paciente_id', pac.id).order('horario'),
+      supabase.from('exames_imagem').select('*').eq('paciente_id', pac.id).order('created_at', { ascending: false }),
     ])
-    if (exRes.data) setExames(exRes.data as Exame[])
-    if (bhRes.data) setPeriodos(bhRes.data as PeriodoBalanco[])
-    if (svRes.data) setSinais(svRes.data as SinalVital[])
+    if (exRes.data)  setExames(exRes.data as Exame[])
+    if (bhRes.data)  setPeriodos(bhRes.data as PeriodoBalanco[])
+    if (svRes.data)  setSinais(svRes.data as SinalVital[])
+    if (imgRes.data) setExamesImagem(imgRes.data as ExameImagem[])
     setLoading(false)
   }
 
-  useEffect(() => { loadData() }, [pac.id])
+  useEffect(() => {
+    loadData()
+    // Realtime subscriptions — updates any tab automatically when data changes
+    const channel = supabase
+      .channel(`modal-${pac.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'exames',            filter: `paciente_id=eq.${pac.id}` }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'periodos_balanco',  filter: `paciente_id=eq.${pac.id}` }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sinais_vitais',     filter: `paciente_id=eq.${pac.id}` }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'exames_imagem',     filter: `paciente_id=eq.${pac.id}` }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pacientes',         filter: `id=eq.${pac.id}` },
+        (payload) => { if (payload.new && payload.eventType !== 'DELETE') setPac(payload.new as Paciente) })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [pac.id])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape' && !editing) onClose() }
@@ -236,6 +253,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
                 ['exames',  '🔬 Exames Laboratoriais'],
                 ['balanco', '💧 Balanço Hídrico'],
                 ['sinais',  '❤️ Sinais Vitais'],
+                ['imagem',  '🩻 Exames de Imagem'],
               ] as [Tab, string][]).map(([t, label]) => (
                 <button key={t} onClick={() => setTab(t)}
                   className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
@@ -257,8 +275,10 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
               <ExamesTab paciente={pac} exames={exames} onRefresh={loadData} showToast={showToast} />
             ) : tab === 'balanco' ? (
               <BalancoTab paciente={pac} periodos={periodos} onRefresh={loadData} showToast={showToast} />
-            ) : (
+            ) : tab === 'sinais' ? (
               <SinaisVitaisTab paciente={pac} sinais={sinais} onRefresh={loadData} showToast={showToast} />
+            ) : (
+              <ExamesImagemTab paciente={pac} examesImagem={examesImagem} onRefresh={loadData} showToast={showToast} />
             )}
           </div>
         </div>
