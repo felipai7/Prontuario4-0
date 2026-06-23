@@ -103,6 +103,8 @@ const CATEGORIES: Category[] = [
   { label: '🫀 Cardíaco',       test: n => /troponin|\bbnp\b/i.test(n) },
   { label: '💨 Gasometria',     test: n => /\bph\b|po2|pco2|hco3|\bbe\b|sato2|lactato|\bco2\b|gap co2/i.test(n) },
   { label: '⚗️ Hormônios',      test: n => /^tsh$|^t4l?$|^t3$|cortisol/i.test(n) },
+  { label: '🦠 Microbiologia',  test: n => /swab|cultura|urocultura|hemocultura|micror?organism|bactéria\s+isolada|contagem\s+de\s+colon|antibiograma|amicacina|ampicilina|aztreonam|cefalexin|cefepim|cefotaxim|cefoxitin|ceftazidim|cefurox|ceftriaxon|ciprofloxacin|cloranfenic|ertapenem|gentamicin|levofloxacin|linezolid|meropenem|piperacilin|polimixin|tigeciclina|tobramicin|trimetoprim|vancomicin|colistin|fosfomicin/i.test(n) },
+  { label: '🔬 EAS/Urina',      test: n => /^cor$|^aspecto$|densidade|cetonas|^nitrito$|urobilinogênio|células\s+epiteliais|cilindros|cristais|bacteriúria|\(química\)|\(microscopia\)|\(sedimento\)|\(urin/i.test(n) },
 ]
 
 function getCategoryLabel(name: string): string {
@@ -191,6 +193,26 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
 
   const tableRows = buildTableRows(allParams)
   const totalAlt = exames.reduce((s, ex) => s + (ex.resultados?.filter(r => r.alterado).length ?? 0), 0)
+
+  // Germe crítico detection
+  const CRITICO_RE = /klebsiella|acinetobacter|pseudomonas|enterococcus|staphylococcus|candida|clostridioides|clostridium difficile|mrsa|esbl|kpc|vre|cre/i
+  const MICRO_EXAM_RE = /cultura|swab|microbiologia|antibiograma|urocultura|hemocultura/i
+  let germeAlert: null | { tipo: 'critico' | 'identificado'; nome: string; exame: string } = null
+  for (const ex of exames) {
+    if (!MICRO_EXAM_RE.test(ex.tipo_exame)) continue
+    for (const r of (ex.resultados || [])) {
+      if (r.alterado) {
+        if (CRITICO_RE.test(r.valor) || CRITICO_RE.test(r.nome)) {
+          germeAlert = { tipo: 'critico', nome: r.valor, exame: ex.tipo_exame }
+          break
+        }
+        if (/identificação|bactéria\s+isolada|germe|organismo/i.test(r.nome)) {
+          germeAlert = germeAlert ?? { tipo: 'identificado', nome: r.valor, exame: ex.tipo_exame }
+        }
+      }
+    }
+    if (germeAlert?.tipo === 'critico') break
+  }
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -397,6 +419,22 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
       {totalAlt > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-amber-800 text-sm font-medium">
           ⚠️ {totalAlt} resultado{totalAlt > 1 ? 's' : ''} alterado{totalAlt > 1 ? 's' : ''}
+        </div>
+      )}
+
+      {germeAlert && (
+        <div className={`rounded-lg px-4 py-2.5 text-sm font-semibold flex items-start gap-2 ${
+          germeAlert.tipo === 'critico'
+            ? 'bg-red-100 border border-red-400 text-red-800'
+            : 'bg-orange-50 border border-orange-300 text-orange-800'
+        }`}>
+          <span className="text-lg">{germeAlert.tipo === 'critico' ? '🚨' : '🦠'}</span>
+          <div>
+            <p className="font-bold">
+              {germeAlert.tipo === 'critico' ? 'Germe crítico / MDR identificado' : 'Germe identificado'}
+            </p>
+            <p className="font-normal text-xs mt-0.5">{germeAlert.nome} — {germeAlert.exame}</p>
+          </div>
         </div>
       )}
 

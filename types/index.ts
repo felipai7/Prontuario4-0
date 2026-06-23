@@ -77,5 +77,23 @@ export interface BalancoCalculado {
   parcial: number
 }
 
+export interface SinalVital {
+  id: string
+  paciente_id: string
+  horario: string        // ISO timestamp
+  turno: 'diurno' | 'noturno'
+  temperatura: number | null
+  pas: number | null
+  pad: number | null
+  pam: number | null
+  fc: number | null
+  fr: number | null
+  sato2: number | null
+  hgt: number | null
+  observacoes: string | null
+  created_at: string
+  updated_at: string
+}
+
 export type ToastType = 'success' | 'error' | 'warn'
 export interface ToastData { id: string; msg: string; tipo: ToastType }

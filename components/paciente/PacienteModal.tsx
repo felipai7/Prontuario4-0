@@ -1,13 +1,14 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import ExamesTab  from './ExamesTab'
-import BalancoTab from './BalancoTab'
-import AltaModal  from './AltaModal'
+import ExamesTab       from './ExamesTab'
+import BalancoTab      from './BalancoTab'
+import SinaisVitaisTab from './SinaisVitaisTab'
+import AltaModal       from './AltaModal'
 import { fmtData, calcAge, pad } from '@/lib/utils'
-import type { Paciente, Exame, PeriodoBalanco, ToastData } from '@/types'
+import type { Paciente, Exame, PeriodoBalanco, SinalVital, ToastData } from '@/types'
 
-type Tab = 'exames' | 'balanco'
+type Tab = 'exames' | 'balanco' | 'sinais'
 
 interface Props {
   paciente: Paciente
@@ -35,6 +36,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
   const [tab,      setTab]      = useState<Tab>('exames')
   const [exames,   setExames]   = useState<Exame[]>([])
   const [periodos, setPeriodos] = useState<PeriodoBalanco[]>([])
+  const [sinais,   setSinais]   = useState<SinalVital[]>([])
   const [loading,  setLoading]  = useState(true)
   const [showAlta, setShowAlta] = useState(false)
   const [pac,      setPac]      = useState<Paciente>(paciente)
@@ -61,12 +63,14 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
 
   const loadData = async () => {
     setLoading(true)
-    const [exRes, bhRes] = await Promise.all([
+    const [exRes, bhRes, svRes] = await Promise.all([
       supabase.from('exames').select('*').eq('paciente_id', pac.id).order('created_at'),
       supabase.from('periodos_balanco').select('*').eq('paciente_id', pac.id).order('inicio'),
+      supabase.from('sinais_vitais').select('*').eq('paciente_id', pac.id).order('horario'),
     ])
     if (exRes.data) setExames(exRes.data as Exame[])
     if (bhRes.data) setPeriodos(bhRes.data as PeriodoBalanco[])
+    if (svRes.data) setSinais(svRes.data as SinalVital[])
     setLoading(false)
   }
 
@@ -234,8 +238,12 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
             )}
 
             {/* Tabs */}
-            <div className="flex gap-1 mt-4">
-              {([['exames','🔬 Exames'],['balanco','💧 Balanço Hídrico']] as [Tab, string][]).map(([t, label]) => (
+            <div className="flex gap-1 mt-4 flex-wrap">
+              {([
+                ['exames',  '🔬 Exames Laboratoriais'],
+                ['balanco', '💧 Balanço Hídrico'],
+                ['sinais',  '❤️ Sinais Vitais'],
+              ] as [Tab, string][]).map(([t, label]) => (
                 <button key={t} onClick={() => setTab(t)}
                   className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
                     tab === t ? 'bg-white text-indigo-700' : 'text-indigo-200 hover:text-white hover:bg-white/10'
@@ -254,8 +262,10 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
               </div>
             ) : tab === 'exames' ? (
               <ExamesTab paciente={pac} exames={exames} onRefresh={loadData} showToast={showToast} />
-            ) : (
+            ) : tab === 'balanco' ? (
               <BalancoTab paciente={pac} periodos={periodos} onRefresh={loadData} showToast={showToast} />
+            ) : (
+              <SinaisVitaisTab paciente={pac} sinais={sinais} onRefresh={loadData} showToast={showToast} />
             )}
           </div>
         </div>
