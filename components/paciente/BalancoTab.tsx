@@ -27,15 +27,14 @@ function evalMath(expr: string): number {
   return parseFloat(clean) || 0
 }
 
-// ── Row definitions ───────────────────────────────────────────────────────────
-type RowType = 'gain' | 'loss' | 'auto' | 'sub-gain' | 'sub-loss' | 'parcial' | 'acum'
+// ── Row definitions (without subtotal rows) ───────────────────────────────────
+type RowType = 'gain' | 'loss' | 'auto' | 'parcial' | 'acum'
 type RowDef  = { key: string; label: string; type: RowType }
 
 const ROWS: RowDef[] = [
   { key: 'venoso',             label: 'Venoso',              type: 'gain' },
   { key: 'oral_enteral',       label: 'Oral/Enteral',        type: 'gain' },
   { key: 'agua_endogena',      label: 'Água Endógena',       type: 'auto' },
-  { key: '__total_ganhos',     label: 'TOTAL GANHOS',        type: 'sub-gain' },
   { key: 'diurese',            label: 'Diurese',             type: 'loss' },
   { key: 'dialise',            label: 'UF Diálise',          type: 'loss' },
   { key: 'febre',              label: 'Febre',               type: 'loss' },
@@ -45,31 +44,29 @@ const ROWS: RowDef[] = [
   { key: 'sne_sng',            label: 'SNG/SNE',             type: 'loss' },
   { key: 'ostomia',            label: 'Ostomia',             type: 'loss' },
   { key: 'perdas_insensiveis', label: 'Perdas Insensíveis',  type: 'auto' },
-  { key: '__total_perdas',     label: 'TOTAL PERDAS',        type: 'sub-loss' },
-  { key: '__parcial',          label: 'Parcial 12h',         type: 'parcial' },
+  { key: '__parcial',          label: 'Saldo Parcial',       type: 'parcial' },
   { key: '__acumulado',        label: 'Acumulado',           type: 'acum' },
 ]
 
+// Separator between gains block and losses block
+const SEPARATOR_AFTER = 'agua_endogena'
+
 function getVal(key: string, p: PeriodoBalanco, acum: number): number {
   switch (key) {
-    case '__total_ganhos': return p.venoso + p.oral_enteral + p.agua_endogena
-    case '__total_perdas': return p.diurese + p.dialise + p.febre + p.evacuacao + p.dreno + p.vomitos + p.sne_sng + p.ostomia + p.perdas_insensiveis
-    case '__parcial':      return calcBalanco(p).parcial
-    case '__acumulado':    return acum
-    default:               return (p as any)[key] ?? 0
+    case '__parcial':   return calcBalanco(p).parcial
+    case '__acumulado': return acum
+    default:            return (p as any)[key] ?? 0
   }
 }
 
 function cellCls(type: RowType, value: number): string {
-  if (type === 'sub-gain')  return 'bg-emerald-50 text-emerald-800 font-bold'
-  if (type === 'sub-loss')  return 'bg-red-50 text-red-800 font-bold'
-  if (type === 'gain')      return 'text-emerald-700'
-  if (type === 'loss')      return 'text-red-600'
-  if (type === 'auto')      return 'text-slate-400 italic'
-  // parcial / acum — colour by sign/magnitude
-  if (value > 500)          return 'bg-red-100 text-red-700 font-bold'
-  if (value > 0)            return 'text-orange-500 font-semibold'
-  if (value > -500)         return 'text-emerald-600 font-semibold'
+  if (type === 'gain')    return 'text-emerald-700'
+  if (type === 'loss')    return 'text-red-600'
+  if (type === 'auto')    return 'text-slate-400 italic'
+  // parcial / acum
+  if (value > 500)  return 'bg-red-50 text-red-700 font-bold'
+  if (value > 0)    return 'text-orange-500 font-semibold'
+  if (value > -500) return 'text-emerald-600 font-semibold'
   return 'bg-blue-50 text-blue-700 font-bold'
 }
 
@@ -102,28 +99,40 @@ const LABELS: Record<string, string> = {
 export default function BalancoTab({ paciente, periodos, onRefresh, showToast }: Props) {
   const supabase = createClient()
 
-  const [formMode,        setFormMode]        = useState<'add' | 'edit' | null>(null)
-  const [editingPeriodo,  setEditingPeriodo]  = useState<PeriodoBalanco | null>(null)
-  const [form,            setForm]            = useState<FormState>(emptyForm())
-  const [saving,          setSaving]          = useState(false)
+  const [formMode,       setFormMode]       = useState<'add' | 'edit' | null>(null)
+  const [editingPeriodo, setEditingPeriodo] = useState<PeriodoBalanco | null>(null)
+  const [form,           setForm]           = useState<FormState>(emptyForm())
+  const [saving,         setSaving]         = useState(false)
 
   const setField = (k: keyof FormState, v: string) => setForm(f => ({ ...f, [k]: v }))
 
-  // Periods sorted chronologically (oldest first = left column)
   const sorted = [...periodos].sort((a, b) =>
     new Date(a.inicio).getTime() - new Date(b.inicio).getTime()
   )
 
-  // Running accumulator per period
+  // Running accumulator
   const acumulados = sorted.reduce<number[]>((acc, p, i) => {
     const prev = i === 0 ? 0 : acc[i - 1]
     return [...acc, prev + calcBalanco(p).parcial]
   }, [])
 
-  // Next period spec for "add" mode
+  // Débito urinário 24h: sum diurese from newest periods covering 24h of horas_periodo
+  let duHoras = 0, duTotal = 0
+  for (const p of [...sorted].reverse()) {
+    if (duHoras >= 24) break
+    duHoras += p.horas_periodo
+    duTotal  += p.diurese
+  }
+  const duLabel  = duHoras >= 24
+    ? 'Débito Urinário 24h'
+    : duHoras > 0 ? `Débito Urinário (últ. ${duHoras.toFixed(0)}h)` : 'Débito Urinário'
+
+  // Última evacuação
+  const lastEvac = [...sorted].reverse().find(p => p.evacuacao > 0)
+
+  // Next period spec
   const horaHHMM    = (paciente.hora_internacao ?? '12:00').substring(0, 5)
   const admissionISO = `${paciente.data_internacao}T${horaHHMM}:00`
-
   let periodSpec: ReturnType<typeof calcFirstPeriod> | null = null
   try {
     periodSpec = periodos.length === 0
@@ -131,34 +140,25 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
       : calcNextPeriod(periodos[periodos.length - 1].fim)
   } catch {}
 
-  const peso   = paciente.peso_kg ?? 70
-  const horas  = formMode === 'edit' && editingPeriodo
-    ? editingPeriodo.horas_periodo
-    : (periodSpec?.horas ?? 12)
+  const peso    = paciente.peso_kg ?? 70
+  const horas   = formMode === 'edit' && editingPeriodo ? editingPeriodo.horas_periodo : (periodSpec?.horas ?? 12)
   const aguaEnd = calcAguaEndogena(horas)
   const perdIns = calcPerdasInsensiveis(peso, horas)
 
-  // ── Add new period ──
+  // ── Save new ──
   const handleSave = async () => {
     if (!periodSpec) return
     setSaving(true)
     const { error } = await supabase.from('periodos_balanco').insert({
-      paciente_id:        paciente.id,
-      inicio:             periodSpec.inicio.toISOString(),
-      fim:                periodSpec.fim.toISOString(),
-      turno:              periodSpec.turno,
-      horas_periodo:      periodSpec.horas,
-      venoso:             evalMath(form.venoso),
-      oral_enteral:       evalMath(form.oral_enteral),
-      agua_endogena:      aguaEnd,
-      diurese:            evalMath(form.diurese),
-      dialise:            evalMath(form.dialise),
-      febre:              evalMath(form.febre),
-      evacuacao:          evalMath(form.evacuacao),
-      dreno:              evalMath(form.dreno),
-      vomitos:            evalMath(form.vomitos),
-      sne_sng:            evalMath(form.sne_sng),
-      ostomia:            evalMath(form.ostomia),
+      paciente_id: paciente.id,
+      inicio: periodSpec.inicio.toISOString(), fim: periodSpec.fim.toISOString(),
+      turno: periodSpec.turno, horas_periodo: periodSpec.horas,
+      venoso: evalMath(form.venoso), oral_enteral: evalMath(form.oral_enteral),
+      agua_endogena: aguaEnd,
+      diurese: evalMath(form.diurese), dialise: evalMath(form.dialise),
+      febre: evalMath(form.febre), evacuacao: evalMath(form.evacuacao),
+      dreno: evalMath(form.dreno), vomitos: evalMath(form.vomitos),
+      sne_sng: evalMath(form.sne_sng), ostomia: evalMath(form.ostomia),
       perdas_insensiveis: perdIns,
     })
     setSaving(false)
@@ -166,20 +166,15 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
     cancelForm(); onRefresh(); showToast('Balanço registrado!')
   }
 
-  // ── Edit existing period ──
+  // ── Edit existing ──
   const startEdit = (p: PeriodoBalanco) => {
     setEditingPeriodo(p)
     setForm({
-      venoso:       String(p.venoso),
-      oral_enteral: String(p.oral_enteral),
-      diurese:      String(p.diurese),
-      dialise:      String(p.dialise),
-      febre:        String(p.febre),
-      evacuacao:    String(p.evacuacao),
-      dreno:        String(p.dreno),
-      vomitos:      String(p.vomitos),
-      sne_sng:      String(p.sne_sng),
-      ostomia:      String(p.ostomia),
+      venoso: String(p.venoso), oral_enteral: String(p.oral_enteral),
+      diurese: String(p.diurese), dialise: String(p.dialise),
+      febre: String(p.febre), evacuacao: String(p.evacuacao),
+      dreno: String(p.dreno), vomitos: String(p.vomitos),
+      sne_sng: String(p.sne_sng), ostomia: String(p.ostomia),
     })
     setFormMode('edit')
   }
@@ -188,17 +183,12 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
     if (!editingPeriodo) return
     setSaving(true)
     const { error } = await supabase.from('periodos_balanco').update({
-      venoso:             evalMath(form.venoso),
-      oral_enteral:       evalMath(form.oral_enteral),
-      agua_endogena:      aguaEnd,
-      diurese:            evalMath(form.diurese),
-      dialise:            evalMath(form.dialise),
-      febre:              evalMath(form.febre),
-      evacuacao:          evalMath(form.evacuacao),
-      dreno:              evalMath(form.dreno),
-      vomitos:            evalMath(form.vomitos),
-      sne_sng:            evalMath(form.sne_sng),
-      ostomia:            evalMath(form.ostomia),
+      venoso: evalMath(form.venoso), oral_enteral: evalMath(form.oral_enteral),
+      agua_endogena: aguaEnd,
+      diurese: evalMath(form.diurese), dialise: evalMath(form.dialise),
+      febre: evalMath(form.febre), evacuacao: evalMath(form.evacuacao),
+      dreno: evalMath(form.dreno), vomitos: evalMath(form.vomitos),
+      sne_sng: evalMath(form.sne_sng), ostomia: evalMath(form.ostomia),
       perdas_insensiveis: perdIns,
     }).eq('id', editingPeriodo.id)
     setSaving(false)
@@ -206,14 +196,11 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
     cancelForm(); onRefresh(); showToast('Balanço atualizado!')
   }
 
-  const cancelForm = () => {
-    setFormMode(null); setEditingPeriodo(null); setForm(emptyForm())
-  }
+  const cancelForm = () => { setFormMode(null); setEditingPeriodo(null); setForm(emptyForm()) }
 
   const acTotal = calcAcumuladoTotal(periodos)
   const acMovel = calcAcumuladoMovel(periodos)
 
-  // ── Form spec for display ──
   const formSpec = formMode === 'edit' && editingPeriodo
     ? { label: fmtTurno(editingPeriodo.turno, editingPeriodo.inicio), sub: 'Editando registro existente' }
     : periodSpec
@@ -224,22 +211,51 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
     <div className="space-y-4">
       {/* Summary cards */}
       <div className="grid grid-cols-3 gap-3">
-        <SummaryCard label="Balanço Parcial"    value={periodos.length > 0 ? calcBalanco(periodos[periodos.length-1]).parcial : null} sub="Último turno"/>
-        <SummaryCard label="Acumulado Total"    value={periodos.length > 0 ? acTotal : null} sub="Desde admissão"/>
-        <SummaryCard label="Acumulado Móvel"    value={periodos.length > 0 ? acMovel : null} sub="Últimos 10 turnos (5 dias)"/>
+        <SummaryCard label="Saldo Parcial"    value={periodos.length > 0 ? calcBalanco(periodos[periodos.length-1]).parcial : null} sub="Último turno"/>
+        <SummaryCard label="Acumulado Total"  value={periodos.length > 0 ? acTotal : null} sub="Desde admissão"/>
+        <SummaryCard label="Acumulado Móvel"  value={periodos.length > 0 ? acMovel : null} sub="Últimos 10 turnos"/>
       </div>
 
-      {/* Header row */}
+      {/* Highlight metrics */}
+      {periodos.length > 0 && (
+        <div className="grid grid-cols-2 gap-3">
+          {/* Débito Urinário */}
+          <div className="bg-sky-50 border border-sky-200 rounded-xl p-3">
+            <p className="text-xs text-sky-600 font-semibold mb-1">💧 {duLabel}</p>
+            <p className="text-2xl font-black text-sky-800">{duTotal.toFixed(0)} mL</p>
+            {duHoras < 24 && duHoras > 0 && (
+              <p className="text-xs text-sky-400 mt-0.5">Dados de {duHoras.toFixed(0)}h disponíveis</p>
+            )}
+          </div>
+
+          {/* Última Evacuação */}
+          <div className={`rounded-xl p-3 border ${lastEvac ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
+            <p className={`text-xs font-semibold mb-1 ${lastEvac ? 'text-amber-600' : 'text-slate-500'}`}>🚽 Última Evacuação</p>
+            {lastEvac ? (
+              <>
+                <p className="text-2xl font-black text-amber-800">{lastEvac.evacuacao.toFixed(0)} mL</p>
+                <p className="text-xs text-amber-600 mt-0.5">
+                  {new Date(lastEvac.fim).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' })}
+                  {' '}{lastEvac.turno === 'diurno' ? '☀️ Diurno' : '🌙 Noturno'}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm font-semibold text-slate-500">Ausente desde admissão</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-slate-700">Registros ({periodos.length} turnos)</h3>
-        {formMode === null && (
+        {formMode === null ? (
           <button
-            onClick={() => { if (periodSpec) { setFormMode('add') } else showToast('Não foi possível calcular o próximo turno', 'error') }}
+            onClick={() => periodSpec ? setFormMode('add') : showToast('Não foi possível calcular o próximo turno', 'error')}
             className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors">
             + Novo Turno
           </button>
-        )}
-        {formMode !== null && (
+        ) : (
           <button onClick={cancelForm}
             className="text-slate-500 hover:text-slate-700 text-sm font-semibold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
             ✕ Cancelar
@@ -247,7 +263,7 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
         )}
       </div>
 
-      {/* Add / Edit form */}
+      {/* Form */}
       {formMode !== null && formSpec && (
         <div className="border-2 border-indigo-200 rounded-xl p-4 bg-indigo-50 space-y-4">
           <div className="flex items-center justify-between">
@@ -261,8 +277,8 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
           </div>
 
           <div>
-            <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-2">🟢 Ganhos (mL)</p>
-            <p className="text-xs text-slate-500 mb-2 italic">Aceita expressões: ex. 200+100+50 = 350</p>
+            <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-1">🟢 Ganhos (mL)</p>
+            <p className="text-xs text-slate-400 mb-2 italic">Aceita expressões: ex. 200+100+50 = 350</p>
             <div className="grid grid-cols-2 gap-2">
               {CAMPOS_GANHO.map(k => (
                 <ExprField key={k} label={LABELS[k]} value={form[k as keyof FormState]}
@@ -297,7 +313,6 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
         </div>
       )}
 
-      {/* Empty state */}
       {periodos.length === 0 && formMode === null && (
         <p className="text-slate-400 text-sm italic text-center py-8">Nenhum balanço registrado</p>
       )}
@@ -313,13 +328,9 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
                 </th>
                 {sorted.map((p, i) => (
                   <th key={p.id} className="px-2 py-2 bg-slate-100 border-b-2 border-r border-slate-200 text-center min-w-[80px]">
-                    <p className="font-bold text-slate-800 text-xs whitespace-nowrap">
-                      {fmtTurno(p.turno, p.inicio)}
-                    </p>
-                    <button
-                      onClick={() => startEdit(p)}
-                      title="Editar este turno"
-                      className={`mt-1 text-indigo-400 hover:text-indigo-700 transition-colors text-xs ${formMode === 'edit' && editingPeriodo?.id === p.id ? 'text-amber-500' : ''}`}>
+                    <p className="font-bold text-slate-800 text-xs whitespace-nowrap">{fmtTurno(p.turno, p.inicio)}</p>
+                    <button onClick={() => startEdit(p)} title="Editar este turno"
+                      className={`mt-1 text-xs transition-colors ${formMode === 'edit' && editingPeriodo?.id === p.id ? 'text-amber-500' : 'text-indigo-300 hover:text-indigo-600'}`}>
                       ✏️
                     </button>
                   </th>
@@ -328,25 +339,26 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
             </thead>
             <tbody>
               {ROWS.map((row, rowIdx) => {
-                const isSub = row.type === 'sub-gain' || row.type === 'sub-loss'
-                const isSummary = row.type === 'parcial' || row.type === 'acum'
-                const rowBg = isSub ? '' : isSummary ? '' : rowIdx % 2 === 0 ? '#fff' : '#f8fafc'
+                const isSep = row.key === SEPARATOR_AFTER
+                const isParcial = row.type === 'parcial'
+                const isAcum    = row.type === 'acum'
+                const rowBg = isParcial ? '' : isAcum ? '' : rowIdx % 2 === 0 ? '#fff' : '#f8fafc'
+
+                const labelCls =
+                  isParcial ? 'bg-indigo-50 text-indigo-800 font-bold' :
+                  isAcum    ? 'bg-slate-200 text-slate-800 font-bold' :
+                  row.type === 'auto' ? 'text-slate-400 italic' :
+                  row.type === 'gain' ? 'text-emerald-700' : 'text-red-600'
+
                 return (
-                  <tr key={row.key}>
+                  <tr key={row.key} className={isSep ? 'border-b-2 border-slate-300' : ''}>
                     <td
-                      className={`sticky left-0 z-10 px-3 py-2 border-r-2 border-b border-slate-200 whitespace-nowrap font-medium
-                        ${row.type === 'sub-gain' ? 'bg-emerald-100 text-emerald-800 font-bold' :
-                          row.type === 'sub-loss' ? 'bg-red-100 text-red-800 font-bold' :
-                          row.type === 'parcial'  ? 'bg-indigo-50 text-indigo-800 font-bold' :
-                          row.type === 'acum'     ? 'bg-slate-200 text-slate-800 font-bold' :
-                          row.type === 'auto'     ? 'text-slate-400 italic' :
-                          row.type === 'gain'     ? 'text-emerald-700' : 'text-red-600'}
-                      `}
+                      className={`sticky left-0 z-10 px-3 py-2 border-r-2 border-b border-slate-200 whitespace-nowrap font-medium ${labelCls}`}
                       style={{ background: rowBg || undefined }}>
                       {row.label}
                     </td>
                     {sorted.map((p, i) => {
-                      const v = getVal(row.key, p, acumulados[i])
+                      const v   = getVal(row.key, p, acumulados[i])
                       const cls = cellCls(row.type, v)
                       const isEditing = formMode === 'edit' && editingPeriodo?.id === p.id
                       return (
@@ -369,7 +381,6 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
-
 function SummaryCard({ label, value, sub }: { label: string; value: number | null; sub: string }) {
   const cls = value == null ? 'text-slate-300' : colorParcial(value)
   return (
@@ -384,20 +395,14 @@ function SummaryCard({ label, value, sub }: { label: string; value: number | nul
 }
 
 function ExprField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  const preview  = evalMath(value)
-  const hasExpr  = value.trim() !== '' && value.trim() !== '0' && value !== String(preview) && /[+\-*/()]/.test(value)
+  const preview = evalMath(value)
+  const hasExpr = value.trim() !== '' && value.trim() !== '0' && value !== String(preview) && /[+\-*/()]/.test(value)
   return (
     <div className="bg-white border border-slate-200 rounded-lg px-3 py-2">
       <p className="text-xs text-slate-500 mb-1">{label}</p>
-      <input
-        type="text" value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder="0"
-        className="w-full text-sm font-semibold focus:outline-none bg-transparent"
-      />
-      {hasExpr && (
-        <p className="text-xs text-indigo-500 mt-0.5">= {preview.toFixed(0)} mL</p>
-      )}
+      <input type="text" value={value} onChange={e => onChange(e.target.value)} placeholder="0"
+        className="w-full text-sm font-semibold focus:outline-none bg-transparent"/>
+      {hasExpr && <p className="text-xs text-indigo-500 mt-0.5">= {preview.toFixed(0)} mL</p>}
     </div>
   )
 }

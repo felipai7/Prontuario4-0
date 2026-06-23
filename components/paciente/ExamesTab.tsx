@@ -19,6 +19,92 @@ const emptyResultado = (): ManualResultado => ({
   nome: '', valor: '', unidade: '', referencia: '', alterado: false, direcao: 'normal'
 })
 
+// ── Name normalisation (reduces duplicates across extractions) ────────────────
+const ALIASES: Array<[RegExp, string]> = [
+  [/^rdw(\s*[-–]?\s*(cv|sd))?(\s*%)?$/i,                     'RDW'],
+  [/^proteína\s+c\s+reativa$/i,                               'PCR'],
+  [/^taxa\s+(de\s+)?filtração\s+glomerular(\s+\w+)?$/i,       'TFG'],
+  [/^tgo$|^ast$|^ast\s*[/]\s*tgo$/i,                         'TGO/AST'],
+  [/^tgp$|^alt$|^alt\s*[/]\s*tgp$/i,                         'TGP/ALT'],
+  [/^(rni|inr)$/i,                                             'INR/RNI'],
+  [/^(dhl|ldh|desidrogenase\s+lática?)$/i,                    'LDH'],
+  [/^ck[\s-]?mb(\s*[\(/]?\s*atividade\s*\)?)?$/i,             'CK-MB'],
+  [/^(ck|cpk)(\s+total)?$/i,                                  'CK Total'],
+  [/^(pro[\s-]?)?bnp$/i,                                      'BNP'],
+  [/^hco3(\s*[\(/]bicarbonato\)?)?$|^bicarbonato(\s+padrão)?$/i, 'HCO3'],
+  [/^sat(uração)?\s*(de\s+)?o\.?2\s*(%)?$/i,                  'SatO2 (%)'],
+  [/^segmentados?\s*(\(?\s*%\s*\)?)?$/i,                      'Segmentados (%)'],
+  [/^neutrófilos?\s+segmentados?$/i,                           'Segmentados (%)'],
+  [/^bastonetes?\s*(\(?\s*%\s*\)?)?$/i,                       'Bastonetes (%)'],
+  [/^linfócitos?\s*(típicos?)?\s*(\(?\s*%\s*\)?)?$/i,         'Linfócitos (%)'],
+  [/^monócitos?\s*(\(?\s*%\s*\)?)?$/i,                        'Monócitos (%)'],
+  [/^eosinófilos?\s*(\(?\s*%\s*\)?)?$/i,                      'Eosinófilos (%)'],
+  [/^basófilos?\s*(\(?\s*%\s*\)?)?$/i,                        'Basófilos (%)'],
+  [/^gama[\s-]?gt$|^γ[\s-]?gt$/i,                             'Gama-GT'],
+  [/^fosfatase\s+alcalina$/i,                                  'Fosfatase Alcalina'],
+  [/^vcm$|^volume\s+corpuscular\s+médio$/i,                   'VCM'],
+  [/^hcm$|^hemoglobina\s+corpuscular\s+média$/i,              'HCM'],
+  [/^chcm$|^concentração\s+de\s+hemoglob/i,                   'CHCM'],
+  [/^v\.?c\.?m\.?$/i,                                          'VCM'],
+  [/^gap\s+co2(\s*\(.+\))?$/i,                                'GAP CO2'],
+]
+
+function canonicalize(name: string): string {
+  const trimmed = name.trim()
+  for (const [pattern, canonical] of ALIASES) {
+    if (pattern.test(trimmed)) return canonical
+  }
+  return trimmed
+}
+
+// ── Category grouping ─────────────────────────────────────────────────────────
+type Category = { label: string; test: (n: string) => boolean }
+
+const CATEGORIES: Category[] = [
+  { label: '🩸 Hemograma',       test: n => /hemácia|hemoglob|hematócrit|vcm|hcm|chcm|rdw|plaqueta|leucócit|neutrófi|segmentad|bastonet|linfócit|monócit|eosinófi|basófi|metamielo/i.test(n) },
+  { label: '⚡ Eletrólitos',     test: n => /^sódio$|^potássio$|^cálcio|^magnésio$|^fósforo$|^cloro$/i.test(n) },
+  { label: '🫘 Renal',           test: n => /ureia|creatinin|tfg|filtração|ácido úrico/i.test(n) },
+  { label: '🧪 Inflamatório',   test: n => /^pcr$|procalcitonin|ferritin|\bvhs\b/i.test(n) },
+  { label: '🩻 Coagulação',     test: n => /tap\b|inr|rni|ttpa|fibrinogên|d[\s-]?dímero/i.test(n) },
+  { label: '🫀 Enzimas/Hepático', test: n => /tgo|tgp|fosfatase|ggt|bilirrubina|ldh|amilase|lipase|albumina|proteínas totais/i.test(n) },
+  { label: '🫀 Cardíaco',       test: n => /troponin|ck[\s-]?(mb|total)|cpk|\bbnp\b/i.test(n) },
+  { label: '💨 Gasometria',     test: n => /\bph\b|po2|pco2|hco3|base excess|sato2|lactato|\bco2\b|gap co2/i.test(n) },
+  { label: '⚗️ Hormônios',      test: n => /^tsh$|^t4l?$|^t3$|cortisol/i.test(n) },
+]
+
+function getCategoryLabel(name: string): string {
+  for (const cat of CATEGORIES) {
+    if (cat.test(name)) return cat.label
+  }
+  return '📋 Outros'
+}
+
+// ── Pivot table helpers ───────────────────────────────────────────────────────
+type TableRow = { kind: 'header'; label: string } | { kind: 'param'; name: string }
+
+function buildTableRows(allParams: string[]): TableRow[] {
+  const groupMap = new Map<string, string[]>()
+  for (const p of allParams) {
+    const cat = getCategoryLabel(p)
+    if (!groupMap.has(cat)) groupMap.set(cat, [])
+    groupMap.get(cat)!.push(p)
+  }
+  const rows: TableRow[] = []
+  for (const cat of CATEGORIES) {
+    const params = groupMap.get(cat.label)
+    if (params?.length) {
+      rows.push({ kind: 'header', label: cat.label })
+      params.forEach(p => rows.push({ kind: 'param', name: p }))
+    }
+  }
+  const outros = groupMap.get('📋 Outros')
+  if (outros?.length) {
+    rows.push({ kind: 'header', label: '📋 Outros' })
+    outros.forEach(p => rows.push({ kind: 'param', name: p }))
+  }
+  return rows
+}
+
 function parseExameDate(ex: Exame): number {
   if (ex.data_exame) {
     const [d, m, y] = ex.data_exame.split('/')
@@ -28,6 +114,7 @@ function parseExameDate(ex: Exame): number {
   return new Date(ex.created_at).getTime()
 }
 
+// ── Component ─────────────────────────────────────────────────────────────────
 export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Props) {
   const supabase = createClient()
   const fileRef  = useRef<HTMLInputElement>(null)
@@ -47,22 +134,29 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
   const [evoText,    setEvoText]    = useState<string | null>(null)
 
   // ── Pivot table data ─────────────────────────────────────────────────────
-  const sorted = [...exames].sort((a, b) => parseExameDate(a) - parseExameDate(b))
-  const comRes = sorted.filter(ex => ex.resultados && ex.resultados.length > 0)
-  const semRes = sorted.filter(ex => !ex.resultados || ex.resultados.length === 0)
+  const sorted  = [...exames].sort((a, b) => parseExameDate(a) - parseExameDate(b))
+  const comRes  = sorted.filter(ex => ex.resultados && ex.resultados.length > 0)
+  const semRes  = sorted.filter(ex => !ex.resultados || ex.resultados.length === 0)
 
+  // Deduplicated canonical params (first-seen order)
   const allParams: string[] = []
-  comRes.forEach(ex => (ex.resultados || []).forEach(r => {
-    if (!allParams.includes(r.nome)) allParams.push(r.nome)
-  }))
+  const seenCanonical = new Set<string>()
+  comRes.forEach(ex => {
+    (ex.resultados || []).forEach(r => {
+      const c = canonicalize(r.nome)
+      if (!seenCanonical.has(c)) { seenCanonical.add(c); allParams.push(c) }
+    })
+  })
 
+  // Lookup by canonical name
   const lookup = new Map<string, Map<string, ResultadoExame>>()
   comRes.forEach(ex => {
     const m = new Map<string, ResultadoExame>()
-    ;(ex.resultados || []).forEach(r => m.set(r.nome, r))
+    ;(ex.resultados || []).forEach(r => m.set(canonicalize(r.nome), r))
     lookup.set(ex.id, m)
   })
 
+  const tableRows = buildTableRows(allParams)
   const totalAlt = exames.reduce((s, ex) => s + (ex.resultados?.filter(r => r.alterado).length ?? 0), 0)
 
   // ── Handlers ─────────────────────────────────────────────────────────────
@@ -226,7 +320,7 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-xs text-slate-500 font-medium">Resultados</label>
                   <button onClick={() => setMRows(r => [...r, emptyResultado()])}
-                    className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold">+ Adicionar linha</button>
+                    className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold">+ Linha</button>
                 </div>
                 <div className="space-y-2">
                   {mRows.map((row, i) => (
@@ -240,11 +334,11 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
                           className="border border-slate-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"/>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <input value={row.referencia} onChange={e => updateRow(i, { referencia: e.target.value })} placeholder="Referência (opcional)"
+                        <input value={row.referencia} onChange={e => updateRow(i, { referencia: e.target.value })} placeholder="Referência"
                           className="flex-1 border border-slate-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"/>
                         <label className="flex items-center gap-1 text-xs text-slate-600 whitespace-nowrap cursor-pointer">
                           <input type="checkbox" checked={row.alterado} onChange={e => updateRow(i, { alterado: e.target.checked })} className="rounded"/>
-                          Alterado
+                          Alt.
                         </label>
                         {row.alterado && (
                           <select value={row.direcao} onChange={e => updateRow(i, { direcao: e.target.value as ManualResultado['direcao'] })}
@@ -296,7 +390,7 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
           <table className="min-w-max w-full text-xs border-separate border-spacing-0">
             <thead>
               <tr>
-                <th className="sticky left-0 z-20 bg-slate-100 px-3 py-2.5 text-left font-bold text-slate-700 border-b-2 border-r-2 border-slate-300 min-w-[160px]">
+                <th className="sticky left-0 z-20 bg-slate-100 px-3 py-2.5 text-left font-bold text-slate-700 border-b-2 border-r-2 border-slate-300 min-w-[170px]">
                   Parâmetro
                 </th>
                 {comRes.map(ex => (
@@ -308,19 +402,33 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
               </tr>
             </thead>
             <tbody>
-              {allParams.map((param, rowIdx) => {
-                const hasAlt = comRes.some(ex => lookup.get(ex.id)?.get(param)?.alterado)
+              {tableRows.map((row, rowIdx) => {
+                if (row.kind === 'header') {
+                  return (
+                    <tr key={`hdr-${row.label}`}>
+                      <td
+                        colSpan={comRes.length + 1}
+                        className="sticky left-0 z-10 px-3 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 border-b border-t border-indigo-100">
+                        {row.label}
+                      </td>
+                    </tr>
+                  )
+                }
+
+                const paramName = row.name
+                const hasAlt = comRes.some(ex => lookup.get(ex.id)?.get(paramName)?.alterado)
                 const rowBg = rowIdx % 2 === 0 ? '#ffffff' : '#f8fafc'
+
                 return (
-                  <tr key={param}>
+                  <tr key={`p-${paramName}`}>
                     <td
                       className={`sticky left-0 z-10 px-3 py-2 font-medium border-r-2 border-b border-slate-200 whitespace-nowrap ${hasAlt ? 'text-red-700' : 'text-slate-700'}`}
                       style={{ background: rowBg }}>
-                      {param}
+                      {paramName}
                     </td>
                     {comRes.map(ex => {
-                      const r = lookup.get(ex.id)?.get(param)
-                      return <PivotCell key={ex.id} r={r} />
+                      const r = lookup.get(ex.id)?.get(paramName)
+                      return <PivotCell key={ex.id} r={r} rowBg={rowBg} />
                     })}
                   </tr>
                 )
@@ -366,8 +474,11 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
   )
 }
 
-function PivotCell({ r }: { r: ResultadoExame | undefined }) {
-  if (!r) return <td className="px-2 py-2 text-center text-slate-200 border-r border-b border-slate-100 text-xs">—</td>
+function PivotCell({ r, rowBg }: { r: ResultadoExame | undefined; rowBg: string }) {
+  if (!r) return (
+    <td className="px-2 py-2 text-center text-slate-200 border-r border-b border-slate-100 text-xs"
+      style={{ background: rowBg }}>—</td>
+  )
   const cls =
     r.alterado && r.direcao === 'alto'  ? 'bg-red-50 text-red-700' :
     r.alterado && r.direcao === 'baixo' ? 'bg-sky-50 text-sky-700' :
@@ -378,7 +489,7 @@ function PivotCell({ r }: { r: ResultadoExame | undefined }) {
     <td className={`px-2 py-2 text-center border-r border-b border-slate-100 whitespace-nowrap text-xs ${cls}`}
       title={r.referencia ? `Ref: ${r.referencia}` : undefined}>
       <span className="font-semibold">{r.valor}</span>
-      {r.unidade && <span className="ml-0.5 opacity-60 text-xs">{r.unidade}</span>}
+      {r.unidade && <span className="ml-0.5 opacity-60">{r.unidade}</span>}
       {arrow && <span className="font-black">{arrow}</span>}
     </td>
   )
