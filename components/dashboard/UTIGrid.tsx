@@ -66,7 +66,11 @@ export default function UTIGrid({ initialPacientes, userEmail }: Props) {
     if (data) setPacientes(data as Paciente[])
   }, [])
 
-  const ocupados = pacientes.length
+  // Valid leito numbers across all alas
+  const validLeitos = new Set(ALAS.flatMap(a => a.leitos))
+  const pacientesVisiveis  = pacientes.filter(p => validLeitos.has(p.numero_leito))
+  const pacientesFantasmas = pacientes.filter(p => !validLeitos.has(p.numero_leito))
+  const ocupados = pacientesVisiveis.length
   const total    = 19
 
   return (
@@ -93,10 +97,32 @@ export default function UTIGrid({ initialPacientes, userEmail }: Props) {
         </div>
       </header>
 
+      {/* Ghost patient warning */}
+      {pacientesFantasmas.length > 0 && (
+        <div className="max-w-7xl mx-auto px-4 pt-4">
+          <div className="bg-red-50 border border-red-300 rounded-xl px-4 py-3 flex items-start gap-3">
+            <span className="text-red-500 text-lg">⚠️</span>
+            <div>
+              <p className="text-sm font-bold text-red-700">
+                {pacientesFantasmas.length} paciente{pacientesFantasmas.length > 1 ? 's' : ''} com leito inválido (não aparece{pacientesFantasmas.length > 1 ? 'm' : ''} no grid)
+              </p>
+              {pacientesFantasmas.map(p => (
+                <p key={p.id} className="text-xs text-red-600 mt-0.5">
+                  • {p.nome} — {p.ala_id} Leito {p.numero_leito} (fora do range)
+                  &nbsp;
+                  <button onClick={() => setSelectedPac(p)}
+                    className="underline hover:text-red-800">Corrigir</button>
+                </p>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Grid */}
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         {ALAS.map(ala => {
-          const ocAla = pacientes.filter(p => p.ala_id === ala.id).length
+          const ocAla = pacientesVisiveis.filter(p => p.ala_id === ala.id).length
           return (
             <section key={ala.id}>
               <div className="flex items-center gap-3 mb-3">
