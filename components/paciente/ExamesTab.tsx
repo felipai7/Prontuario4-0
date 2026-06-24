@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Exame, Paciente, ResultadoExame, ToastData } from '@/types'
 
@@ -10,7 +10,7 @@ interface Props {
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
 }
 
-type AddMode = 'ia' | 'manual'
+type AddMode = 'ia' | 'texto' | 'manual'
 type ManualResultado = {
   nome: string; valor: string; unidade: string; referencia: string
   alterado: boolean; direcao: 'alto' | 'baixo' | 'normal' | 'qualitativo'
@@ -201,6 +201,8 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
   const [savingM,    setSavingM]    = useState(false)
   const [evoLoading, setEvoLoading] = useState(false)
   const [evoText,    setEvoText]    = useState<string | null>(null)
+  const [rawText,    setRawText]    = useState('')
+  const [pastedImg,  setPastedImg]  = useState<{ base64: string; mediaType: string; preview: string } | null>(null)
 
   // ── Pivot table data ─────────────────────────────────────────────────────
   const sorted  = [...exames].sort((a, b) => parseExameDate(a) - parseExameDate(b))
@@ -272,6 +274,73 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
     if (germeAlert?.tipo === 'critico') break
   }
 
+  // ── Clipboard paste (image) ───────────────────────────────────────────────
+  const handleGlobalPaste = useCallback((e: ClipboardEvent) => {
+    if (!adding) return
+    const items = Array.from(e.clipboardData?.items ?? [])
+    const imgItem = items.find(i => i.type.startsWith('image/'))
+    if (!imgItem) return
+    e.preventDefault()
+    const blob = imgItem.getAsFile()
+    if (!blob) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const dataUrl = ev.target?.result as string
+      const [header, b64] = dataUrl.split(',')
+      const mt = header.match(/data:([^;]+)/)?.[1] ?? 'image/png'
+      setPastedImg({ base64: b64, mediaType: mt, preview: dataUrl })
+      setAddMode('ia')
+      setFile(null); setPreview(null)
+      setLocalErr(null)
+    }
+    reader.readAsDataURL(blob)
+  }, [adding])
+
+  useEffect(() => {
+    document.addEventListener('paste', handleGlobalPaste)
+    return () => document.removeEventListener('paste', handleGlobalPaste)
+  }, [handleGlobalPaste])
+
+  const handleExtractPasted = async () => {
+    if (!pastedImg) return
+    setExtracting(true); setLocalErr(null)
+    try {
+      const resp = await fetch('/api/extract-exam', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64: pastedImg.base64, mediaType: pastedImg.mediaType }),
+      })
+      const data = await resp.json()
+      if (!resp.ok) throw new Error(data.error)
+      await supabase.from('exames').insert({
+        paciente_id: paciente.id, tipo_exame: data.tipo_exame,
+        data_exame: data.data_exame, resultados: data.resultados,
+        observacoes: data.observacoes, raw_text: data.raw_text, nome_arquivo: 'print-colado',
+      })
+      resetAdding(); onRefresh(); showToast('Exame extraído e salvo!')
+    } catch (e: any) { setLocalErr(e.message) }
+    setExtracting(false)
+  }
+
+  const handleExtractText = async () => {
+    if (!rawText.trim()) { setLocalErr('Cole o texto do laudo no campo acima'); return }
+    setExtracting(true); setLocalErr(null)
+    try {
+      const resp = await fetch('/api/extract-exam', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rawText: rawText.trim() }),
+      })
+      const data = await resp.json()
+      if (!resp.ok) throw new Error(data.error)
+      await supabase.from('exames').insert({
+        paciente_id: paciente.id, tipo_exame: data.tipo_exame,
+        data_exame: data.data_exame, resultados: data.resultados,
+        observacoes: data.observacoes, raw_text: data.raw_text, nome_arquivo: null,
+      })
+      resetAdding(); onRefresh(); showToast('Exame extraído e salvo!')
+    } catch (e: any) { setLocalErr(e.message) }
+    setExtracting(false)
+  }
+
   // ── Handlers ─────────────────────────────────────────────────────────────
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; if (!f) return
@@ -329,6 +398,7 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
 
   const resetAdding = () => {
     setAdding(false); setAddMode('ia'); setFile(null); setPreview(null); setLocalErr(null)
+    setPastedImg(null); setRawText('')
     if (fileRef.current) fileRef.current.value = ''
     setMTipo(''); setMData(''); setMObs(''); setMRows([emptyResultado()])
   }
@@ -367,31 +437,86 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
         <div className="border-2 border-dashed border-indigo-200 rounded-xl p-4 bg-indigo-50 space-y-3">
           <div className="flex rounded-lg overflow-hidden border border-indigo-200">
             <button onClick={() => { setAddMode('ia'); setLocalErr(null) }}
-              className={`flex-1 py-2 text-sm font-semibold transition-colors ${addMode === 'ia' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 hover:bg-indigo-50'}`}>
-              🤖 Via IA
+              className={`flex-1 py-2 text-xs font-semibold transition-colors ${addMode === 'ia' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 hover:bg-indigo-50'}`}>
+              📁 PDF / Imagem
+            </button>
+            <button onClick={() => { setAddMode('texto'); setLocalErr(null) }}
+              className={`flex-1 py-2 text-xs font-semibold transition-colors ${addMode === 'texto' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 hover:bg-indigo-50'}`}>
+              📋 Colar texto
             </button>
             <button onClick={() => { setAddMode('manual'); setLocalErr(null) }}
-              className={`flex-1 py-2 text-sm font-semibold transition-colors ${addMode === 'manual' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 hover:bg-indigo-50'}`}>
+              className={`flex-1 py-2 text-xs font-semibold transition-colors ${addMode === 'manual' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 hover:bg-indigo-50'}`}>
               ✏️ Manual
             </button>
           </div>
 
           {addMode === 'ia' && (
             <>
-              <input ref={fileRef} type="file" id="exam-file" accept=".pdf,image/*" onChange={handleFile} className="hidden"/>
-              <label htmlFor="exam-file"
-                className="flex items-center justify-center gap-2 w-full py-3 border-2 border-dashed border-indigo-300 rounded-lg cursor-pointer hover:border-indigo-500 hover:bg-white text-sm text-indigo-600 font-medium transition-all">
-                📁 {file ? file.name : 'Selecionar PDF ou Imagem'}
-              </label>
-              {preview && preview !== '[PDF]' && <img src={preview} alt="preview" className="max-h-40 mx-auto rounded-lg border object-contain"/>}
-              {preview === '[PDF]' && <p className="text-sm text-slate-500 text-center">📄 {file?.name}</p>}
-              {localErr && <p className="text-red-600 text-sm">❌ {localErr}</p>}
-              {file && (
-                <button onClick={handleExtract} disabled={extracting}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors">
-                  {extracting ? '⏳ Extraindo com IA...' : '🤖 Extrair e Salvar'}
-                </button>
+              {/* Clipboard paste hint */}
+              {!pastedImg && !file && (
+                <div className="flex items-center gap-2 rounded-lg bg-indigo-100 border border-indigo-200 px-3 py-2 text-xs text-indigo-700">
+                  <span className="text-base">💡</span>
+                  <span>Cole um print diretamente com <kbd className="bg-white border border-indigo-200 rounded px-1 py-0.5 font-mono">Ctrl+V</kbd> — ou escolha um arquivo abaixo</span>
+                </div>
               )}
+
+              {/* Pasted image from clipboard */}
+              {pastedImg && (
+                <div className="space-y-2">
+                  <div className="relative">
+                    <img src={pastedImg.preview} alt="print colado" className="max-h-48 mx-auto rounded-lg border object-contain"/>
+                    <button onClick={() => setPastedImg(null)}
+                      className="absolute top-1 right-1 bg-white/80 hover:bg-white text-slate-500 hover:text-red-600 rounded-full w-6 h-6 flex items-center justify-center text-xs border border-slate-200">✕</button>
+                  </div>
+                  <p className="text-xs text-center text-indigo-600 font-medium">📋 Imagem colada da área de transferência</p>
+                  {localErr && <p className="text-red-600 text-sm">❌ {localErr}</p>}
+                  <button onClick={handleExtractPasted} disabled={extracting}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors">
+                    {extracting ? '⏳ Extraindo com IA...' : '🤖 Extrair e Salvar'}
+                  </button>
+                </div>
+              )}
+
+              {/* File picker */}
+              {!pastedImg && (
+                <>
+                  <input ref={fileRef} type="file" id="exam-file" accept=".pdf,image/*" onChange={handleFile} className="hidden"/>
+                  <label htmlFor="exam-file"
+                    className="flex items-center justify-center gap-2 w-full py-3 border-2 border-dashed border-indigo-300 rounded-lg cursor-pointer hover:border-indigo-500 hover:bg-white text-sm text-indigo-600 font-medium transition-all">
+                    📁 {file ? file.name : 'Selecionar PDF ou Imagem'}
+                  </label>
+                  {preview && preview !== '[PDF]' && <img src={preview} alt="preview" className="max-h-40 mx-auto rounded-lg border object-contain"/>}
+                  {preview === '[PDF]' && <p className="text-sm text-slate-500 text-center">📄 {file?.name}</p>}
+                  {localErr && <p className="text-red-600 text-sm">❌ {localErr}</p>}
+                  {file && (
+                    <button onClick={handleExtract} disabled={extracting}
+                      className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors">
+                      {extracting ? '⏳ Extraindo com IA...' : '🤖 Extrair e Salvar'}
+                    </button>
+                  )}
+                </>
+              )}
+            </>
+          )}
+
+          {addMode === 'texto' && (
+            <>
+              <div className="bg-indigo-100 border border-indigo-200 rounded-lg px-3 py-2 text-xs text-indigo-700 flex items-start gap-2">
+                <span className="text-base mt-0.5">💡</span>
+                <span>Abra o resultado no site do laboratório ou em qualquer PDF, pressione <kbd className="bg-white border border-indigo-200 rounded px-1 py-0.5 font-mono">Ctrl+A</kbd> para selecionar tudo e <kbd className="bg-white border border-indigo-200 rounded px-1 py-0.5 font-mono">Ctrl+C</kbd> para copiar. Cole abaixo.</span>
+              </div>
+              <textarea
+                value={rawText}
+                onChange={e => setRawText(e.target.value)}
+                placeholder="Cole aqui o texto completo do resultado laboratorial..."
+                rows={8}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs bg-white resize-y focus:outline-none focus:ring-2 focus:ring-indigo-400 font-mono"
+              />
+              {localErr && <p className="text-red-600 text-sm">❌ {localErr}</p>}
+              <button onClick={handleExtractText} disabled={extracting || !rawText.trim()}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors">
+                {extracting ? '⏳ Extraindo com IA...' : '🤖 Extrair e Salvar'}
+              </button>
             </>
           )}
 

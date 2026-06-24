@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { base64, mediaType } = body
+    const { base64, mediaType, rawText } = body
 
     const ai = new GoogleGenAI({ apiKey })
 
@@ -49,10 +49,11 @@ export async function POST(request: NextRequest) {
       'data_exame é a data de COLETA (não liberação), null se ausente; ' +
       'se houver múltiplos painéis no arquivo combine em um único JSON com todos os resultados.'
 
-    const raw = await generateWithFallback(ai, [
-      { inlineData: { mimeType: mediaType, data: base64 } },
-      prompt,
-    ])
+    const contents: any[] = rawText
+      ? [`${prompt}\n\nTexto do laudo:\n${rawText}`]
+      : [{ inlineData: { mimeType: mediaType, data: base64 } }, prompt]
+
+    const raw = await generateWithFallback(ai, contents)
 
     // Robust JSON extraction — try multiple strategies
     function tryParse(s: string): any { try { return JSON.parse(s) } catch { return null } }
