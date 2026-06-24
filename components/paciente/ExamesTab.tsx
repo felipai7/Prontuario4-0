@@ -202,7 +202,7 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
   const [evoLoading, setEvoLoading] = useState(false)
   const [evoText,    setEvoText]    = useState<string | null>(null)
   const [rawText,    setRawText]    = useState('')
-  const [pastedImg,  setPastedImg]  = useState<{ base64: string; mediaType: string; preview: string } | null>(null)
+  const [pastedImgs, setPastedImgs] = useState<{ base64: string; mediaType: string; preview: string }[]>([])
 
   // ── Pivot table data ─────────────────────────────────────────────────────
   const sorted  = [...exames].sort((a, b) => parseExameDate(a) - parseExameDate(b))
@@ -288,7 +288,7 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
       const dataUrl = ev.target?.result as string
       const [header, b64] = dataUrl.split(',')
       const mt = header.match(/data:([^;]+)/)?.[1] ?? 'image/png'
-      setPastedImg({ base64: b64, mediaType: mt, preview: dataUrl })
+      setPastedImgs(prev => [...prev, { base64: b64, mediaType: mt, preview: dataUrl }])
       setAddMode('ia')
       setFile(null); setPreview(null)
       setLocalErr(null)
@@ -302,12 +302,12 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
   }, [handleGlobalPaste])
 
   const handleExtractPasted = async () => {
-    if (!pastedImg) return
+    if (!pastedImgs.length) return
     setExtracting(true); setLocalErr(null)
     try {
       const resp = await fetch('/api/extract-exam', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base64: pastedImg.base64, mediaType: pastedImg.mediaType }),
+        body: JSON.stringify({ images: pastedImgs.map(i => ({ base64: i.base64, mediaType: i.mediaType })) }),
       })
       const data = await resp.json()
       if (!resp.ok) throw new Error(data.error)
@@ -398,7 +398,7 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
 
   const resetAdding = () => {
     setAdding(false); setAddMode('ia'); setFile(null); setPreview(null); setLocalErr(null)
-    setPastedImg(null); setRawText('')
+    setPastedImgs([]); setRawText('')
     if (fileRef.current) fileRef.current.value = ''
     setMTipo(''); setMData(''); setMObs(''); setMRows([emptyResultado()])
   }
@@ -453,32 +453,43 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
           {addMode === 'ia' && (
             <>
               {/* Clipboard paste hint */}
-              {!pastedImg && !file && (
+              {pastedImgs.length === 0 && !file && (
                 <div className="flex items-center gap-2 rounded-lg bg-indigo-100 border border-indigo-200 px-3 py-2 text-xs text-indigo-700">
                   <span className="text-base">💡</span>
-                  <span>Cole um print diretamente com <kbd className="bg-white border border-indigo-200 rounded px-1 py-0.5 font-mono">Ctrl+V</kbd> — ou escolha um arquivo abaixo</span>
+                  <span>Cole prints com <kbd className="bg-white border border-indigo-200 rounded px-1 py-0.5 font-mono">Ctrl+V</kbd> — pode colar quantos precisar antes de extrair</span>
                 </div>
               )}
 
-              {/* Pasted image from clipboard */}
-              {pastedImg && (
+              {/* Pasted images grid */}
+              {pastedImgs.length > 0 && (
                 <div className="space-y-2">
-                  <div className="relative">
-                    <img src={pastedImg.preview} alt="print colado" className="max-h-48 mx-auto rounded-lg border object-contain"/>
-                    <button onClick={() => setPastedImg(null)}
-                      className="absolute top-1 right-1 bg-white/80 hover:bg-white text-slate-500 hover:text-red-600 rounded-full w-6 h-6 flex items-center justify-center text-xs border border-slate-200">✕</button>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium text-indigo-700">
+                      📋 {pastedImgs.length} print{pastedImgs.length > 1 ? 's' : ''} colado{pastedImgs.length > 1 ? 's' : ''} — cole mais com <kbd className="bg-indigo-50 border border-indigo-200 rounded px-1 font-mono">Ctrl+V</kbd>
+                    </p>
+                    <button onClick={() => setPastedImgs([])}
+                      className="text-xs text-red-400 hover:text-red-600">Limpar tudo</button>
                   </div>
-                  <p className="text-xs text-center text-indigo-600 font-medium">📋 Imagem colada da área de transferência</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {pastedImgs.map((img, idx) => (
+                      <div key={idx} className="relative">
+                        <img src={img.preview} alt={`print ${idx + 1}`} className="w-full h-28 rounded-lg border object-contain bg-slate-50"/>
+                        <button onClick={() => setPastedImgs(prev => prev.filter((_, i) => i !== idx))}
+                          className="absolute top-1 right-1 bg-white/90 hover:bg-white text-slate-500 hover:text-red-600 rounded-full w-5 h-5 flex items-center justify-center text-xs border border-slate-200 shadow-sm">✕</button>
+                        <span className="absolute bottom-1 left-1 bg-black/50 text-white text-xs px-1.5 py-0.5 rounded">{idx + 1}</span>
+                      </div>
+                    ))}
+                  </div>
                   {localErr && <p className="text-red-600 text-sm">❌ {localErr}</p>}
                   <button onClick={handleExtractPasted} disabled={extracting}
                     className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors">
-                    {extracting ? '⏳ Extraindo com IA...' : '🤖 Extrair e Salvar'}
+                    {extracting ? `⏳ Extraindo ${pastedImgs.length} imagens com IA...` : `🤖 Extrair ${pastedImgs.length} print${pastedImgs.length > 1 ? 's' : ''} e Salvar`}
                   </button>
                 </div>
               )}
 
               {/* File picker */}
-              {!pastedImg && (
+              {pastedImgs.length === 0 && (
                 <>
                   <input ref={fileRef} type="file" id="exam-file" accept=".pdf,image/*" onChange={handleFile} className="hidden"/>
                   <label htmlFor="exam-file"

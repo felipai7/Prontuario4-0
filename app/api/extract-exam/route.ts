@@ -32,7 +32,10 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { base64, mediaType, rawText } = body
+    const { base64, mediaType, rawText, images } = body
+    // images: [{ base64, mediaType }]  — multi-image paste
+    // base64 + mediaType               — single file upload
+    // rawText                          — plain text paste
 
     const ai = new GoogleGenAI({ apiKey })
 
@@ -47,11 +50,22 @@ export async function POST(request: NextRequest) {
       'Regras: inclua TODOS os parâmetros sem exceção; use conhecimento médico para "alterado" mesmo sem referência; ' +
       '"direcao" = alto se acima do normal, baixo se abaixo, qualitativo se positivo/negativo/reagente; ' +
       'data_exame é a data de COLETA (não liberação), null se ausente; ' +
-      'se houver múltiplos painéis no arquivo combine em um único JSON com todos os resultados.'
+      'se houver múltiplos painéis ou imagens combine tudo em um único JSON com todos os resultados.'
 
-    const contents: any[] = rawText
-      ? [`${prompt}\n\nTexto do laudo:\n${rawText}`]
-      : [{ inlineData: { mimeType: mediaType, data: base64 } }, prompt]
+    let contents: any[]
+    if (rawText) {
+      contents = [`${prompt}\n\nTexto do laudo:\n${rawText}`]
+    } else if (images && Array.isArray(images) && images.length > 0) {
+      // Multiple images: interleave each image then the prompt at the end
+      contents = [
+        ...images.map((img: { base64: string; mediaType: string }) => ({
+          inlineData: { mimeType: img.mediaType, data: img.base64 },
+        })),
+        prompt,
+      ]
+    } else {
+      contents = [{ inlineData: { mimeType: mediaType, data: base64 } }, prompt]
+    }
 
     const raw = await generateWithFallback(ai, contents)
 
