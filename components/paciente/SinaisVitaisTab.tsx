@@ -96,7 +96,6 @@ function pamFor(row: RowInput): number | null {
 
 function rowToPayload(pacienteId: string, dateStr: string, hour: number, row: RowInput) {
   const h = hour.toString().padStart(2, '0')
-  // For noturno hours 0-6 the date is +1 day
   let d = new Date(dateStr + 'T00:00:00')
   if (hour < 7) d.setDate(d.getDate() + 1)
   const iso = `${d.toISOString().split('T')[0]}T${h}:00:00`
@@ -125,6 +124,23 @@ function emptyRow(): RowInput {
 
 function todayStr() { return new Date().toISOString().split('T')[0] }
 
+// Returns the "shift start date" for grouping: noturno 00-06h belongs to previous day's shift
+function shiftDate(sv: SinalVital): string {
+  const d = new Date(sv.horario)
+  if (sv.turno === 'noturno' && d.getHours() < 7) {
+    d.setDate(d.getDate() - 1)
+  }
+  return d.toISOString().split('T')[0]
+}
+
+type PeriodGroup = {
+  key: string
+  label: string
+  dateLabel: string
+  turno: 'diurno' | 'noturno'
+  readings: SinalVital[]
+}
+
 export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast }: Props) {
   const supabase = createClient()
   const [formOpen,  setFormOpen]  = useState(false)
@@ -135,10 +151,20 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
   const [saving,    setSaving]    = useState(false)
   const [importing, setImporting] = useState(false)
 
-  // Edit individual reading
   const [editSv,     setEditSv]     = useState<SinalVital | null>(null)
   const [editForm,   setEditForm]   = useState<RowInput>(emptyRow())
   const [editSaving, setEditSaving] = useState(false)
+
+  // Group expansion state — all collapsed by default
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  const toggleGroup = (key: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   const openEditSv = (sv: SinalVital) => {
     setEditSv(sv)
@@ -159,7 +185,7 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
     setEditSaving(true)
     const ef = editForm
     const pasN = parseFloat(ef.pas), padN = parseFloat(ef.pad)
-    const pamAuto = !isNaN(pasN) && !isNaN(padN) ? Math.round((pasN + 2 * padN) / 3) : null
+    const pamAuto = !isNaN(pasN) && !isNaN(padN) ? Math.round((pasN + 2*padN)/3) : null
     const payload = {
       temperatura: ef.temperatura ? parseFloat(ef.temperatura) : null,
       pas:  ef.pas  ? parseInt(ef.pas)  : null,
@@ -189,20 +215,12 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
   const hours = formTurno === 'diurno' ? DIURNO_HOURS : NOTURNO_HOURS
 
   const setRow = (idx: number, key: SvKey, raw: string) => {
-    setRows(prev => {
-      const next = [...prev]
-      next[idx] = { ...next[idx], [key]: raw }
-      return next
-    })
+    setRows(prev => { const next = [...prev]; next[idx] = { ...next[idx], [key]: raw }; return next })
   }
 
   const blurRow = (idx: number, key: SvKey, raw: string) => {
     const clamped = clampInput(key, raw)
-    if (clamped !== raw) setRows(prev => {
-      const next = [...prev]
-      next[idx] = { ...next[idx], [key]: clamped }
-      return next
-    })
+    if (clamped !== raw) setRows(prev => { const next = [...prev]; next[idx] = { ...next[idx], [key]: clamped }; return next })
   }
 
   const handleTurnoChange = (t: 'diurno' | 'noturno') => {
@@ -214,16 +232,34 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
     [...sinais].sort((a, b) => new Date(a.horario).getTime() - new Date(b.horario).getTime()),
     [sinais])
 
-  // Determine last 12h period (most recent turno)
-  const lastPeriodSinais = useMemo(() => {
-    if (!sorted.length) return []
-    const lastTurno = sorted[sorted.length - 1].turno
-    const lastDate  = sorted[sorted.length - 1].horario.split('T')[0]
-    // same turno & same calendar date (approximate)
-    return sorted.filter(sv => sv.turno === lastTurno && sv.horario.startsWith(lastDate))
+  // Group by turno + shift start date
+  const groups = useMemo((): PeriodGroup[] => {
+    const map = new Map<string, PeriodGroup>()
+    for (const sv of sorted) {
+      const sd = shiftDate(sv)
+      const key = `${sv.turno}-${sd}`
+      if (!map.has(key)) {
+        const d = new Date(sd + 'T12:00:00')
+        const dateLabel = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+        map.set(key, {
+          key,
+          turno: sv.turno,
+          dateLabel,
+          label: `${sv.turno === 'diurno' ? '☀️' : '🌙'} ${dateLabel}`,
+          readings: [],
+        })
+      }
+      map.get(key)!.readings.push(sv)
+    }
+    return [...map.values()]
   }, [sorted])
 
-  // Min / max for each column from lastPeriodSinais
+  // Last period stats for summary cards
+  const lastPeriodSinais = useMemo(() => {
+    if (!groups.length) return []
+    return groups[groups.length - 1].readings
+  }, [groups])
+
   const summaryStats = useMemo(() => {
     const stats: Record<SvKey, { min: number; max: number; minA: Alert; maxA: Alert } | null> = {
       temperatura: null, pas: null, pad: null, pam: null, fc: null, fr: null, sato2: null, hgt: null,
@@ -238,10 +274,10 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
   }, [lastPeriodSinais])
 
   const periodLabel = useMemo(() => {
-    if (!lastPeriodSinais.length) return ''
-    const last = lastPeriodSinais[lastPeriodSinais.length - 1]
+    if (!groups.length) return ''
+    const last = groups[groups.length - 1]
     return last.turno === 'diurno' ? '☀️ Diurno' : '🌙 Noturno'
-  }, [lastPeriodSinais])
+  }, [groups])
 
   const handleSave = async () => {
     const payloads = rows
@@ -302,36 +338,38 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
     setImporting(false); if (e.target) e.target.value = ''
   }
 
-  return (
-    <div className="space-y-4">
+  const hasExpandedGroup = groups.some(g => expandedGroups.has(g.key))
 
-      {/* Min/max summary cards for last period */}
+  return (
+    <div className="space-y-3">
+
+      {/* Compact summary cards */}
       {lastPeriodSinais.length > 0 && (
         <div>
-          <p className="text-xs text-slate-400 mb-2 font-medium">
+          <p className="text-xs text-slate-400 mb-1.5 font-medium">
             Resumo do último período — {periodLabel}
             <span className="ml-2 text-slate-300">({lastPeriodSinais.length} leituras)</span>
           </p>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-4 gap-1.5">
             {COLS.map(col => {
               const s = summaryStats[col.key]
               if (!s) return (
-                <div key={col.key} className="rounded-xl border border-slate-200 bg-white p-2 text-center">
+                <div key={col.key} className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-center">
                   <p className="text-xs text-slate-400">{col.label}</p>
-                  <p className="text-base text-slate-200">—</p>
+                  <p className="text-sm text-slate-200">—</p>
                 </div>
               )
               const sameVal = s.min === s.max
               const maxBorder = s.maxA === 'crit' ? 'border-red-300' : s.maxA === 'warn' ? 'border-orange-200' : 'border-slate-200'
               return (
-                <div key={col.key} className={`rounded-xl border p-2 text-center bg-white ${maxBorder}`}>
-                  <p className="text-xs text-slate-500 mb-1">{col.label} <span className="text-slate-300">{col.unit}</span></p>
+                <div key={col.key} className={`rounded-lg border px-2 py-1.5 text-center bg-white ${maxBorder}`}>
+                  <p className="text-xs text-slate-500 mb-0.5">{col.label} <span className="text-slate-300">{col.unit}</span></p>
                   {sameVal ? (
-                    <p className={`text-base font-bold ${alertBg(s.maxA)}`}>{s.max}</p>
+                    <p className={`text-sm font-bold ${alertBg(s.maxA)}`}>{s.max}</p>
                   ) : (
-                    <div className="flex items-center justify-center gap-1 text-sm">
+                    <div className="flex items-center justify-center gap-1 text-xs">
                       <span className={`font-semibold ${alertBg(s.minA)}`}>{s.min}</span>
-                      <span className="text-slate-300 text-xs">–</span>
+                      <span className="text-slate-300">–</span>
                       <span className={`font-semibold ${alertBg(s.maxA)}`}>{s.max}</span>
                     </div>
                   )}
@@ -344,9 +382,7 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
 
       {/* Header */}
       <div className="flex items-center justify-between gap-2">
-        <h3 className="font-semibold text-slate-700">
-          Leituras ({sinais.length})
-        </h3>
+        <h3 className="font-semibold text-slate-700">Leituras ({sinais.length})</h3>
         <div className="flex gap-2">
           <label className={`cursor-pointer flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors ${importing ? 'opacity-50 cursor-not-allowed' : ''}`}>
             {importing ? '⏳ Importando...' : '📷 Importar foto'}
@@ -362,7 +398,6 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
       {/* Bulk grid form */}
       {formOpen && (
         <div className="border-2 border-indigo-200 rounded-xl bg-indigo-50 p-4 space-y-3">
-          {/* Controls */}
           <div className="flex flex-wrap items-end gap-3">
             <div>
               <label className="text-xs text-slate-500 block mb-1">Data</label>
@@ -381,7 +416,6 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
             </div>
           </div>
 
-          {/* Grid table */}
           <div className="overflow-x-auto rounded-lg border border-indigo-200 bg-white">
             <table className="min-w-max w-full text-xs border-separate border-spacing-0">
               <thead>
@@ -390,9 +424,8 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
                     Hora
                   </th>
                   {COLS.map(col => (
-                    <th key={col.key} className="px-2 py-2 bg-indigo-100 border-b-2 border-r border-indigo-200 text-center text-indigo-800 font-bold min-w-[72px] whitespace-nowrap">
-                      {col.label}
-                      <span className="text-indigo-400 font-normal ml-0.5 text-xs">{col.unit}</span>
+                    <th key={col.key} className="px-2 py-2 bg-indigo-100 border-b-2 border-r border-indigo-200 text-center text-indigo-800 font-bold min-w-[68px] whitespace-nowrap">
+                      {col.label}<span className="text-indigo-400 font-normal ml-0.5 text-xs">{col.unit}</span>
                     </th>
                   ))}
                 </tr>
@@ -403,27 +436,23 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
                   const autoP = pamFor(row)
                   return (
                     <tr key={hour} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                      <td className="sticky left-0 px-3 py-1.5 font-bold text-slate-700 border-r-2 border-b border-slate-200 text-center"
+                      <td className="sticky left-0 px-3 py-1 font-bold text-slate-700 border-r-2 border-b border-slate-200 text-center"
                         style={{ background: idx % 2 === 0 ? '#fff' : '#f8fafc' }}>
                         {hour.toString().padStart(2,'0')}:00
                       </td>
                       {COLS.map(col => {
                         const isPam = col.key === 'pam'
-                        const displayVal = isPam && row.pam === '' && autoP !== null ? String(autoP) : row[col.key]
-                        const isPamAuto  = isPam && row.pam === '' && autoP !== null
+                        const isPamAuto = isPam && row.pam === '' && autoP !== null
                         return (
-                          <td key={col.key} className="px-1 py-1 border-r border-b border-slate-100">
+                          <td key={col.key} className="px-1 py-0.5 border-r border-b border-slate-100">
                             <input
-                              type="number"
-                              step={col.step ?? '1'}
-                              min={col.min}
-                              max={col.max}
+                              type="number" step={col.step ?? '1'} min={col.min} max={col.max}
                               value={isPamAuto ? autoP! : row[col.key]}
                               onChange={e => !isPamAuto && setRow(idx, col.key, e.target.value)}
                               onBlur={e => !isPamAuto && blurRow(idx, col.key, e.target.value)}
                               placeholder="—"
                               readOnly={isPamAuto}
-                              className={`w-full text-center text-sm font-semibold focus:outline-none rounded px-1 py-0.5
+                              className={`w-full text-center text-xs font-semibold focus:outline-none rounded px-1 py-0.5
                                 ${isPamAuto ? 'text-indigo-400 bg-indigo-50 cursor-default' : 'bg-transparent placeholder-slate-200 focus:bg-indigo-50'}`}
                             />
                           </td>
@@ -437,7 +466,7 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
           </div>
 
           <button onClick={handleSave} disabled={saving}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors">
+            className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-2 rounded-lg text-sm transition-colors">
             {saving ? 'Salvando...' : 'Salvar Período'}
           </button>
         </div>
@@ -447,58 +476,118 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
         <p className="text-slate-400 text-sm italic text-center py-8">Nenhuma leitura registrada</p>
       )}
 
-      {/* Pivot table — historical view */}
-      {sorted.length > 0 && (
+      {/* Grouped pivot table */}
+      {groups.length > 0 && (
         <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
           <table className="min-w-max w-full text-xs border-separate border-spacing-0">
             <thead>
+              {/* Row 1: param header + group headers */}
               <tr>
-                <th className="sticky left-0 z-20 bg-slate-100 px-3 py-2.5 text-left font-bold text-slate-700 border-b-2 border-r-2 border-slate-300 min-w-[100px]">
+                <th rowSpan={hasExpandedGroup ? 2 : 1}
+                  className="sticky left-0 z-20 bg-slate-100 px-3 py-2 text-left font-bold text-slate-700 border-b-2 border-r-2 border-slate-300 min-w-[90px] align-middle">
                   Parâmetro
                 </th>
-                {sorted.map((sv, idx) => {
-                  const dt = new Date(sv.horario)
-                  const shiftChange = idx > 0 && getTurno(dt) !== getTurno(new Date(sorted[idx-1].horario))
-                  const isDiurno = sv.turno === 'diurno'
+                {groups.map(g => {
+                  const exp = expandedGroups.has(g.key)
+                  const isDiurno = g.turno === 'diurno'
+                  const col = isDiurno ? 'text-amber-600' : 'text-indigo-600'
+                  if (exp) {
+                    return (
+                      <th key={g.key} colSpan={g.readings.length}
+                        className={`px-2 py-1.5 text-center border-b border-r-2 border-indigo-200 bg-slate-50 text-xs`}>
+                        <button onClick={() => toggleGroup(g.key)}
+                          className={`font-semibold hover:opacity-70 ${col}`}>
+                          {g.label} ({g.readings.length}) ▲
+                        </button>
+                      </th>
+                    )
+                  }
                   return (
-                    <th key={sv.id}
-                      className={`px-2 py-1.5 text-center bg-slate-100 border-b-2 border-r border-slate-200 min-w-[60px] whitespace-nowrap ${shiftChange ? 'border-l-2 border-l-indigo-300' : ''}`}>
-                      <p className={`font-semibold text-xs ${isDiurno ? 'text-amber-600' : 'text-indigo-600'}`}>
-                        {dt.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}
-                      </p>
-                      <p className="text-slate-400 font-normal text-xs">
-                        {dt.toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit'})}
-                      </p>
-                      <button onClick={() => openEditSv(sv)}
-                        className="text-indigo-300 hover:text-indigo-600 text-xs mt-0.5 px-1">✏️</button>
+                    <th key={g.key} rowSpan={hasExpandedGroup ? 2 : 1}
+                      className={`px-2 py-1.5 text-center bg-slate-100 border-b-2 border-r border-slate-200 min-w-[72px] cursor-pointer hover:bg-slate-200 transition-colors align-middle ${col}`}
+                      onClick={() => toggleGroup(g.key)}>
+                      <p className="font-semibold text-xs">{g.label}</p>
+                      <p className="font-normal text-slate-400 text-xs">{g.readings.length} leit.</p>
+                      <p className="text-slate-300 text-xs mt-0.5">▶</p>
                     </th>
                   )
                 })}
               </tr>
+              {/* Row 2: individual reading times (only for expanded groups) */}
+              {hasExpandedGroup && (
+                <tr>
+                  {groups.flatMap(g => {
+                    if (!expandedGroups.has(g.key)) return []
+                    return g.readings.map((sv, svIdx) => {
+                      const dt = new Date(sv.horario)
+                      const isDiurno = g.turno === 'diurno'
+                      return (
+                        <th key={sv.id}
+                          className={`px-1 py-1 text-center bg-slate-100 border-b-2 border-slate-200 min-w-[52px] text-xs
+                            ${svIdx === g.readings.length - 1 ? 'border-r-2 border-r-indigo-200' : 'border-r'}`}>
+                          <p className={`font-semibold ${isDiurno ? 'text-amber-600' : 'text-indigo-600'}`}>
+                            {dt.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})}
+                          </p>
+                          <button onClick={() => openEditSv(sv)}
+                            className="text-indigo-300 hover:text-indigo-600 mt-0.5">✏️</button>
+                        </th>
+                      )
+                    })
+                  })}
+                </tr>
+              )}
             </thead>
             <tbody>
               {COLS.map((col, rowIdx) => {
                 const rowBg = rowIdx % 2 === 0 ? '#ffffff' : '#f8fafc'
                 return (
                   <tr key={col.key}>
-                    <td className="sticky left-0 z-10 px-3 py-2 font-semibold text-slate-700 border-r-2 border-b border-slate-200 whitespace-nowrap"
+                    <td className="sticky left-0 z-10 px-3 py-1 font-semibold text-slate-700 border-r-2 border-b border-slate-200 whitespace-nowrap text-xs"
                       style={{ background: rowBg }}>
                       {col.label}
-                      <span className="text-slate-300 font-normal ml-1 text-xs">{col.unit}</span>
+                      <span className="text-slate-300 font-normal ml-1">{col.unit}</span>
                     </td>
-                    {sorted.map((sv, idx) => {
-                      const v = sv[col.key] as number | null
-                      const a = alertFor(col.key, v)
-                      const shiftChange = idx > 0 && getTurno(new Date(sv.horario)) !== getTurno(new Date(sorted[idx-1].horario))
-                      const cls = alertBg(a)
-                      const bgOverride = a === 'crit' ? '#fef2f2' : a === 'warn' ? '#fff7ed' : a === 'low' ? '#f0f9ff' : rowBg
-                      return (
-                        <td key={sv.id}
-                          className={`px-2 py-1.5 text-center border-r border-b border-slate-100 text-xs ${cls} ${shiftChange ? 'border-l-2 border-l-indigo-100' : ''}`}
+                    {groups.flatMap(g => {
+                      if (expandedGroups.has(g.key)) {
+                        // Individual cells
+                        return g.readings.map((sv, svIdx) => {
+                          const v = sv[col.key] as number | null
+                          const a = alertFor(col.key, v)
+                          const cls = alertBg(a)
+                          const bgOverride = a === 'crit' ? '#fef2f2' : a === 'warn' ? '#fff7ed' : a === 'low' ? '#f0f9ff' : rowBg
+                          return (
+                            <td key={sv.id}
+                              className={`px-1 py-1 text-center border-b text-xs ${cls}
+                                ${svIdx === g.readings.length - 1 ? 'border-r-2 border-r-indigo-100' : 'border-r border-slate-100'}`}
+                              style={{ background: bgOverride }}>
+                              {v != null ? v : <span className="text-slate-200">—</span>}
+                            </td>
+                          )
+                        })
+                      }
+                      // Summary (collapsed group)
+                      const vals = g.readings.map(sv => sv[col.key] as number | null).filter(v => v !== null) as number[]
+                      if (!vals.length) return [
+                        <td key={g.key} className="px-2 py-1 text-center border-b border-r border-slate-200 text-xs text-slate-200"
+                          style={{ background: rowBg }}>—</td>
+                      ]
+                      const mn = Math.min(...vals), mx = Math.max(...vals)
+                      const aMin = alertFor(col.key, mn), aMax = alertFor(col.key, mx)
+                      const worst = [aMin, aMax].includes('crit') ? 'crit' : [aMin, aMax].includes('warn') ? 'warn' : [aMin, aMax].includes('low') ? 'low' : 'ok'
+                      const bgOverride = worst === 'crit' ? '#fef2f2' : worst === 'warn' ? '#fff7ed' : worst === 'low' ? '#f0f9ff' : rowBg
+                      return [
+                        <td key={g.key} className="px-2 py-1 text-center border-b border-r border-slate-200 text-xs whitespace-nowrap"
                           style={{ background: bgOverride }}>
-                          {v != null ? v : <span className="text-slate-200">—</span>}
+                          {mn === mx
+                            ? <span className={`font-semibold ${alertBg(aMax)}`}>{mn}</span>
+                            : <>
+                                <span className={`font-semibold ${alertBg(aMin)}`}>{mn}</span>
+                                <span className="text-slate-300 mx-0.5">–</span>
+                                <span className={`font-semibold ${alertBg(aMax)}`}>{mx}</span>
+                              </>
+                          }
                         </td>
-                      )
+                      ]
                     })}
                   </tr>
                 )
@@ -508,13 +597,23 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
         </div>
       )}
 
+      {/* Hint */}
+      {groups.length > 0 && (
+        <div className="flex flex-wrap gap-3 text-xs text-slate-400">
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-100 border border-red-300"/>Crítico</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-100 border border-orange-200"/>Atenção</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-sky-100 border border-sky-200"/>Baixo</span>
+          <span className="flex items-center gap-1 text-indigo-400">Clique no período para expandir leituras individuais</span>
+        </div>
+      )}
+
       {/* Edit individual reading modal */}
       {editSv && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={e => e.target === e.currentTarget && setEditSv(null)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-3">
             <div className="flex items-center justify-between">
               <p className="font-bold text-slate-800">
-                ✏️ Editando leitura — {new Date(editSv.horario).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}
+                ✏️ {new Date(editSv.horario).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}
                 {' '}{editSv.turno === 'diurno' ? '☀️' : '🌙'}
               </p>
               <button onClick={() => setEditSv(null)} className="text-slate-400 hover:text-slate-700 text-lg">✕</button>
@@ -560,16 +659,6 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {sorted.length > 0 && (
-        <div className="flex flex-wrap gap-3 text-xs text-slate-400">
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-100 border border-red-300"/>Crítico</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-100 border border-orange-200"/>Atenção</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-sky-100 border border-sky-200"/>Baixo</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-2 border-l-2 border-indigo-300"/>Mudança de turno</span>
-          <span className="flex items-center gap-1 text-indigo-400">PAM calculado automaticamente (PAS+2×PAD)/3</span>
         </div>
       )}
     </div>

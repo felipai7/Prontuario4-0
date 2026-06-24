@@ -19,9 +19,23 @@ const emptyResultado = (): ManualResultado => ({
   nome: '', valor: '', unidade: '', referencia: '', alterado: false, direcao: 'normal'
 })
 
-// ── Name normalisation (reduces duplicates across extractions) ────────────────
+// ── Name normalisation ────────────────────────────────────────────────────────
 const ALIASES: Array<[RegExp, string]> = [
-  // Hemograma – normalise case/accentuation/suffix variations
+  // _Gasometria suffix — must come before generic aliases to take precedence
+  [/^na[_\s]*gasometria.*$/i,              'Sódio (gaso.)'],
+  [/^k[_\s]*gasometria.*$/i,               'Potássio (gaso.)'],
+  [/^hct[_\s]*gasometria.*$/i,             'Hematócrito (gaso.)'],
+  [/^be[_\s]*gasometria.*$/i,              'BE'],
+  [/^o2sat[_\s]*gasometria.*$/i,           'SatO2 (%)'],
+  [/^hco3[_\s]*gasometria.*$/i,            'HCO3'],
+  [/^co2\s*total[_\s]*gasometria.*$/i,     'CO2 Total'],
+  [/^glicose[_\s]*gasometria.*$/i,         'Glicose (gaso.)'],
+  [/^gap\s*co2[_\s]*gasometria.*$/i,       'GAP CO2'],
+  [/^lactato[_\s]*gasometria.*$/i,         'Lactato'],
+  [/^ph[_\s]*gasometria.*$/i,              'pH'],
+  [/^pco2[_\s]*gasometria.*$/i,            'PCO2'],
+  [/^po2[_\s]*gasometria.*$/i,             'PO2'],
+  // Hemograma
   [/^hematócrit[oa]?$|^hct$/i,                                 'Hematócrito'],
   [/^hemoglob[ia]n[ao]?s?$/i,                                  'Hemoglobina'],
   [/^hemácias?$/i,                                             'Hemácias'],
@@ -46,7 +60,7 @@ const ALIASES: Array<[RegExp, string]> = [
   [/^mpv$|^volume\s+plaquetário\s+médio$/i,                    'MPV'],
   [/^plaquetas?$/i,                                            'Plaquetas'],
   [/^leucócitos?(\s+totais?)?$/i,                              'Leucócitos'],
-  // Eletrólitos – include bare NA/K from gasometry panels
+  // Eletrólitos
   [/^magnésio(\s+sérico)?$/i,                                  'Magnésio'],
   [/^na$|^sódio(\s+sérico)?$/i,                                'Sódio'],
   [/^k$|^potássio(\s+sérico)?$/i,                              'Potássio'],
@@ -57,10 +71,7 @@ const ALIASES: Array<[RegExp, string]> = [
   [/^taxa\s+(de\s+)?filtração\s+glomerular(\s+\w+)?$|etfg$/i,  'TFG'],
   // Metabólico
   [/^glicose(\s+\(gasometria.*\))?$/i,                         'Glicose'],
-  // Gasometria – remaining contextual params
-  [/^na\s*\(gasometria.*\)$/i,                                 'Sódio'],
-  [/^k\s*\(gasometria.*\)$/i,                                  'Potássio'],
-  [/^hct\s*\(gasometria.*\)$/i,                                'Hematócrito'],
+  // Gasometria (contextual, no suffix)
   [/^be$|^base\s*excess$/i,                                    'BE'],
   [/^o2sat$|^sat(uração)?\s*(de\s+)?o\.?2\s*(%)?$/i,          'SatO2 (%)'],
   [/^hco3(\s*[\(/]bicarbonato\)?)?$|^bicarbonato(\s+padrão)?$/i, 'HCO3'],
@@ -69,15 +80,16 @@ const ALIASES: Array<[RegExp, string]> = [
   [/^proteína\s+c\s+reativa(\s*\(?pcr\)?)?$/i,                 'PCR'],
   // Coagulação
   [/^(rni|inr)$/i,                                              'INR/RNI'],
-  // Enzimas/Hepático + CK
+  // Abdome — hepático/pancreático/canalicular
   [/^tgo$|^ast$|^ast\s*[/]\s*tgo$/i,                          'TGO/AST'],
   [/^tgp$|^alt$|^alt\s*[/]\s*tgp$/i,                          'TGP/ALT'],
   [/^(dhl|ldh|desidrogenase\s+lática?)$/i,                     'LDH'],
-  [/^ck[\s-]?mb(\s*[\(/]?\s*atividade\s*\)?)?$/i,              'CK-MB'],
-  [/^(ck|cpk)(\s+total)?$|^creatino(fosfo)?quinase$/i,         'CK Total'],
   [/^gama[\s-]?gt$|^γ[\s-]?gt$/i,                              'Gama-GT'],
   [/^fosfatase\s+alcalina$/i,                                   'Fosfatase Alcalina'],
-  // Cardíaco
+  // Cardíaco — CK, Troponina, BNP
+  [/^ck[\s-]?mb(\s*[-–]?\s*(massa|atividade))?(\s*\(.*\))?$/i, 'CK-MB'],
+  [/^(ck|cpk)(\s+total)?$|^creatino(fosfo)?quinase$/i,         'CK Total'],
+  [/^troponin[ao]?\s*[IiTt]?(\s*\(.*\))?$/i,                  'Troponina'],
   [/^(pro[\s-]?)?bnp$/i,                                       'BNP'],
 ]
 
@@ -93,15 +105,37 @@ function canonicalize(name: string): string {
 type Category = { label: string; test: (n: string) => boolean }
 
 const CATEGORIES: Category[] = [
-  { label: '🩸 Hemograma',       test: n => /hemácia|hemoglob|hematócrit|vcm|hcm|chcm|rdw|plaqueta|leucócit|neutrófi|segmentad|bastonet|linfócit|monócit|eosinófi|basófi|metamielo|mielócit|promielócit|blastos|plasmócit|mpv/i.test(n) },
-  { label: '⚡ Eletrólitos',     test: n => /^sódio$|^potássio$|^cálcio|^magnésio$|^fósforo$|^cloro$/i.test(n) },
-  { label: '🍬 Metabólico',      test: n => /^glicose$|hba1c|insulina/i.test(n) },
-  { label: '🫘 Renal',           test: n => /^ureia$|creatinin|^tfg$|filtração|ácido úrico/i.test(n) },
+  {
+    label: '🩸 Hemograma',
+    // Exclude (gaso.) suffix so HCT/Hematócrito from gasometry goes to Gasometria
+    test: n => /hemácia|hemoglob|hematócrit(?!\s*\(gaso)|vcm|hcm|chcm|rdw|plaqueta|leucócit|neutrófi|segmentad|bastonet|linfócit|monócit|eosinófi|basófi|metamielo|mielócit|promielócit|blastos|plasmócit|mpv/i.test(n),
+  },
+  {
+    label: '⚡ Eletrólitos',
+    // Includes (gaso.) variants for Na and K
+    test: n => /^sódio(\s*\(gaso\.\))?$|^potássio(\s*\(gaso\.\))?$|^cálcio|^magnésio$|^fósforo$|^cloro$/i.test(n),
+  },
+  {
+    label: '🍬 Metabólico',
+    // ^glicose$ excludes 'Glicose (gaso.)' which goes to Gasometria
+    test: n => /^glicose$|hba1c|insulina/i.test(n),
+  },
+  { label: '🫘 Renal',          test: n => /^ureia$|creatinin|^tfg$|filtração|ácido úrico/i.test(n) },
   { label: '🧪 Inflamatório',   test: n => /^pcr$|procalcitonin|ferritin|\bvhs\b/i.test(n) },
   { label: '🩻 Coagulação',     test: n => /tap\b|inr|rni|ttpa|fibrinogên|d[\s-]?dímero/i.test(n) },
-  { label: '🫀 Enzimas/Hepático', test: n => /tgo|tgp|fosfatase|ggt|bilirrubina|ldh|amilase|lipase|albumina|proteínas totais|ck[\s-]?(mb|total)|cpk/i.test(n) },
-  { label: '🫀 Cardíaco',       test: n => /troponin|\bbnp\b/i.test(n) },
-  { label: '💨 Gasometria',     test: n => /\bph\b|po2|pco2|hco3|\bbe\b|sato2|lactato|\bco2\b|gap co2/i.test(n) },
+  {
+    label: '🏥 Abdome',
+    test: n => /tgo|tgp|fosfatase|ggt|bilirrubina|ldh|amilase|lipase|albumina|proteínas totais/i.test(n),
+  },
+  {
+    label: '🫀 Cardíaco',
+    test: n => /troponin|\bbnp\b|^ck total$|^ck-mb$/i.test(n),
+  },
+  {
+    label: '💨 Gasometria',
+    // Also catches (gaso.) suffix for Glicose (gaso.), Hematócrito (gaso.) etc.
+    test: n => /\bph\b|po2|pco2|hco3|\bbe\b|sato2|lactato|\bco2\b|gap co2|gaso\./i.test(n),
+  },
   { label: '⚗️ Hormônios',      test: n => /^tsh$|^t4l?$|^t3$|cortisol/i.test(n) },
   { label: '🦠 Microbiologia',  test: n => /swab|cultura|urocultura|hemocultura|micror?organism|bactéria\s+isolada|contagem\s+(de\s+)?col[oô]n|antibiograma|amicacina|amoxicil|ampicil|sulbactam|aztreonam|cefalexin|cefepim|cefotaxim|cefoxitin|ceftazidim|cefurox|ceftriaxon|ciprofloxacin|cloranfenic|ertapenem|gentamicin|imipenem|levofloxacin|linezolid|meropenem|piperacilin|pip.*tazo|polimixin|tigeciclina|tobramicin|trimetoprim|trimet.*sulfa|sulfa.*trimet|vancomicin|colistin|fosfomicin/i.test(n) },
   { label: '🔬 EAS/Urina',      test: n => /^cor$|^aspecto$|densidade|cetonas|^nitrito$|urobilinogênio|células\s+epiteliais|células\s+trans|células\s+tubulares|escamosas|cilindros|cristais|bacteriúria|^muco$|leveduras|^proteínas$|\(química\)|\(microscopia\)|\(sedimento\)|\(urin/i.test(n) },
@@ -193,7 +227,6 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
 
   const tableRows = buildTableRows(allParams)
 
-  // Delete / edit exam
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [editExame,  setEditExame]  = useState<{ id: string; tipo: string; data: string; obs: string } | null>(null)
   const [editSaving, setEditSaving] = useState(false)
@@ -204,8 +237,7 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
     const { error } = await supabase.from('exames').delete().eq('id', id)
     setDeletingId(null)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
-    showToast('Exame removido')
-    onRefresh()
+    showToast('Exame removido'); onRefresh()
   }
 
   const handleSaveEditExame = async () => {
@@ -222,7 +254,6 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
     setEditExame(null); onRefresh()
   }
 
-  // Germe crítico detection
   const CRITICO_RE = /klebsiella|acinetobacter|pseudomonas|enterococcus|staphylococcus|candida|clostridioides|clostridium difficile|mrsa|esbl|kpc|vre|cre/i
   const MICRO_EXAM_RE = /cultura|swab|microbiologia|antibiograma|urocultura|hemocultura/i
   let germeAlert: null | { tipo: 'critico' | 'identificado'; nome: string; exame: string } = null
@@ -231,8 +262,7 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
     for (const r of (ex.resultados || [])) {
       if (r.alterado) {
         if (CRITICO_RE.test(r.valor) || CRITICO_RE.test(r.nome)) {
-          germeAlert = { tipo: 'critico', nome: r.valor, exame: ex.tipo_exame }
-          break
+          germeAlert = { tipo: 'critico', nome: r.valor, exame: ex.tipo_exame }; break
         }
         if (/identificação|bactéria\s+isolada|germe|organismo/i.test(r.nome)) {
           germeAlert = germeAlert ?? { tipo: 'identificado', nome: r.valor, exame: ex.tipo_exame }
@@ -325,9 +355,7 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-slate-700">
-          Exames ({exames.length})
-        </h3>
+        <h3 className="font-semibold text-slate-700">Exames ({exames.length})</h3>
         <button onClick={() => adding ? resetAdding() : setAdding(true)}
           className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors">
           {adding ? '✕ Cancelar' : '+ Adicionar Exame'}
@@ -439,7 +467,6 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
         </div>
       )}
 
-
       {germeAlert && (
         <div className={`rounded-lg px-4 py-2.5 text-sm font-semibold flex items-start gap-2 ${
           germeAlert.tipo === 'critico'
@@ -448,9 +475,7 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
         }`}>
           <span className="text-lg">{germeAlert.tipo === 'critico' ? '🚨' : '🦠'}</span>
           <div>
-            <p className="font-bold">
-              {germeAlert.tipo === 'critico' ? 'Germe crítico / MDR identificado' : 'Germe identificado'}
-            </p>
+            <p className="font-bold">{germeAlert.tipo === 'critico' ? 'Germe crítico / MDR identificado' : 'Germe identificado'}</p>
             <p className="font-normal text-xs mt-0.5">{germeAlert.nome} — {germeAlert.exame}</p>
           </div>
         </div>
@@ -460,7 +485,7 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
         <p className="text-slate-400 text-sm italic text-center py-8">Nenhum exame registrado</p>
       )}
 
-      {/* ── Pivot table ── */}
+      {/* Pivot table */}
       {comRes.length > 0 && (
         <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
           <table className="min-w-max w-full text-xs border-separate border-spacing-0">
@@ -495,23 +520,19 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
                 if (row.kind === 'header') {
                   return (
                     <tr key={`hdr-${row.label}`}>
-                      <td
-                        colSpan={comRes.length + 1}
+                      <td colSpan={comRes.length + 1}
                         className="sticky left-0 z-10 px-3 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 border-b border-t border-indigo-100">
                         {row.label}
                       </td>
                     </tr>
                   )
                 }
-
                 const paramName = row.name
                 const hasAlt = comRes.some(ex => lookup.get(ex.id)?.get(paramName)?.alterado)
                 const rowBg = rowIdx % 2 === 0 ? '#ffffff' : '#f8fafc'
-
                 return (
                   <tr key={`p-${paramName}`}>
-                    <td
-                      className={`sticky left-0 z-10 px-3 py-2 font-medium border-r-2 border-b border-slate-200 whitespace-nowrap ${hasAlt ? 'text-red-700' : 'text-slate-700'}`}
+                    <td className={`sticky left-0 z-10 px-3 py-2 font-medium border-r-2 border-b border-slate-200 whitespace-nowrap ${hasAlt ? 'text-red-700' : 'text-slate-700'}`}
                       style={{ background: rowBg }}>
                       {paramName}
                     </td>
