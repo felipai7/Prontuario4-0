@@ -40,8 +40,8 @@ const DROGAS: DrogaConfig[] = [
   {
     nome: 'Vasopressina',
     variantes: [
-      { label: 'Simples (0,2 UI/mL)',  valor: 0.2, unidade_conc: 'UI/mL' },
-      { label: 'Dobrada (0,2 UI/mL)',  valor: 0.2, unidade_conc: 'UI/mL' },
+      { label: 'Simples (0,2 UI/mL)', valor: 0.2, unidade_conc: 'UI/mL' },
+      { label: 'Dobrada (0,4 UI/mL)', valor: 0.4, unidade_conc: 'UI/mL' },
     ],
     dose_unidade: 'UI/min', dose_alvo_min: 0.01, dose_alvo_max: 0.04,
     dose_alvo_label: '0,01 – 0,04 UI/min',
@@ -76,8 +76,8 @@ const DROGAS: DrogaConfig[] = [
     variantes: [
       { label: 'Padrão (200 mcg/mL)', valor: 200, unidade_conc: 'mcg/mL' },
     ],
-    dose_unidade: 'mcg/min', dose_alvo_min: 5, dose_alvo_max: 200,
-    dose_alvo_label: '5 – 200 mcg/min',
+    dose_unidade: 'mcg/min', dose_alvo_min: 5, dose_alvo_max: 20,
+    dose_alvo_label: '5 – 20 mcg/min (até 200 mcg/min)',
     usaPeso: false,
     calcDose: (f, c, _p) => (f * c) / 60,
     formatDose: d => d.toFixed(1),
