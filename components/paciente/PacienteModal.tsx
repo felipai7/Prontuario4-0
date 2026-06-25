@@ -8,7 +8,7 @@ import ExamesImagemTab  from './ExamesImagemTab'
 import HemodinamicaTab  from './HemodinamicaTab'
 import AltaModal        from './AltaModal'
 import { fmtData, calcAge, pad } from '@/lib/utils'
-import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, ToastData } from '@/types'
+import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ToastData } from '@/types'
 
 type Tab = 'balanco' | 'sinais' | 'exames' | 'imagem' | 'hemo'
 
@@ -36,15 +36,22 @@ type EditForm = {
 export default function PacienteModal({ paciente, onClose, onAltaConcedida, showToast }: Props) {
   const supabase   = createClient()
   const [tab,      setTab]      = useState<Tab>('balanco')
-  const [exames,        setExames]       = useState<Exame[]>([])
-  const [periodos,      setPeriodos]     = useState<PeriodoBalanco[]>([])
-  const [sinais,        setSinais]       = useState<SinalVital[]>([])
-  const [examesImagem,  setExamesImagem] = useState<ExameImagem[]>([])
-  const [dvas,          setDvas]         = useState<DVA[]>([])
-  const [loading,       setLoading]      = useState(true)
-  const [showAlta, setShowAlta] = useState(false)
-  const [pac,      setPac]      = useState<Paciente>(paciente)
-  const [editing,  setEditing]  = useState(false)
+  const [exames,        setExames]        = useState<Exame[]>([])
+  const [periodos,      setPeriodos]      = useState<PeriodoBalanco[]>([])
+  const [sinais,        setSinais]        = useState<SinalVital[]>([])
+  const [examesImagem,  setExamesImagem]  = useState<ExameImagem[]>([])
+  const [dvas,          setDvas]          = useState<DVA[]>([])
+  const [periodosHemo,  setPeriodosHemo]  = useState<PeriodoHemodinamica[]>([])
+  const [loading,       setLoading]       = useState(true)
+  const [showAlta,      setShowAlta]      = useState(false)
+  const [pac,           setPac]           = useState<Paciente>(paciente)
+  const [editing,       setEditing]       = useState(false)
+
+  // AI evaluation state
+  const [aiOpen,    setAiOpen]    = useState(false)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiText,    setAiText]    = useState<string | null>(null)
+
   const hoje = new Date().toISOString().split('T')[0]
 
   function makeEditForm(p: Paciente): EditForm {
@@ -67,42 +74,78 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
 
   const loadData = async () => {
     setLoading(true)
-    const [exRes, bhRes, svRes, imgRes, dvaRes] = await Promise.all([
+    const [exRes, bhRes, svRes, imgRes, dvaRes, hemoRes] = await Promise.all([
       supabase.from('exames').select('*').eq('paciente_id', pac.id).order('created_at'),
       supabase.from('periodos_balanco').select('*').eq('paciente_id', pac.id).order('inicio'),
       supabase.from('sinais_vitais').select('*').eq('paciente_id', pac.id).order('horario'),
       supabase.from('exames_imagem').select('*').eq('paciente_id', pac.id).order('created_at', { ascending: false }),
-      supabase.from('dvas').select('*').eq('paciente_id', pac.id).eq('ativo', true).order('created_at'),
+      supabase.from('dvas').select('*').eq('paciente_id', pac.id).order('created_at'),
+      supabase.from('periodos_hemodinamica').select('*').eq('paciente_id', pac.id).order('criado_em'),
     ])
-    if (exRes.data)  setExames(exRes.data as Exame[])
-    if (bhRes.data)  setPeriodos(bhRes.data as PeriodoBalanco[])
-    if (svRes.data)  setSinais(svRes.data as SinalVital[])
-    if (imgRes.data) setExamesImagem(imgRes.data as ExameImagem[])
-    if (dvaRes.data) setDvas(dvaRes.data as DVA[])
+    if (exRes.data)   setExames(exRes.data as Exame[])
+    if (bhRes.data)   setPeriodos(bhRes.data as PeriodoBalanco[])
+    if (svRes.data)   setSinais(svRes.data as SinalVital[])
+    if (imgRes.data)  setExamesImagem(imgRes.data as ExameImagem[])
+    if (dvaRes.data)  setDvas(dvaRes.data as DVA[])
+    if (hemoRes.data) setPeriodosHemo(hemoRes.data as PeriodoHemodinamica[])
     setLoading(false)
   }
 
   useEffect(() => {
     loadData()
-    // Realtime subscriptions — updates any tab automatically when data changes
     const channel = supabase
       .channel(`modal-${pac.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'exames',            filter: `paciente_id=eq.${pac.id}` }, () => loadData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'periodos_balanco',  filter: `paciente_id=eq.${pac.id}` }, () => loadData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sinais_vitais',     filter: `paciente_id=eq.${pac.id}` }, () => loadData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'exames_imagem',     filter: `paciente_id=eq.${pac.id}` }, () => loadData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'dvas',              filter: `paciente_id=eq.${pac.id}` }, () => loadData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pacientes',         filter: `id=eq.${pac.id}` },
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'exames',                filter: `paciente_id=eq.${pac.id}` }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'periodos_balanco',       filter: `paciente_id=eq.${pac.id}` }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sinais_vitais',          filter: `paciente_id=eq.${pac.id}` }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'exames_imagem',          filter: `paciente_id=eq.${pac.id}` }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dvas',                   filter: `paciente_id=eq.${pac.id}` }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'periodos_hemodinamica',  filter: `paciente_id=eq.${pac.id}` }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pacientes',              filter: `id=eq.${pac.id}` },
         (payload) => { if (payload.new && payload.eventType !== 'DELETE') setPac(payload.new as Paciente) })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [pac.id])
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape' && !editing) onClose() }
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (aiOpen) { setAiOpen(false); return }
+        if (!editing) onClose()
+      }
+    }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [editing])
+  }, [editing, aiOpen])
+
+  const handleAvaliarIA = async () => {
+    setAiOpen(true)
+    setAiLoading(true)
+    setAiText(null)
+    try {
+      const res = await fetch('/api/avaliacao-clinica', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paciente: pac,
+          exames,
+          sinais,
+          examesImagem,
+          periodos,
+          dvas,
+          periodosHemo,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setAiText(data.texto)
+    } catch (e: any) {
+      showToast('Erro na avaliação com IA: ' + e.message, 'error')
+      setAiOpen(false)
+    } finally {
+      setAiLoading(false)
+    }
+  }
 
   const handleSaveEdit = async () => {
     const errs: Record<string, string> = {}
@@ -121,7 +164,6 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     setEditErrors(errs)
     if (Object.keys(errs).length > 0) return
 
-    // Check target bed not occupied by another patient
     if (novoLeito !== pac.numero_leito || editForm.ala_id !== pac.ala_id) {
       const { data: ocupante } = await supabase.from('pacientes')
         .select('id, nome').eq('ala_id', editForm.ala_id).eq('numero_leito', novoLeito).eq('ativo', true).single()
@@ -175,6 +217,10 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
                 )}
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
+                <button onClick={handleAvaliarIA} disabled={aiLoading} title="Avaliação clínica completa com IA"
+                  className="bg-violet-500 hover:bg-violet-400 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
+                  🧠 Avaliar com IA
+                </button>
                 <button onClick={() => setEditing(e => !e)} title="Editar dados do paciente"
                   className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${editing ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white hover:bg-white/20'}`}>
                   ✏️ Editar
@@ -272,7 +318,49 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
           </div>
 
           {/* Body */}
-          <div className="overflow-y-auto flex-1 p-6">
+          <div className="overflow-y-auto flex-1 p-6 relative">
+
+            {/* AI evaluation overlay */}
+            {aiOpen && (
+              <div className="absolute inset-0 z-10 bg-white rounded-b-2xl flex flex-col">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 flex-shrink-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🧠</span>
+                    <span className="font-bold text-slate-800">Avaliação Clínica com IA</span>
+                    <span className="text-xs text-slate-400">{pac.nome}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {!aiLoading && aiText && (
+                      <button onClick={() => navigator.clipboard.writeText(aiText).then(() => showToast('Copiado!'))}
+                        className="text-xs text-indigo-600 hover:text-indigo-800 border border-indigo-200 hover:border-indigo-400 px-2.5 py-1.5 rounded-lg transition-colors">
+                        📋 Copiar
+                      </button>
+                    )}
+                    {!aiLoading && aiText && (
+                      <button onClick={handleAvaliarIA}
+                        className="text-xs text-violet-600 hover:text-violet-800 border border-violet-200 hover:border-violet-400 px-2.5 py-1.5 rounded-lg transition-colors">
+                        🔄 Reanalisar
+                      </button>
+                    )}
+                    <button onClick={() => setAiOpen(false)}
+                      className="text-slate-400 hover:text-slate-700 w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100">
+                      ✕
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-6">
+                  {aiLoading ? (
+                    <div className="flex flex-col items-center justify-center h-48 gap-4">
+                      <div className="w-10 h-10 border-4 border-violet-500 border-t-transparent rounded-full animate-spin" />
+                      <p className="text-slate-500 text-sm">Analisando dados clínicos...</p>
+                    </div>
+                  ) : aiText ? (
+                    <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">{aiText}</pre>
+                  ) : null}
+                </div>
+              </div>
+            )}
+
             {loading ? (
               <div className="flex items-center justify-center py-16">
                 <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
@@ -286,7 +374,14 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
             ) : tab === 'imagem' ? (
               <ExamesImagemTab paciente={pac} examesImagem={examesImagem} onRefresh={loadData} showToast={showToast} />
             ) : (
-              <HemodinamicaTab paciente={pac} dvas={dvas} onRefresh={loadData} showToast={showToast} />
+              <HemodinamicaTab
+                paciente={pac}
+                dvas={dvas}
+                periodos={periodosHemo}
+                sinais={sinais}
+                onRefresh={loadData}
+                showToast={showToast}
+              />
             )}
           </div>
         </div>
@@ -297,6 +392,9 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
           paciente={pac}
           exames={exames}
           periodos={periodos}
+          sinais={sinais}
+          examesImagem={examesImagem}
+          dvas={dvas}
           onClose={() => setShowAlta(false)}
           onAltaConcedida={onAltaConcedida}
           showToast={showToast}

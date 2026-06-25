@@ -1,11 +1,14 @@
 'use client'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { Paciente, DVA, ToastData } from '@/types'
+import { fmtData, getTurno } from '@/lib/utils'
+import type { Paciente, DVA, PeriodoHemodinamica, SinalVital, ToastData } from '@/types'
 
 interface Props {
   paciente: Paciente
   dvas: DVA[]
+  periodos: PeriodoHemodinamica[]
+  sinais: SinalVital[]
   onRefresh: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
 }
@@ -50,9 +53,7 @@ const DROGAS: DrogaConfig[] = [
   },
   {
     nome: 'Dopamina',
-    variantes: [
-      { label: 'Padrão (1.000 mcg/mL)', valor: 1000, unidade_conc: 'mcg/mL' },
-    ],
+    variantes: [{ label: 'Padrão (1.000 mcg/mL)', valor: 1000, unidade_conc: 'mcg/mL' }],
     dose_unidade: 'mcg/Kg/min', dose_alvo_min: 1, dose_alvo_max: 20,
     dose_alvo_label: '1 – 20 mcg/Kg/min',
     usaPeso: true,
@@ -61,9 +62,7 @@ const DROGAS: DrogaConfig[] = [
   },
   {
     nome: 'Dobutamina',
-    variantes: [
-      { label: 'Padrão (5.000 mcg/mL)', valor: 5000, unidade_conc: 'mcg/mL' },
-    ],
+    variantes: [{ label: 'Padrão (5.000 mcg/mL)', valor: 5000, unidade_conc: 'mcg/mL' }],
     dose_unidade: 'mcg/Kg/min', dose_alvo_min: 2, dose_alvo_max: 20,
     dose_alvo_label: '2 – 20 mcg/Kg/min',
     usaPeso: true,
@@ -72,9 +71,7 @@ const DROGAS: DrogaConfig[] = [
   },
   {
     nome: 'Nitroglicerina (Tridil)',
-    variantes: [
-      { label: 'Padrão (200 mcg/mL)', valor: 200, unidade_conc: 'mcg/mL' },
-    ],
+    variantes: [{ label: 'Padrão (200 mcg/mL)', valor: 200, unidade_conc: 'mcg/mL' }],
     dose_unidade: 'mcg/min', dose_alvo_min: 5, dose_alvo_max: 20,
     dose_alvo_label: '5 – 20 mcg/min (até 200 mcg/min)',
     usaPeso: false,
@@ -83,9 +80,7 @@ const DROGAS: DrogaConfig[] = [
   },
   {
     nome: 'Nitroprussiato (Nipride)',
-    variantes: [
-      { label: 'Padrão (200 mcg/mL)', valor: 200, unidade_conc: 'mcg/mL' },
-    ],
+    variantes: [{ label: 'Padrão (200 mcg/mL)', valor: 200, unidade_conc: 'mcg/mL' }],
     dose_unidade: 'mcg/Kg/min', dose_alvo_min: 0.3, dose_alvo_max: 10,
     dose_alvo_label: '0,3 – 10 mcg/Kg/min',
     usaPeso: true,
@@ -129,9 +124,25 @@ function doseAlert(dose: number, cfg: DrogaConfig): 'ok' | 'warn' | 'crit' {
   return 'ok'
 }
 
-function buildSummaryText(dvas: DVA[], peso: number | null): string {
-  const ativos = dvas.filter(d => d.ativo)
-  if (!ativos.length) return 'Hemodinâmica estável sem uso de agentes vasoativos'
+type FcRange  = { min: number; max: number }
+type PaRange  = { pasMin: number; pasMax: number; padMin: number; padMax: number }
+
+function buildSummaryText(
+  ativos: DVA[],
+  peso: number | null,
+  fcRange: FcRange | null,
+  paRange: PaRange | null,
+): string {
+  let vitaisSuffix = ''
+  if (fcRange || paRange) {
+    const parts: string[] = []
+    if (fcRange) parts.push(`FC entre ${fcRange.min} e ${fcRange.max} bpm`)
+    if (paRange) parts.push(`PA entre ${paRange.pasMin}/${paRange.padMin} e ${paRange.pasMax}/${paRange.padMax} mmHg`)
+    vitaisSuffix = `, mantendo ${parts.join(', ')} no período`
+  }
+
+  if (!ativos.length) return 'Hemodinâmica estável sem uso de agentes vasoativos' + vitaisSuffix
+
   const partes = ativos.map(dva => {
     const cfg = getDrogaConfig(dva.droga)
     const fluxoStr = dva.fluxo_ml_h % 1 === 0 ? String(dva.fluxo_ml_h) : dva.fluxo_ml_h.toFixed(1)
@@ -140,17 +151,20 @@ function buildSummaryText(dvas: DVA[], peso: number | null): string {
     return `${dva.droga} ${fluxoStr} mL/h (${cfg.formatDose(dose)} ${cfg.dose_unidade})`
   })
   const inicio = 'Hemodinâmica mantida às custas do uso de '
-  if (partes.length === 1) return inicio + partes[0]
-  return inicio + partes.slice(0, -1).join(', ') + ' e ' + partes[partes.length - 1]
+  const meio = partes.length === 1 ? partes[0] : partes.slice(0, -1).join(', ') + ' e ' + partes[partes.length - 1]
+  return inicio + meio + vitaisSuffix
 }
 
-// Prevent scroll/arrow from changing numeric inputs
+function fmtHora(iso: string): string {
+  return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+}
+
 function noScrollInput(e: React.WheelEvent<HTMLInputElement>) { e.currentTarget.blur() }
 function noArrowInput(e: React.KeyboardEvent<HTMLInputElement>) {
   if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault()
 }
 
-export default function HemodinamicaTab({ paciente, dvas, onRefresh, showToast }: Props) {
+export default function HemodinamicaTab({ paciente, dvas, periodos, sinais, onRefresh, showToast }: Props) {
   const supabase = createClient()
   const peso = paciente.peso_kg
 
@@ -161,24 +175,62 @@ export default function HemodinamicaTab({ paciente, dvas, onRefresh, showToast }
   const [saving,    setSaving]    = useState(false)
   const [removing,  setRemoving]  = useState<string | null>(null)
   const [copied,    setCopied]    = useState(false)
+  const [editId,    setEditId]    = useState<string | null>(null)
+  const [editFluxo, setEditFluxo] = useState('')
+  const [editVarIdx,setEditVarIdx]= useState(0)
+  const [editSaving,setEditSaving]= useState(false)
+  const [showTurnoConfirm, setShowTurnoConfirm] = useState(false)
+  const [turnoSaving, setTurnoSaving] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
 
-  // Edit state
-  const [editId,      setEditId]      = useState<string | null>(null)
-  const [editFluxo,   setEditFluxo]   = useState('')
-  const [editVarIdx,  setEditVarIdx]  = useState(0)
-  const [editSaving,  setEditSaving]  = useState(false)
+  // ── Período atual e DVAs ───────────────────────────────────────────────────
+  const sortedPeriodos = [...periodos].sort((a, b) =>
+    new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime()
+  )
+  const currentPeriodo = sortedPeriodos.find(p => !p.fim) ?? null
+  const pastPeriodos   = sortedPeriodos.filter(p => p.fim !== null)
 
-  const ativosDVA       = dvas.filter(d => d.ativo)
+  const ativosDVA = dvas.filter(d =>
+    d.ativo && (
+      currentPeriodo
+        ? (d.periodo_id === currentPeriodo.id || d.periodo_id === null)
+        : d.periodo_id === null
+    )
+  )
   const activeDrogaNomes = ativosDVA.map(d => d.droga)
-  const summary         = buildSummaryText(ativosDVA, peso)
-  const emUsoDVA        = ativosDVA.length > 0
 
+  // ── FC/PA no período atual ─────────────────────────────────────────────────
+  const periodSinais = (() => {
+    if (currentPeriodo) {
+      const start = new Date(currentPeriodo.inicio).getTime()
+      const end   = currentPeriodo.fim ? new Date(currentPeriodo.fim).getTime() : Date.now()
+      return sinais.filter(s => {
+        const t = new Date(s.horario).getTime()
+        return t >= start && t <= end
+      })
+    }
+    const cutoff = Date.now() - 12 * 3600 * 1000
+    return sinais.filter(s => new Date(s.horario).getTime() >= cutoff)
+  })()
+
+  const fcVals  = periodSinais.filter(s => s.fc  !== null).map(s => s.fc!)
+  const pasVals = periodSinais.filter(s => s.pas !== null).map(s => s.pas!)
+  const padVals = periodSinais.filter(s => s.pad !== null).map(s => s.pad!)
+  const fcRange: FcRange | null = fcVals.length >= 2
+    ? { min: Math.min(...fcVals), max: Math.max(...fcVals) } : null
+  const paRange: PaRange | null = pasVals.length >= 2 && padVals.length >= 2
+    ? { pasMin: Math.min(...pasVals), pasMax: Math.max(...pasVals),
+        padMin: Math.min(...padVals), padMax: Math.max(...padVals) } : null
+
+  const summary   = buildSummaryText(ativosDVA, peso, fcRange, paRange)
+  const emUsoDVA  = ativosDVA.length > 0
+
+  // ── Form helpers ───────────────────────────────────────────────────────────
   const drogaConfig    = getDrogaConfig(selDroga)!
   const varianteConfig = drogaConfig.variantes[selVar] ?? drogaConfig.variantes[0]
   const fluxoNum       = parseFloat(fluxo)
   const dosePreview    = !isNaN(fluxoNum) && fluxoNum > 0 && (drogaConfig.usaPeso ? !!peso : true)
-    ? drogaConfig.calcDose(fluxoNum, varianteConfig.valor, peso ?? 1)
-    : null
+    ? drogaConfig.calcDose(fluxoNum, varianteConfig.valor, peso ?? 1) : null
   const selBlockReason = getBlockReason(selDroga, activeDrogaNomes)
 
   const handleOpenForm = () => {
@@ -188,15 +240,11 @@ export default function HemodinamicaTab({ paciente, dvas, onRefresh, showToast }
     setFormOpen(true)
   }
 
-  const handleDrogaChange = (nome: string) => {
-    setSelDroga(nome); setSelVar(0); setFluxo('')
-  }
+  const handleDrogaChange = (nome: string) => { setSelDroga(nome); setSelVar(0); setFluxo('') }
 
   const handleSave = async () => {
     if (selBlockReason) { showToast(selBlockReason, 'error'); return }
-    if (!fluxo || isNaN(fluxoNum) || fluxoNum <= 0) {
-      showToast('Informe o fluxo em mL/h', 'error'); return
-    }
+    if (!fluxo || isNaN(fluxoNum) || fluxoNum <= 0) { showToast('Informe o fluxo em mL/h', 'error'); return }
     setSaving(true)
     const { error } = await supabase.from('dvas').insert({
       paciente_id:          paciente.id,
@@ -206,6 +254,7 @@ export default function HemodinamicaTab({ paciente, dvas, onRefresh, showToast }
       concentracao_label:   varianteConfig.label,
       fluxo_ml_h:           fluxoNum,
       ativo:                true,
+      periodo_id:           currentPeriodo?.id ?? null,
     })
     setSaving(false)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
@@ -216,9 +265,7 @@ export default function HemodinamicaTab({ paciente, dvas, onRefresh, showToast }
   const startEdit = (dva: DVA) => {
     const cfg = getDrogaConfig(dva.droga)
     const varIdx = cfg?.variantes.findIndex(v => v.valor === dva.concentracao_valor) ?? 0
-    setEditId(dva.id)
-    setEditFluxo(String(dva.fluxo_ml_h))
-    setEditVarIdx(varIdx >= 0 ? varIdx : 0)
+    setEditId(dva.id); setEditFluxo(String(dva.fluxo_ml_h)); setEditVarIdx(varIdx >= 0 ? varIdx : 0)
   }
   const cancelEdit = () => { setEditId(null); setEditFluxo(''); setEditVarIdx(0) }
 
@@ -236,8 +283,7 @@ export default function HemodinamicaTab({ paciente, dvas, onRefresh, showToast }
     }).eq('id', dva.id)
     setEditSaving(false)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
-    showToast('DVA atualizada!')
-    cancelEdit(); onRefresh()
+    showToast('DVA atualizada!'); cancelEdit(); onRefresh()
   }
 
   const handleRemove = async (id: string) => {
@@ -255,14 +301,115 @@ export default function HemodinamicaTab({ paciente, dvas, onRefresh, showToast }
     })
   }
 
+  // ── Novo turno ─────────────────────────────────────────────────────────────
+  const handleNovoTurno = async (duplicar: boolean) => {
+    setTurnoSaving(true)
+    const now = new Date().toISOString()
+    const novoTurno = getTurno(new Date())
+    const hoje = now.split('T')[0]
+
+    // Captura DVAs antes de arquivar
+    const dvasParaDuplicar = duplicar ? ativosDVA : []
+
+    // Fecha período atual e arquiva DVAs ativas
+    if (currentPeriodo) {
+      await supabase.from('periodos_hemodinamica').update({ fim: now }).eq('id', currentPeriodo.id)
+      await supabase.from('dvas').update({ ativo: false }).eq('paciente_id', paciente.id).eq('ativo', true)
+    }
+
+    // Cria novo período
+    const { data: newPeriodo, error } = await supabase
+      .from('periodos_hemodinamica')
+      .insert({ paciente_id: paciente.id, turno: novoTurno, data: hoje, inicio: now, fim: null })
+      .select('id').single()
+
+    if (error || !newPeriodo) {
+      showToast('Erro ao criar novo turno', 'error'); setTurnoSaving(false); return
+    }
+
+    // Duplica DVAs se solicitado
+    if (dvasParaDuplicar.length > 0) {
+      await supabase.from('dvas').insert(
+        dvasParaDuplicar.map(d => ({
+          paciente_id:          d.paciente_id,
+          droga:                d.droga,
+          concentracao_valor:   d.concentracao_valor,
+          concentracao_unidade: d.concentracao_unidade,
+          concentracao_label:   d.concentracao_label,
+          fluxo_ml_h:           d.fluxo_ml_h,
+          ativo:                true,
+          periodo_id:           newPeriodo.id,
+        }))
+      )
+    }
+
+    showToast(duplicar
+      ? `Novo turno iniciado com ${dvasParaDuplicar.length} DVA(s) duplicada(s)`
+      : 'Novo turno iniciado'
+    )
+    setTurnoSaving(false); setShowTurnoConfirm(false); onRefresh()
+  }
+
+  // ── Primeiro turno (sem período anterior) ─────────────────────────────────
+  const handleIniciarPrimeiro = async () => {
+    setTurnoSaving(true)
+    const now = new Date().toISOString()
+    const novoTurno = getTurno(new Date())
+    const hoje = now.split('T')[0]
+
+    const { data: newPeriodo, error } = await supabase
+      .from('periodos_hemodinamica')
+      .insert({ paciente_id: paciente.id, turno: novoTurno, data: hoje, inicio: now, fim: null })
+      .select('id').single()
+
+    if (error || !newPeriodo) {
+      showToast('Erro ao iniciar turno', 'error'); setTurnoSaving(false); return
+    }
+
+    // Associa DVAs existentes (sem período) ao primeiro período
+    if (ativosDVA.filter(d => d.periodo_id === null).length > 0) {
+      await supabase.from('dvas')
+        .update({ periodo_id: newPeriodo.id })
+        .eq('paciente_id', paciente.id)
+        .eq('ativo', true)
+        .is('periodo_id', null)
+    }
+
+    showToast('Controle de turnos iniciado!'); setTurnoSaving(false); setShowTurnoConfirm(false); onRefresh()
+  }
+
   return (
     <div className="space-y-4">
 
-      {/* Summary banner */}
+      {/* Cabeçalho do período atual */}
+      <div className="flex items-center justify-between text-xs text-slate-500">
+        {currentPeriodo ? (
+          <span>
+            {currentPeriodo.turno === 'diurno' ? '🌞' : '🌙'}{' '}
+            <span className="font-semibold text-slate-700">
+              {currentPeriodo.turno === 'diurno' ? 'Diurno' : 'Noturno'} — {fmtData(currentPeriodo.data)}
+            </span>
+            {' '}· desde {fmtHora(currentPeriodo.inicio)}
+            {periodSinais.length > 0 && (
+              <span className="ml-2 text-indigo-500">({periodSinais.length} sinais vitais no período)</span>
+            )}
+          </span>
+        ) : (
+          <span className="italic text-slate-400">Nenhum turno iniciado</span>
+        )}
+        {pastPeriodos.length > 0 && (
+          <button onClick={() => setHistoryOpen(h => !h)}
+            className="text-indigo-500 hover:text-indigo-700 font-medium">
+            {historyOpen ? '▲' : '▼'} {pastPeriodos.length} turno(s) anterior(es)
+          </button>
+        )}
+      </div>
+
+      {/* Banner de resumo hemodinâmico */}
       <div className={`rounded-xl p-4 border flex items-start justify-between gap-3 ${
         emUsoDVA ? 'bg-amber-50 border-amber-300' : 'bg-green-50 border-green-300'
       }`}>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <p className={`text-sm font-semibold leading-relaxed ${emUsoDVA ? 'text-amber-800' : 'text-green-800'}`}>
             {emUsoDVA ? '⚠️' : '✅'} {summary}
           </p>
@@ -282,39 +429,44 @@ export default function HemodinamicaTab({ paciente, dvas, onRefresh, showToast }
         </button>
       </div>
 
-      {/* DVA list */}
+      {/* Ações — Novo Turno + Adicionar DVA */}
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-slate-700">DVAs em uso ({ativosDVA.length})</h3>
-        <button onClick={formOpen ? () => setFormOpen(false) : handleOpenForm}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors">
-          {formOpen ? '✕ Cancelar' : '+ Adicionar DVA'}
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowTurnoConfirm(true)}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
+            🔄 {currentPeriodo ? 'Novo Turno' : 'Iniciar Turno'}
+          </button>
+          <button onClick={formOpen ? () => setFormOpen(false) : handleOpenForm}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors">
+            {formOpen ? '✕ Cancelar' : '+ Adicionar DVA'}
+          </button>
+        </div>
       </div>
 
       {ativosDVA.length === 0 && !formOpen && (
         <p className="text-slate-400 text-sm italic text-center py-6">Nenhuma DVA ativa</p>
       )}
 
+      {/* Lista de DVAs ativas */}
       {ativosDVA.map(dva => {
-        const cfg     = getDrogaConfig(dva.droga)
-        const dose    = calcDoseForDVA(dva, peso)
-        const alrt    = dose && cfg ? doseAlert(dose, cfg) : 'ok'
+        const cfg       = getDrogaConfig(dva.droga)
+        const dose      = calcDoseForDVA(dva, peso)
+        const alrt      = dose && cfg ? doseAlert(dose, cfg) : 'ok'
         const isEditing = editId === dva.id
-        const editCfg = isEditing ? getDrogaConfig(dva.droga) : undefined
-        const editVariante = editCfg?.variantes[editVarIdx] ?? editCfg?.variantes[0]
-        const editFluxoNum = parseFloat(editFluxo)
-        const editDosePreview = isEditing && editVariante && !isNaN(editFluxoNum) && editFluxoNum > 0
+        const editCfg   = isEditing ? getDrogaConfig(dva.droga) : undefined
+        const editVar   = editCfg?.variantes[editVarIdx] ?? editCfg?.variantes[0]
+        const editFNum  = parseFloat(editFluxo)
+        const editDosePreview = isEditing && editVar && !isNaN(editFNum) && editFNum > 0
           ? editCfg && (editCfg.usaPeso ? !!peso : true)
-            ? editCfg.calcDose(editFluxoNum, editVariante.valor, peso ?? 1)
-            : null
+            ? editCfg.calcDose(editFNum, editVar.valor, peso ?? 1) : null
           : null
         const fluxoStr = dva.fluxo_ml_h % 1 === 0 ? String(dva.fluxo_ml_h) : dva.fluxo_ml_h.toFixed(1)
 
         return (
           <div key={dva.id} className={`border rounded-xl p-4 space-y-2 ${
             alrt === 'crit' ? 'bg-red-50 border-red-300' :
-            alrt === 'warn' ? 'bg-amber-50 border-amber-200' :
-                              'bg-white border-slate-200'
+            alrt === 'warn' ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'
           }`}>
             <div className="flex items-start gap-3">
               <div className="flex-1 min-w-0">
@@ -327,8 +479,7 @@ export default function HemodinamicaTab({ paciente, dvas, onRefresh, showToast }
                     <span className="text-sm font-semibold text-indigo-700">{fluxoStr} mL/h</span>
                     {dose !== null && cfg ? (
                       <span className={`text-sm font-bold ${
-                        alrt === 'crit' ? 'text-red-700' :
-                        alrt === 'warn' ? 'text-amber-700' : 'text-slate-700'
+                        alrt === 'crit' ? 'text-red-700' : alrt === 'warn' ? 'text-amber-700' : 'text-slate-700'
                       }`}>
                         {cfg.formatDose(dose)} {cfg.dose_unidade}
                         {alrt !== 'ok' && <span className="ml-1 text-xs">{alrt === 'crit' ? '⚠️ fora do alvo' : '⬆️ acima do alvo'}</span>}
@@ -354,7 +505,6 @@ export default function HemodinamicaTab({ paciente, dvas, onRefresh, showToast }
               )}
             </div>
 
-            {/* Inline edit form */}
             {isEditing && editCfg && (
               <div className="space-y-2 pt-1 border-t border-slate-200">
                 {editCfg.variantes.length > 1 && (
@@ -372,14 +522,10 @@ export default function HemodinamicaTab({ paciente, dvas, onRefresh, showToast }
                 <div className="flex items-center gap-2">
                   <div className="flex-1">
                     <label className="text-xs text-slate-500 font-medium block mb-1">Fluxo (mL/h)</label>
-                    <input
-                      type="number" step="0.1" min="0"
-                      value={editFluxo}
+                    <input type="number" step="0.1" min="0" value={editFluxo}
                       onChange={e => setEditFluxo(e.target.value)}
-                      onWheel={noScrollInput}
-                      onKeyDown={noArrowInput}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                    />
+                      onWheel={noScrollInput} onKeyDown={noArrowInput}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
                   </div>
                   {editDosePreview !== null && editCfg && (
                     <div className={`rounded-lg px-3 py-1.5 border text-xs mt-4 ${
@@ -412,11 +558,10 @@ export default function HemodinamicaTab({ paciente, dvas, onRefresh, showToast }
         )
       })}
 
-      {/* Add DVA form */}
+      {/* Formulário de nova DVA */}
       {formOpen && (
         <div className="border-2 border-indigo-200 rounded-xl bg-indigo-50 p-4 space-y-3">
           <p className="text-sm font-bold text-indigo-900">Nova DVA</p>
-
           <div>
             <label className="text-xs text-slate-500 font-medium block mb-1">Droga *</label>
             <select value={selDroga} onChange={e => handleDrogaChange(e.target.value)}
@@ -430,11 +575,8 @@ export default function HemodinamicaTab({ paciente, dvas, onRefresh, showToast }
                 )
               })}
             </select>
-            {selBlockReason && (
-              <p className="text-xs text-red-600 mt-1">⚠️ {selBlockReason}</p>
-            )}
+            {selBlockReason && <p className="text-xs text-red-600 mt-1">⚠️ {selBlockReason}</p>}
           </div>
-
           {!selBlockReason && (
             <>
               {drogaConfig.variantes.length > 1 && (
@@ -452,25 +594,19 @@ export default function HemodinamicaTab({ paciente, dvas, onRefresh, showToast }
                   </div>
                 </div>
               )}
-
               {drogaConfig.variantes.length === 1 && (
                 <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-500">
                   Concentração: <span className="font-semibold text-slate-700">{varianteConfig.label}</span>
                 </div>
               )}
-
               <div>
                 <label className="text-xs text-slate-500 font-medium block mb-1">Fluxo (mL/h) *</label>
-                <input
-                  type="number" step="0.1" min="0" value={fluxo}
+                <input type="number" step="0.1" min="0" value={fluxo}
                   onChange={e => setFluxo(e.target.value)}
-                  onWheel={noScrollInput}
-                  onKeyDown={noArrowInput}
+                  onWheel={noScrollInput} onKeyDown={noArrowInput}
                   placeholder="ex: 5.5"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                />
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
               </div>
-
               {dosePreview !== null && (
                 <div className={`rounded-lg px-4 py-3 border text-sm ${
                   doseAlert(dosePreview, drogaConfig) === 'crit' ? 'bg-red-50 border-red-300 text-red-800' :
@@ -484,13 +620,107 @@ export default function HemodinamicaTab({ paciente, dvas, onRefresh, showToast }
               {drogaConfig.usaPeso && !peso && (
                 <p className="text-xs text-amber-600">⚠️ Cadastre o peso do paciente para calcular a dose em {drogaConfig.dose_unidade}</p>
               )}
-
               <button onClick={handleSave} disabled={saving || !!selBlockReason}
                 className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors">
                 {saving ? 'Salvando...' : '+ Registrar DVA'}
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {/* Histórico de turnos */}
+      {historyOpen && pastPeriodos.length > 0 && (
+        <div className="mt-2 space-y-2">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Histórico de Turnos</p>
+          {pastPeriodos.map(p => {
+            const pDVAs    = dvas.filter(d => d.periodo_id === p.id)
+            const pSummary = buildSummaryText(pDVAs, peso, null, null)
+            return (
+              <div key={p.id} className="border border-slate-200 rounded-xl p-3 bg-slate-50">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-slate-700">
+                    {p.turno === 'diurno' ? '🌞 Diurno' : '🌙 Noturno'} — {fmtData(p.data)}
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    {fmtHora(p.inicio)} → {p.fim ? fmtHora(p.fim) : '?'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 italic">{pSummary}</p>
+                {pDVAs.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {pDVAs.map(d => (
+                      <span key={d.id} className="text-xs bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-600">
+                        {d.droga} {d.fluxo_ml_h} mL/h
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Modal: Novo Turno */}
+      {showTurnoConfirm && (
+        <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-bold text-slate-800">🔄 {currentPeriodo ? 'Novo Turno' : 'Iniciar Controle de Turnos'}</h3>
+            {currentPeriodo ? (
+              <>
+                <p className="text-sm text-slate-600">
+                  O turno atual ({currentPeriodo.turno === 'diurno' ? 'Diurno' : 'Noturno'} — {fmtData(currentPeriodo.data)}) será encerrado.
+                </p>
+                {ativosDVA.length > 0 && (
+                  <div className="bg-slate-50 rounded-lg p-3 text-sm text-slate-700 space-y-1">
+                    <p className="font-semibold text-xs text-slate-500 uppercase">DVAs ativas ({ativosDVA.length})</p>
+                    {ativosDVA.map(d => (
+                      <p key={d.id} className="text-xs text-slate-600">• {d.droga} — {d.fluxo_ml_h} mL/h</p>
+                    ))}
+                  </div>
+                )}
+                <p className="text-sm font-semibold text-slate-700">Deseja duplicar as DVAs no novo turno?</p>
+                <div className="flex gap-2">
+                  <button onClick={() => handleNovoTurno(false)} disabled={turnoSaving}
+                    className="flex-1 border border-slate-300 text-slate-600 text-sm font-semibold py-2 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors">
+                    Não, turno vazio
+                  </button>
+                  <button onClick={() => handleNovoTurno(true)} disabled={turnoSaving}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold py-2 rounded-lg transition-colors">
+                    {turnoSaving ? 'Salvando...' : `Sim, duplicar (${ativosDVA.length})`}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-slate-600">
+                  Isso iniciará o controle de turnos hemodinâmicos para este paciente.
+                </p>
+                {ativosDVA.length > 0 && (
+                  <p className="text-sm text-slate-500">
+                    As {ativosDVA.length} DVA(s) existente(s) serão associadas a este primeiro turno.
+                  </p>
+                )}
+                <div className="flex gap-2">
+                  <button onClick={() => setShowTurnoConfirm(false)} disabled={turnoSaving}
+                    className="flex-1 border border-slate-300 text-slate-600 text-sm font-semibold py-2 rounded-lg hover:bg-slate-50 transition-colors">
+                    Cancelar
+                  </button>
+                  <button onClick={handleIniciarPrimeiro} disabled={turnoSaving}
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold py-2 rounded-lg transition-colors">
+                    {turnoSaving ? 'Iniciando...' : 'Iniciar Turno'}
+                  </button>
+                </div>
+              </>
+            )}
+            {!turnoSaving && (
+              <button onClick={() => setShowTurnoConfirm(false)}
+                className="w-full text-xs text-slate-400 hover:text-slate-600 pt-1">
+                Cancelar
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

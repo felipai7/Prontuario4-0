@@ -104,8 +104,20 @@ export interface DVA {
   concentracao_label: string
   fluxo_ml_h: number
   ativo: boolean
+  periodo_id: string | null
   created_at: string
   updated_at: string
+}
+
+export interface PeriodoHemodinamica {
+  id: string
+  paciente_id: string
+  turno: 'diurno' | 'noturno'
+  data: string            // YYYY-MM-DD
+  inicio: string          // ISO timestamp
+  fim: string | null      // ISO timestamp, null = turno em aberto
+  observacoes: string | null
+  criado_em: string
 }
 
 export interface ExameImagem {

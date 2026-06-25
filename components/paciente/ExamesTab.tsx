@@ -199,8 +199,6 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
   const [mObs,       setMObs]       = useState('')
   const [mRows,      setMRows]      = useState<ManualResultado[]>([emptyResultado()])
   const [savingM,    setSavingM]    = useState(false)
-  const [evoLoading, setEvoLoading] = useState(false)
-  const [evoText,    setEvoText]    = useState<string | null>(null)
   const [rawText,    setRawText]    = useState('')
   const [pastedImgs, setPastedImgs] = useState<{ base64: string; mediaType: string; preview: string }[]>([])
 
@@ -405,20 +403,6 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
 
   const updateRow = (i: number, p: Partial<ManualResultado>) =>
     setMRows(rows => rows.map((r, idx) => idx === i ? { ...r, ...p } : r))
-
-  const handleEvolucao = async () => {
-    setEvoLoading(true); setEvoText(null)
-    try {
-      const res = await fetch('/api/evolucao-exames', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paciente, exames }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      setEvoText(data.texto || 'Sem resposta')
-    } catch (e: any) { showToast('Erro: ' + e.message, 'error') }
-    setEvoLoading(false)
-  }
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
@@ -750,21 +734,6 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
         </div>
       )}
 
-      {/* Evolutionary assessment */}
-      {exames.length >= 1 && (
-        <div className="pt-2">
-          <button onClick={handleEvolucao} disabled={evoLoading}
-            className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors">
-            {evoLoading ? '⏳ Analisando...' : '📈 Avaliação Evolutiva com IA'}
-          </button>
-          {evoText && (
-            <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-xl p-4">
-              <p className="text-sm font-bold text-emerald-800 mb-2">📊 Avaliação Evolutiva</p>
-              <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">{evoText}</pre>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   )
 }
