@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { fmtData, calcAge } from '@/lib/utils'
-import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, ToastData } from '@/types'
+import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, ATB, CuidadosHorizontais, ToastData } from '@/types'
 
 interface Props {
   paciente: Paciente
@@ -11,6 +11,8 @@ interface Props {
   sinais: SinalVital[]
   examesImagem: ExameImagem[]
   dvas: DVA[]
+  atbs: ATB[]
+  cuidados: CuidadosHorizontais | null
   onClose: () => void
   onAltaConcedida: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
@@ -18,7 +20,7 @@ interface Props {
 
 type Step = 'confirm' | 'discharging' | 'alta_ok' | 'generating' | 'review'
 
-export default function AltaModal({ paciente, exames, periodos, sinais, examesImagem, dvas, onClose, onAltaConcedida, showToast }: Props) {
+export default function AltaModal({ paciente, exames, periodos, sinais, examesImagem, dvas, atbs, cuidados, onClose, onAltaConcedida, showToast }: Props) {
   const supabase             = createClient()
   const [step,               setStep]             = useState<Step>('confirm')
   const [resumo,             setResumo]           = useState<string | null>(null)
@@ -53,7 +55,7 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
       const res  = await fetch('/api/gerar-resumo-alta', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paciente, exames, periodos, sinais, examesImagem, dvas }),
+        body: JSON.stringify({ paciente, exames, periodos, sinais, examesImagem, dvas, atbs, cuidados }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -72,7 +74,7 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
       const res  = await fetch('/api/gerar-resumo-alta', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paciente, exames, periodos, sinais, examesImagem, dvas }),
+        body: JSON.stringify({ paciente, exames, periodos, sinais, examesImagem, dvas, atbs, cuidados }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)

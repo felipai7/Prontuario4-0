@@ -9,6 +9,8 @@ export interface Paciente {
   hipoteses: string | null
   ala_id: 'uti-01' | 'uti-02'
   numero_leito: number
+  saps3: number | null
+  paliativo: boolean
   ativo: boolean
   created_at: string
   updated_at: string
@@ -134,3 +136,43 @@ export interface ExameImagem {
 
 export type ToastType = 'success' | 'error' | 'warn'
 export interface ToastData { id: string; msg: string; tipo: ToastType }
+
+export type ViaIBP = 'Oral' | 'Endovenoso'
+export type ViaAnticoag = 'Subcutâneo' | 'Endovenoso' | 'Oral'
+export type Objetivo = 'profilatico' | 'terapeutico'
+export type DrogaAnticoag = 'Enoxaparina' | 'Heparina Não Fracionada' | 'Apixabana' | 'Rivaroxabana' | 'Outro'
+
+export interface ATB {
+  id: string
+  paciente_id: string
+  droga: string
+  data_inicio: string       // YYYY-MM-DD
+  dias_previstos: number | null
+  foco: string | null
+  ativo: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface CuidadosHorizontais {
+  id: string
+  paciente_id: string
+  previsao_alta: string | null   // YYYY-MM-DD
+
+  ibp_em_uso: boolean
+  ibp_via: ViaIBP | null
+  ibp_dose_valor: number | null
+  ibp_dose_unidade: string | null
+  ibp_objetivo: Objetivo | null
+
+  anticoag_em_uso: boolean
+  anticoag_droga: DrogaAnticoag | null
+  anticoag_droga_outro: string | null
+  anticoag_via: ViaAnticoag | null
+  anticoag_dose_valor: number | null
+  anticoag_dose_unidade: string | null
+  anticoag_objetivo: Objetivo | null
+
+  pendencias: string | null
+  updated_at: string
+}

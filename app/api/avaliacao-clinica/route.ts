@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { GoogleGenAI } from '@google/genai'
 import { calcAcumuladoTotal, calcAcumuladoMovel, calcBalanco, fmtData } from '@/lib/utils'
-import type { Paciente, Exame, SinalVital, ExameImagem, PeriodoBalanco, DVA, PeriodoHemodinamica } from '@/types'
+import type { Paciente, Exame, SinalVital, ExameImagem, PeriodoBalanco, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais } from '@/types'
 
 const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-8b']
 
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
   if (!apiKey) return NextResponse.json({ error: 'Google AI API Key não configurada' }, { status: 500 })
 
   try {
-    const { paciente, exames, sinais, examesImagem, periodos, dvas, periodosHemo }: {
+    const { paciente, exames, sinais, examesImagem, periodos, dvas, periodosHemo, atbs, cuidados }: {
       paciente: Paciente
       exames: Exame[]
       sinais: SinalVital[]
@@ -38,6 +38,8 @@ export async function POST(request: NextRequest) {
       periodos: PeriodoBalanco[]
       dvas: DVA[]
       periodosHemo: PeriodoHemodinamica[]
+      atbs?: ATB[]
+      cuidados?: CuidadosHorizontais | null
     } = await request.json()
 
     // ── Sinais Vitais (últimas 24h ou período atual) ─────────────────────────
@@ -112,26 +114,53 @@ export async function POST(request: NextRequest) {
       bhSection += `\nÚltimo turno (${ultimoPeriodo.horas_periodo}h): diurese ${ultimoPeriodo.diurese} mL → ${diureseHora} mL/h${diureseKg ? ` (${diureseKg} mL/kg/h)` : ''} | BH parcial: ${bc.parcial > 0 ? '+' : ''}${bc.parcial.toFixed(0)} mL`
     }
 
+    // ── Antibioticoterapia ──────────────────────────────────────────────────────
+    const ativosATB = (atbs ?? []).filter(a => a.ativo)
+    const atbSection = ativosATB.length === 0
+      ? 'Sem antibioticoterapia em curso.'
+      : ativosATB.map(a => {
+          const dias = Math.floor((Date.now() - new Date(a.data_inicio + 'T00:00:00').getTime()) / (24 * 3600 * 1000))
+          return `${a.droga} — dia ${dias} de uso${a.dias_previstos != null ? ` (previsto: ${a.dias_previstos} dias)` : ''}${a.foco ? `, foco: ${a.foco}` : ''}`
+        }).join('; ')
+
+    // ── IBP / Anticoagulante / Previsão de alta / Pendências ─────────────────────
+    const ibpSection = cuidados?.ibp_em_uso
+      ? `Em uso — via ${cuidados.ibp_via ?? '?'}, dose ${cuidados.ibp_dose_valor ?? '?'} ${cuidados.ibp_dose_unidade ?? ''}, objetivo ${cuidados.ibp_objetivo ?? '?'}`
+      : 'Sem uso de IBP.'
+    const anticoagSection = cuidados?.anticoag_em_uso
+      ? `Em uso — ${cuidados.anticoag_droga === 'Outro' ? cuidados.anticoag_droga_outro : cuidados.anticoag_droga}, via ${cuidados.anticoag_via ?? '?'}, dose ${cuidados.anticoag_dose_valor ?? '?'} ${cuidados.anticoag_dose_unidade ?? ''}, objetivo ${cuidados.anticoag_objetivo ?? '?'}`
+      : 'Sem anticoagulação em curso.'
+    const previsaoAltaSection = cuidados?.previsao_alta ? fmtData(cuidados.previsao_alta) : 'não definida'
+    const pendenciasSection = cuidados?.pendencias || 'Nenhuma pendência registrada.'
+
     // ── Calcular idade ────────────────────────────────────────────────────────
     const dob = new Date(paciente.data_nascimento + 'T12:00:00')
     const age = Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 3600 * 1000))
+    const diasInternado = Math.floor((Date.now() - new Date(paciente.data_internacao + 'T' + paciente.hora_internacao).getTime()) / (24 * 3600 * 1000))
 
     const prompt =
       `Você é médico especialista em medicina intensiva. Faça uma avaliação clínica OBJETIVA e CONCISA deste paciente de UTI.\n\n` +
       `PACIENTE: ${paciente.nome} | ${age} anos | Peso: ${paciente.peso_kg ? paciente.peso_kg + ' kg' : 'não registrado'}\n` +
-      `Internação: ${fmtData(paciente.data_internacao)} às ${paciente.hora_internacao}\n` +
+      `Internação: ${fmtData(paciente.data_internacao)} às ${paciente.hora_internacao} (${diasInternado} dias)${paciente.saps3 != null ? ` | SAPS-3: ${paciente.saps3}` : ''}${paciente.paliativo ? ' | PACIENTE EM CUIDADOS PALIATIVOS' : ''}\n` +
       `Hipóteses: ${paciente.hipoteses || 'não informadas'}\n\n` +
       `SINAIS VITAIS (${currentPeriodo ? 'turno atual' : 'últimas 24h'}, ${recentSinais.length} aferições):\n${svSection}\n\n` +
       `HEMODINÂMICA:\n${hemoSection}\n\n` +
       `EXAMES LABORATORIAIS (${examesOrdenados.length} mais recentes):\n${examesSection}\n\n` +
       `EXAMES DE IMAGEM:\n${imagemSection}\n\n` +
       `BALANÇO HÍDRICO:\n${bhSection}\n\n` +
-      `Forneça avaliação com os seguintes itens (linguagem médica técnica, máx. 300 palavras):\n` +
+      `ANTIBIOTICOTERAPIA:\n${atbSection}\n\n` +
+      `IBP: ${ibpSection}\n` +
+      `ANTICOAGULAÇÃO: ${anticoagSection}\n` +
+      `PREVISÃO DE ALTA: ${previsaoAltaSection}\n` +
+      `PENDÊNCIAS/PROGRAMAÇÕES: ${pendenciasSection}\n\n` +
+      `Forneça avaliação com os seguintes itens (linguagem médica técnica, máx. 320 palavras):\n` +
       `1. Resumo do caso: hipótese principal e contexto clínico\n` +
       `2. Principais alterações laboratoriais e tendências evolutivas\n` +
       `3. Achados de imagem relevantes (se disponíveis)\n` +
       `4. Débito urinário: valor em mL/h${paciente.peso_kg ? ' e mL/kg/h' : ''}, correlacione com creatinina/ureia (função renal normal ou alterada)\n` +
-      `5. Tendência hemodinâmica: vasopressores/inotrópicos e tendência geral dos sinais vitais`
+      `5. Tendência hemodinâmica: vasopressores/inotrópicos e tendência geral dos sinais vitais\n` +
+      `6. Antibioticoterapia: esquema atual, dias de uso e alerta se ultrapassar tempo previsto\n` +
+      `7. Profilaxias/anticoagulação (IBP e anticoagulante) e pendências relevantes registradas pela equipe`
 
     const ai = new GoogleGenAI({ apiKey })
     const texto = await generateWithFallback(ai, prompt)

@@ -6,11 +6,12 @@ import BalancoTab      from './BalancoTab'
 import SinaisVitaisTab from './SinaisVitaisTab'
 import ExamesImagemTab  from './ExamesImagemTab'
 import HemodinamicaTab  from './HemodinamicaTab'
+import IntensivistaHorizontalTab from './IntensivistaHorizontalTab'
 import AltaModal        from './AltaModal'
 import { fmtData, calcAge, pad } from '@/lib/utils'
-import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ToastData } from '@/types'
+import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, ToastData } from '@/types'
 
-type Tab = 'balanco' | 'sinais' | 'exames' | 'imagem' | 'hemo'
+type Tab = 'balanco' | 'sinais' | 'exames' | 'imagem' | 'hemo' | 'horizontal'
 
 interface Props {
   paciente: Paciente
@@ -26,11 +27,17 @@ const ALAS_INFO = [
 const ALAS_MAP: Record<string, string> = { 'uti-01': 'UTI 01', 'uti-02': 'UTI 02' }
 const PLANOS = ['IPASGO', 'Unimed', 'Particular', 'Bradesco', 'Outros']
 
+function diasInternado(dataInternacao: string, horaInternacao: string): number {
+  const inicio = new Date(dataInternacao + 'T' + horaInternacao)
+  return Math.max(0, Math.floor((Date.now() - inicio.getTime()) / (24 * 3600 * 1000)))
+}
+
 type EditForm = {
   nome: string; data_nascimento: string
   plano: string; planoOu: string
   peso_kg: string; ala_id: 'uti-01' | 'uti-02'; numero_leito: string
   hipoteses: string
+  saps3: string; paliativo: boolean
 }
 
 export default function PacienteModal({ paciente, onClose, onAltaConcedida, showToast }: Props) {
@@ -42,6 +49,8 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
   const [examesImagem,  setExamesImagem]  = useState<ExameImagem[]>([])
   const [dvas,          setDvas]          = useState<DVA[]>([])
   const [periodosHemo,  setPeriodosHemo]  = useState<PeriodoHemodinamica[]>([])
+  const [atbs,          setAtbs]          = useState<ATB[]>([])
+  const [cuidados,      setCuidados]      = useState<CuidadosHorizontais | null>(null)
   const [loading,       setLoading]       = useState(true)
   const [showAlta,      setShowAlta]      = useState(false)
   const [pac,           setPac]           = useState<Paciente>(paciente)
@@ -66,6 +75,8 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
       ala_id: p.ala_id,
       numero_leito: String(p.numero_leito),
       hipoteses: p.hipoteses ?? '',
+      saps3: String(p.saps3 ?? ''),
+      paliativo: p.paliativo,
     }
   }
 
@@ -75,13 +86,15 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
 
   const loadData = async () => {
     setLoading(true)
-    const [exRes, bhRes, svRes, imgRes, dvaRes, hemoRes] = await Promise.all([
+    const [exRes, bhRes, svRes, imgRes, dvaRes, hemoRes, atbRes, cuidadosRes] = await Promise.all([
       supabase.from('exames').select('*').eq('paciente_id', pac.id).order('created_at'),
       supabase.from('periodos_balanco').select('*').eq('paciente_id', pac.id).order('inicio'),
       supabase.from('sinais_vitais').select('*').eq('paciente_id', pac.id).order('horario'),
       supabase.from('exames_imagem').select('*').eq('paciente_id', pac.id).order('created_at', { ascending: false }),
       supabase.from('dvas').select('*').eq('paciente_id', pac.id).order('created_at'),
       supabase.from('periodos_hemodinamica').select('*').eq('paciente_id', pac.id).order('criado_em'),
+      supabase.from('atbs').select('*').eq('paciente_id', pac.id).order('data_inicio'),
+      supabase.from('cuidados_horizontais').select('*').eq('paciente_id', pac.id).maybeSingle(),
     ])
     if (exRes.data)   setExames(exRes.data as Exame[])
     if (bhRes.data)   setPeriodos(bhRes.data as PeriodoBalanco[])
@@ -89,6 +102,8 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     if (imgRes.data)  setExamesImagem(imgRes.data as ExameImagem[])
     if (dvaRes.data)  setDvas(dvaRes.data as DVA[])
     if (hemoRes.data) setPeriodosHemo(hemoRes.data as PeriodoHemodinamica[])
+    if (atbRes.data)  setAtbs(atbRes.data as ATB[])
+    setCuidados((cuidadosRes.data as CuidadosHorizontais | null) ?? null)
     setLoading(false)
   }
 
@@ -102,6 +117,8 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
       .on('postgres_changes', { event: '*', schema: 'public', table: 'exames_imagem',          filter: `paciente_id=eq.${pac.id}` }, () => loadData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dvas',                   filter: `paciente_id=eq.${pac.id}` }, () => loadData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'periodos_hemodinamica',  filter: `paciente_id=eq.${pac.id}` }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'atbs',                   filter: `paciente_id=eq.${pac.id}` }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cuidados_horizontais',   filter: `paciente_id=eq.${pac.id}` }, () => loadData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pacientes',              filter: `id=eq.${pac.id}` },
         (payload) => { if (payload.new && payload.eventType !== 'DELETE') setPac(payload.new as Paciente) })
       .subscribe()
@@ -138,6 +155,8 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
           periodos,
           dvas,
           periodosHemo,
+          atbs,
+          cuidados,
         }),
       })
       const data = await res.json()
@@ -166,6 +185,8 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     }
     const pesoNum = editForm.peso_kg ? parseFloat(editForm.peso_kg) : null
     if (pesoNum !== null && (pesoNum < 1 || pesoNum > 300)) errs.peso_kg = 'Peso inválido (1–300 Kg)'
+    const saps3Num = editForm.saps3 ? parseFloat(editForm.saps3) : null
+    if (saps3Num !== null && (saps3Num < 0 || saps3Num > 300)) errs.saps3 = 'SAPS-3 inválido'
     setEditErrors(errs)
     if (Object.keys(errs).length > 0) return
 
@@ -188,6 +209,8 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
       ala_id: editForm.ala_id,
       numero_leito: novoLeito,
       hipoteses: editForm.hipoteses.trim() || null,
+      saps3: saps3Num,
+      paliativo: editForm.paliativo,
     }
     const { error } = await supabase.from('pacientes').update(updates).eq('id', pac.id)
     setSaving(false)
@@ -208,17 +231,26 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
           <div className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white px-6 py-4 rounded-t-2xl flex-shrink-0">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
-                <h2 className="text-xl font-bold truncate">{pac.nome}</h2>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-xl font-bold truncate">{pac.nome}</h2>
+                  {pac.paliativo && (
+                    <span className="bg-slate-900/60 border border-slate-300/40 text-slate-100 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
+                      🕊️ Paliativo
+                    </span>
+                  )}
+                </div>
                 <p className="text-indigo-200 text-sm mt-1">
                   📅 {fmtData(pac.data_nascimento)} ({calcAge(pac.data_nascimento)}) &nbsp;·&nbsp;
                   🏥 {pac.plano_saude} &nbsp;·&nbsp;
                   🛏️ {ALAS_MAP[pac.ala_id]} — Leito {pad(pac.numero_leito)}
                 </p>
+                <p className="text-indigo-200 text-xs mt-0.5">
+                  🗓️ {diasInternado(pac.data_internacao, pac.hora_internacao)} dia(s) de internação
+                  {pac.saps3 != null && <> &nbsp;·&nbsp; 📊 SAPS-3: <span className="font-bold">{pac.saps3}</span></>}
+                  {pac.peso_kg && <> &nbsp;·&nbsp; ⚖️ {pac.peso_kg} Kg</>}
+                </p>
                 {pac.hipoteses && (
                   <p className="text-indigo-300 text-xs mt-1 italic">🩺 {pac.hipoteses}</p>
-                )}
-                {pac.peso_kg && (
-                  <p className="text-indigo-200 text-xs mt-0.5">⚖️ {pac.peso_kg} Kg</p>
                 )}
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
@@ -267,6 +299,10 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
                     <EInput type="number" step="0.1" min="1" max="300" value={editForm.peso_kg}
                       onChange={e => setEditForm(f => ({...f, peso_kg: e.target.value}))}/>
                   </EF>
+                  <EF label="SAPS-3" error={editErrors.saps3}>
+                    <EInput type="number" step="1" min="0" max="300" value={editForm.saps3}
+                      onChange={e => setEditForm(f => ({...f, saps3: e.target.value}))}/>
+                  </EF>
                   <EF label="UTI">
                     <ESelect value={editForm.ala_id}
                       onChange={e => setEditForm(f => ({...f, ala_id: e.target.value as 'uti-01'|'uti-02', numero_leito: ''}))}>
@@ -288,6 +324,14 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
                         rows={2} placeholder="Ex: Insuficiência respiratória aguda, Sepse..."
                         className="w-full bg-white/20 text-white placeholder-white/40 border border-white/30 rounded-lg px-3 py-1.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-white/50"/>
                     </EF>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={editForm.paliativo}
+                        onChange={e => setEditForm(f => ({...f, paliativo: e.target.checked}))}
+                        className="w-4 h-4 accent-white"/>
+                      <span className="text-xs text-white/80 font-medium">🕊️ Paciente em cuidados paliativos</span>
+                    </label>
                   </div>
                 </div>
                 <div className="flex gap-2 justify-end">
@@ -311,6 +355,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
                 ['exames',  '🔬 Exames Laboratoriais'],
                 ['imagem',  '🩻 Exames de Imagem'],
                 ['hemo',    '💊 Hemodinâmica'],
+                ['horizontal', '🩺 Intensivista Horizontal'],
               ] as [Tab, string][]).map(([t, label]) => (
                 <button key={t} onClick={() => setTab(t)}
                   className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
@@ -366,6 +411,16 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
               </div>
             )}
 
+            {!loading && cuidados?.pendencias && (
+              <div className="mb-4 bg-amber-50 border-2 border-amber-300 rounded-xl p-3 flex items-start gap-2">
+                <span className="text-lg flex-shrink-0">📝</span>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-amber-800 uppercase tracking-wide">Pendências e Programações</p>
+                  <p className="text-sm text-amber-900 whitespace-pre-wrap">{cuidados.pendencias}</p>
+                </div>
+              </div>
+            )}
+
             {loading ? (
               <div className="flex items-center justify-center py-16">
                 <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
@@ -378,6 +433,14 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
               <SinaisVitaisTab paciente={pac} sinais={sinais} onRefresh={loadData} showToast={showToast} />
             ) : tab === 'imagem' ? (
               <ExamesImagemTab paciente={pac} examesImagem={examesImagem} onRefresh={loadData} showToast={showToast} />
+            ) : tab === 'horizontal' ? (
+              <IntensivistaHorizontalTab
+                paciente={pac}
+                atbs={atbs}
+                cuidados={cuidados}
+                onRefresh={loadData}
+                showToast={showToast}
+              />
             ) : (
               <HemodinamicaTab
                 paciente={pac}
@@ -400,6 +463,8 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
           sinais={sinais}
           examesImagem={examesImagem}
           dvas={dvas}
+          atbs={atbs}
+          cuidados={cuidados}
           onClose={() => setShowAlta(false)}
           onAltaConcedida={onAltaConcedida}
           showToast={showToast}
