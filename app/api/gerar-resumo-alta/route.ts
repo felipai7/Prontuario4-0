@@ -1,27 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { calcAcumuladoTotal, calcAcumuladoMovel, calcBalanco, fmtData } from '@/lib/utils'
-import { GoogleGenAI } from '@google/genai'
+import { getAI, generateWithFallback } from '@/lib/ai'
 import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, ATB, CuidadosHorizontais } from '@/types'
-
-const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-8b']
-
-async function generateWithFallback(ai: GoogleGenAI, prompt: string): Promise<string> {
-  let lastErr: Error | null = null
-  for (const model of MODELS) {
-    try {
-      const response = await ai.models.generateContent({ model, contents: [prompt] })
-      return response.text?.trim() ?? ''
-    } catch (e: any) {
-      lastErr = e
-      if (!e.message?.includes('503') && !e.message?.includes('UNAVAILABLE') && !e.message?.includes('overload')) {
-        throw e
-      }
-      await new Promise(r => setTimeout(r, 1500))
-    }
-  }
-  throw lastErr
-}
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -132,7 +113,7 @@ export async function POST(request: NextRequest) {
       `ANTICOAGULAÇÃO na alta: ${anticoagSection}\n\n` +
       `Redija resumo de alta com: motivo de internação, evolução clínica desde a admissão, principais achados laboratoriais e de imagem, balanço hídrico e débito urinário, condições hemodinâmicas na alta, antibioticoterapia recebida, profilaxias/anticoagulação mantidas na alta. Seja objetivo sem ser prolixo. Use linguagem médica formal.`
 
-    const ai = new GoogleGenAI({ apiKey })
+    const ai = getAI()
     const texto = await generateWithFallback(ai, prompt)
 
     return NextResponse.json({ texto })

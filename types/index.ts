@@ -1,3 +1,5 @@
+import type { AlaId } from '@/lib/config'
+
 export interface Paciente {
   id: string
   nome: string
@@ -7,7 +9,7 @@ export interface Paciente {
   hora_internacao: string   // HH:MM
   peso_kg: number | null
   hipoteses: string | null
-  ala_id: 'uti-01' | 'uti-02'
+  ala_id: AlaId
   numero_leito: number
   saps3: number | null
   paliativo: boolean

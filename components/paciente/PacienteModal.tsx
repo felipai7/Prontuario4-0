@@ -9,6 +9,7 @@ import HemodinamicaTab  from './HemodinamicaTab'
 import IntensivistaHorizontalTab from './IntensivistaHorizontalTab'
 import AltaModal        from './AltaModal'
 import { fmtData, calcAge, pad } from '@/lib/utils'
+import { ALAS, ALAS_MAP, PLANOS, type AlaId } from '@/lib/config'
 import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, ToastData } from '@/types'
 
 type Tab = 'balanco' | 'sinais' | 'exames' | 'imagem' | 'hemo' | 'horizontal'
@@ -20,13 +21,6 @@ interface Props {
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
 }
 
-const ALAS_INFO = [
-  { id: 'uti-01' as const, nome: 'UTI 01', leitos: Array.from({length: 9},  (_, i) => i + 1)  },
-  { id: 'uti-02' as const, nome: 'UTI 02', leitos: Array.from({length: 10}, (_, i) => i + 10) },
-]
-const ALAS_MAP: Record<string, string> = { 'uti-01': 'UTI 01', 'uti-02': 'UTI 02' }
-const PLANOS = ['IPASGO', 'Unimed', 'Particular', 'Bradesco', 'Outros']
-
 function diasInternado(dataInternacao: string, horaInternacao: string): number {
   const inicio = new Date(dataInternacao + 'T' + horaInternacao)
   return Math.max(0, Math.floor((Date.now() - inicio.getTime()) / (24 * 3600 * 1000)))
@@ -35,7 +29,7 @@ function diasInternado(dataInternacao: string, horaInternacao: string): number {
 type EditForm = {
   nome: string; data_nascimento: string
   plano: string; planoOu: string
-  peso_kg: string; ala_id: 'uti-01' | 'uti-02'; numero_leito: string
+  peso_kg: string; ala_id: AlaId; numero_leito: string
   hipoteses: string
   saps3: string; paliativo: boolean
 }
@@ -179,7 +173,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     if (!editForm.plano) errs.plano = 'Selecione um plano'
     if (editForm.plano === 'Outros' && !editForm.planoOu.trim()) errs.planoOu = 'Informe o plano'
     const novoLeito = parseInt(editForm.numero_leito, 10)
-    const alaInfo = ALAS_INFO.find(a => a.id === editForm.ala_id)
+    const alaInfo = ALAS.find(a => a.id === editForm.ala_id)
     if (!alaInfo || !alaInfo.leitos.includes(novoLeito)) {
       errs.numero_leito = `Leito inválido para ${alaInfo?.nome ?? 'UTI selecionada'}`
     }
@@ -305,15 +299,15 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
                   </EF>
                   <EF label="UTI">
                     <ESelect value={editForm.ala_id}
-                      onChange={e => setEditForm(f => ({...f, ala_id: e.target.value as 'uti-01'|'uti-02', numero_leito: ''}))}>
-                      {ALAS_INFO.map(a => <option key={a.id} value={a.id} className="text-slate-800">{a.nome}</option>)}
+                      onChange={e => setEditForm(f => ({...f, ala_id: e.target.value as AlaId, numero_leito: ''}))}>
+                      {ALAS.map(a => <option key={a.id} value={a.id} className="text-slate-800">{a.nome}</option>)}
                     </ESelect>
                   </EF>
                   <EF label="Leito" error={editErrors.numero_leito}>
                     <ESelect value={editForm.numero_leito}
                       onChange={e => setEditForm(f => ({...f, numero_leito: e.target.value}))}>
                       <option value="" className="text-slate-800">Selecione...</option>
-                      {(ALAS_INFO.find(a => a.id === editForm.ala_id)?.leitos ?? []).map(l => (
+                      {(ALAS.find(a => a.id === editForm.ala_id)?.leitos ?? []).map(l => (
                         <option key={l} value={String(l)} className="text-slate-800">Leito {String(l).padStart(2,'0')}</option>
                       ))}
                     </ESelect>
