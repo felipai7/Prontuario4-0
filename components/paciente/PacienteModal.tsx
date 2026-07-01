@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import ExamesTab       from './ExamesTab'
 import BalancoTab      from './BalancoTab'
@@ -51,6 +51,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
   const [aiOpen,    setAiOpen]    = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
   const [aiText,    setAiText]    = useState<string | null>(null)
+  const aiAbortRef = useRef<AbortController | null>(null)
 
   const hoje = new Date().toISOString().split('T')[0]
 
@@ -119,6 +120,8 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
   }, [editing, aiOpen])
 
   const handleAvaliarIA = async () => {
+    aiAbortRef.current?.abort()
+    aiAbortRef.current = new AbortController()
     setAiOpen(true)
     setAiLoading(true)
     setAiText(null)
@@ -126,6 +129,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
       const res = await fetch('/api/avaliacao-clinica', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: aiAbortRef.current.signal,
         body: JSON.stringify({
           paciente: pac,
           exames,
@@ -140,6 +144,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
       if (!res.ok) throw new Error(data.error)
       setAiText(data.texto)
     } catch (e: any) {
+      if (e.name === 'AbortError') return
       showToast('Erro na avaliação com IA: ' + e.message, 'error')
       setAiOpen(false)
     } finally {

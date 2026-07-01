@@ -289,7 +289,7 @@ export default function HemodinamicaTab({ paciente, dvas, periodos, sinais, onRe
   const handleRemove = async (id: string) => {
     if (!confirm('Encerrar uso desta DVA?')) return
     setRemoving(id)
-    const { error } = await supabase.from('dvas').delete().eq('id', id)
+    const { error } = await supabase.from('dvas').update({ ativo: false }).eq('id', id)
     setRemoving(null)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
     showToast('DVA encerrada'); onRefresh()
@@ -313,8 +313,13 @@ export default function HemodinamicaTab({ paciente, dvas, periodos, sinais, onRe
 
     // Fecha período atual e arquiva DVAs ativas
     if (currentPeriodo) {
-      await supabase.from('periodos_hemodinamica').update({ fim: now }).eq('id', currentPeriodo.id)
-      await supabase.from('dvas').update({ ativo: false }).eq('paciente_id', paciente.id).eq('ativo', true)
+      const { error: errFim } = await supabase
+        .from('periodos_hemodinamica').update({ fim: now }).eq('id', currentPeriodo.id)
+      if (errFim) { showToast('Erro ao fechar período anterior: ' + errFim.message, 'error'); setTurnoSaving(false); return }
+
+      const { error: errArq } = await supabase
+        .from('dvas').update({ ativo: false }).eq('paciente_id', paciente.id).eq('ativo', true)
+      if (errArq) { showToast('Erro ao arquivar DVAs: ' + errArq.message, 'error'); setTurnoSaving(false); return }
     }
 
     // Cria novo período
@@ -329,7 +334,7 @@ export default function HemodinamicaTab({ paciente, dvas, periodos, sinais, onRe
 
     // Duplica DVAs se solicitado
     if (dvasParaDuplicar.length > 0) {
-      await supabase.from('dvas').insert(
+      const { error: errDup } = await supabase.from('dvas').insert(
         dvasParaDuplicar.map(d => ({
           paciente_id:          d.paciente_id,
           droga:                d.droga,
@@ -341,6 +346,10 @@ export default function HemodinamicaTab({ paciente, dvas, periodos, sinais, onRe
           periodo_id:           newPeriodo.id,
         }))
       )
+      if (errDup) {
+        showToast(`Turno criado, mas falha ao duplicar DVAs: ${errDup.message}`, 'error')
+        setTurnoSaving(false); setShowTurnoConfirm(false); onRefresh(); return
+      }
     }
 
     showToast(duplicar
