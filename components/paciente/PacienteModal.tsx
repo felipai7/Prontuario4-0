@@ -1,18 +1,13 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import ExamesTab       from './ExamesTab'
-import BalancoTab      from './BalancoTab'
-import SinaisVitaisTab from './SinaisVitaisTab'
-import ExamesImagemTab  from './ExamesImagemTab'
-import HemodinamicaTab  from './HemodinamicaTab'
-import IntensivistaHorizontalTab from './IntensivistaHorizontalTab'
 import AltaModal        from './AltaModal'
 import { fmtData, calcAge, pad } from '@/lib/utils'
 import { ALAS, ALAS_MAP, PLANOS, type AlaId } from '@/lib/config'
+import { enabledModules, type ModuleId, type PacienteContext } from '@/lib/modules'
 import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, ToastData } from '@/types'
 
-type Tab = 'balanco' | 'sinais' | 'exames' | 'imagem' | 'hemo' | 'horizontal'
+const modules = enabledModules()
 
 interface Props {
   paciente: Paciente
@@ -36,7 +31,7 @@ type EditForm = {
 
 export default function PacienteModal({ paciente, onClose, onAltaConcedida, showToast }: Props) {
   const supabase   = createClient()
-  const [tab,      setTab]      = useState<Tab>('balanco')
+  const [tab,      setTab]      = useState<ModuleId>(modules[0].id as ModuleId)
   const [exames,        setExames]        = useState<Exame[]>([])
   const [periodos,      setPeriodos]      = useState<PeriodoBalanco[]>([])
   const [sinais,        setSinais]        = useState<SinalVital[]>([])
@@ -215,6 +210,13 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     showToast('Dados do paciente atualizados!')
   }
 
+  const moduleCtx: PacienteContext = {
+    paciente: pac,
+    exames, periodos, sinais, examesImagem, dvas, periodosHemo, atbs, cuidados,
+    onRefresh: loadData,
+    showToast,
+  }
+
   return (
     <>
       <div className="fixed inset-0 bg-black/60 z-40 flex items-start justify-center p-4 overflow-y-auto"
@@ -343,19 +345,12 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
 
             {/* Tabs */}
             <div className="flex gap-1 mt-4 flex-wrap">
-              {([
-                ['balanco', '💧 Balanço Hídrico'],
-                ['sinais',  '❤️ Sinais Vitais'],
-                ['exames',  '🔬 Exames Laboratoriais'],
-                ['imagem',  '🩻 Exames de Imagem'],
-                ['hemo',    '💊 Hemodinâmica'],
-                ['horizontal', '🩺 Intensivista Horizontal'],
-              ] as [Tab, string][]).map(([t, label]) => (
-                <button key={t} onClick={() => setTab(t)}
+              {modules.map(m => (
+                <button key={m.id} onClick={() => setTab(m.id as ModuleId)}
                   className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
-                    tab === t ? 'bg-white text-indigo-700' : 'text-indigo-200 hover:text-white hover:bg-white/10'
+                    tab === m.id ? 'bg-white text-indigo-700' : 'text-indigo-200 hover:text-white hover:bg-white/10'
                   }`}>
-                  {label}
+                  {m.label}
                 </button>
               ))}
             </div>
@@ -419,31 +414,8 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
               <div className="flex items-center justify-center py-16">
                 <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
               </div>
-            ) : tab === 'exames' ? (
-              <ExamesTab paciente={pac} exames={exames} onRefresh={loadData} showToast={showToast} />
-            ) : tab === 'balanco' ? (
-              <BalancoTab paciente={pac} periodos={periodos} onRefresh={loadData} showToast={showToast} />
-            ) : tab === 'sinais' ? (
-              <SinaisVitaisTab paciente={pac} sinais={sinais} onRefresh={loadData} showToast={showToast} />
-            ) : tab === 'imagem' ? (
-              <ExamesImagemTab paciente={pac} examesImagem={examesImagem} onRefresh={loadData} showToast={showToast} />
-            ) : tab === 'horizontal' ? (
-              <IntensivistaHorizontalTab
-                paciente={pac}
-                atbs={atbs}
-                cuidados={cuidados}
-                onRefresh={loadData}
-                showToast={showToast}
-              />
             ) : (
-              <HemodinamicaTab
-                paciente={pac}
-                dvas={dvas}
-                periodos={periodosHemo}
-                sinais={sinais}
-                onRefresh={loadData}
-                showToast={showToast}
-              />
+              modules.find(m => m.id === tab)?.render(moduleCtx)
             )}
           </div>
         </div>
