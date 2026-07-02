@@ -1,4 +1,4 @@
-import type { PeriodoBalanco, BalancoCalculado, AvaliacaoNeurologica, SuporteVentilatorio, ATB, CuidadosHorizontais } from '@/types'
+import type { PeriodoBalanco, BalancoCalculado, AvaliacaoNeurologica, SuporteVentilatorio, ATB } from '@/types'
 
 // ── Formatação ─────────────────────────────────────────────────────────────
 
@@ -44,6 +44,14 @@ export function diasDesde(dataYYYYMMDD: string): number {
   return Math.max(0, Math.floor((hoje.getTime() - inicio.getTime()) / (24 * 3600 * 1000)))
 }
 
+/**
+ * Dia atual de um ATB, respeitando se a data de início conta como D0 (dose
+ * não completada no 1º dia) ou D1 (dose completa desde o início).
+ */
+export function diaAtualATB(atb: ATB): number {
+  return diasDesde(atb.data_inicio) + atb.dia_inicial
+}
+
 // ── Resumos clínicos em texto (usados nos prompts de IA) ───────────────────
 
 export function resumoNeuro(neuro: AvaliacaoNeurologica | null | undefined): string {
@@ -73,29 +81,6 @@ export function resumoVentilatorio(v: SuporteVentilatorio | null | undefined): s
   }
   const dias = v.vm_data_inicio ? diasDesde(v.vm_data_inicio) : null
   return `Ventilação mecânica${v.vm_via ? ` via ${v.vm_via}` : ''}${dias != null ? ` há ${dias} dia(s)` : ''}.`
-}
-
-export function resumoAntibioticoterapia(atbs: ATB[]): string {
-  const ativos = atbs.filter(a => a.ativo)
-  if (!ativos.length) return 'Sem antibioticoterapia em curso.'
-  const partes = ativos.map(a => {
-    const dias = diasDesde(a.data_inicio)
-    const alerta = a.dias_previstos != null ? dias >= a.dias_previstos : dias > 7
-    return `${a.droga} (D${dias}${a.dias_previstos != null ? `/${a.dias_previstos}` : ''}${a.foco ? `, foco: ${a.foco}` : ''})${alerta ? ' ⚠️' : ''}`
-  })
-  return `Em uso: ${partes.join(', ')}.`
-}
-
-export function resumoProfilaxias(cuidados: CuidadosHorizontais | null | undefined): string {
-  if (!cuidados) return 'Não registrado.'
-  const partes: string[] = []
-  partes.push(cuidados.ibp_em_uso
-    ? `IBP em uso${cuidados.ibp_via ? ` (${cuidados.ibp_via}${cuidados.ibp_dose_valor != null ? `, ${cuidados.ibp_dose_valor} ${cuidados.ibp_dose_unidade ?? ''}` : ''}${cuidados.ibp_objetivo ? `, ${cuidados.ibp_objetivo}` : ''})` : ''}`
-    : 'sem IBP')
-  partes.push(cuidados.anticoag_em_uso
-    ? `anticoagulação com ${cuidados.anticoag_droga === 'Outro' ? (cuidados.anticoag_droga_outro || 'droga não especificada') : cuidados.anticoag_droga}${cuidados.anticoag_via ? ` (${cuidados.anticoag_via}${cuidados.anticoag_dose_valor != null ? `, ${cuidados.anticoag_dose_valor} ${cuidados.anticoag_dose_unidade ?? ''}` : ''}${cuidados.anticoag_objetivo ? `, ${cuidados.anticoag_objetivo}` : ''})` : ''}`
-    : 'sem anticoagulação')
-  return partes.join('; ') + '.'
 }
 
 // ── Turnos ────────────────────────────────────────────────────────────────
@@ -155,20 +140,6 @@ export function calcAcumuladoMovel(periodos: PeriodoBalanco[]): number {
     .sort((a, b) => new Date(b.inicio).getTime() - new Date(a.inicio).getTime())
     .slice(0, 10)
   return ultimos.reduce((acc, p) => acc + calcBalanco(p).parcial, 0)
-}
-
-export function resumoBalanco(periodos: PeriodoBalanco[], pesoKg: number | null): string {
-  if (!periodos.length) return 'Não registrado.'
-  const ultimo = [...periodos].sort((a, b) => new Date(b.inicio).getTime() - new Date(a.inicio).getTime())[0]
-  const bc = calcBalanco(ultimo)
-  const diureseHora = ultimo.horas_periodo > 0 ? (ultimo.diurese / ultimo.horas_periodo).toFixed(1) : null
-  const diureseKg = pesoKg && ultimo.horas_periodo > 0
-    ? (ultimo.diurese / (pesoKg * ultimo.horas_periodo)).toFixed(2) : null
-  const movel = calcAcumuladoMovel(periodos)
-  return `Último turno (${ultimo.turno}, ${ultimo.horas_periodo}h): diurese ${ultimo.diurese} mL` +
-    (diureseHora ? ` (${diureseHora} mL/h${diureseKg ? `, ${diureseKg} mL/kg/h` : ''})` : '') +
-    `, BH parcial ${bc.parcial > 0 ? '+' : ''}${bc.parcial.toFixed(0)} mL. ` +
-    `Acumulado móvel (últimos turnos): ${movel > 0 ? '+' : ''}${movel.toFixed(0)} mL.`
 }
 
 /** Given admission datetime, return the first period's start/end/horas */

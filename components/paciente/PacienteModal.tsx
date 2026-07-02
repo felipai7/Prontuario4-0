@@ -6,7 +6,7 @@ import { fmtData, calcAge, pad, diasDesde } from '@/lib/utils'
 import { ALAS, ALAS_MAP, PLANOS, type AlaId } from '@/lib/config'
 import { modulosAtivos, type PacienteContext } from '@/lib/modules'
 import { montarEvolucaoDiaria } from '@/lib/evolucaoDiaria'
-import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, ToastData } from '@/types'
+import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, ToastData } from '@/types'
 
 const modulos = modulosAtivos()
 
@@ -45,6 +45,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
   const [cuidados,      setCuidados]      = useState<CuidadosHorizontais | null>(null)
   const [neuro,         setNeuro]         = useState<AvaliacaoNeurologica | null>(null)
   const [ventilatorio,  setVentilatorio]  = useState<SuporteVentilatorio | null>(null)
+  const [intercorrencias, setIntercorrencias] = useState<Intercorrencia[]>([])
   const [loading,       setLoading]       = useState(true)
   const [showAlta,      setShowAlta]      = useState(false)
   const [pac,           setPac]           = useState<Paciente>(paciente)
@@ -85,7 +86,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
 
   const loadData = async () => {
     setLoading(true)
-    const [exRes, bhRes, svRes, imgRes, dvaRes, hemoRes, atbRes, cuidadosRes, neuroRes, ventRes] = await Promise.all([
+    const [exRes, bhRes, svRes, imgRes, dvaRes, hemoRes, atbRes, cuidadosRes, neuroRes, ventRes, intRes] = await Promise.all([
       supabase.from('exames').select('*').eq('paciente_id', pac.id).order('created_at'),
       supabase.from('periodos_balanco').select('*').eq('paciente_id', pac.id).order('inicio'),
       supabase.from('sinais_vitais').select('*').eq('paciente_id', pac.id).order('horario'),
@@ -96,6 +97,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
       supabase.from('cuidados_horizontais').select('*').eq('paciente_id', pac.id).maybeSingle(),
       supabase.from('avaliacoes_neurologicas').select('*').eq('paciente_id', pac.id).maybeSingle(),
       supabase.from('suportes_ventilatorios').select('*').eq('paciente_id', pac.id).maybeSingle(),
+      supabase.from('intercorrencias').select('*').eq('paciente_id', pac.id).order('horario', { ascending: false }),
     ])
     if (exRes.data)   setExames(exRes.data as Exame[])
     if (bhRes.data)   setPeriodos(bhRes.data as PeriodoBalanco[])
@@ -107,6 +109,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     setCuidados((cuidadosRes.data as CuidadosHorizontais | null) ?? null)
     setNeuro((neuroRes.data as AvaliacaoNeurologica | null) ?? null)
     setVentilatorio((ventRes.data as SuporteVentilatorio | null) ?? null)
+    if (intRes.data)  setIntercorrencias(intRes.data as Intercorrencia[])
     setLoading(false)
   }
 
@@ -124,6 +127,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cuidados_horizontais',   filter: `paciente_id=eq.${pac.id}` }, () => loadData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'avaliacoes_neurologicas', filter: `paciente_id=eq.${pac.id}` }, () => loadData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'suportes_ventilatorios', filter: `paciente_id=eq.${pac.id}` }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'intercorrencias',        filter: `paciente_id=eq.${pac.id}` }, () => loadData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pacientes',              filter: `id=eq.${pac.id}` },
         (payload) => { if (payload.new && payload.eventType !== 'DELETE') setPac(payload.new as Paciente) })
       .subscribe()
@@ -143,7 +147,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
   }, [editing, aiOpen, evoOpen])
 
   const handleAbrirEvolucao = () => {
-    setEvoText(montarEvolucaoDiaria({ paciente: pac, sinais, dvas, periodosHemo, periodos, atbs, cuidados, neuro, ventilatorio }))
+    setEvoText(montarEvolucaoDiaria({ paciente: pac, sinais, dvas, periodosHemo, periodos, atbs, neuro, ventilatorio, intercorrencias }))
     setEvoOpen(true)
   }
 

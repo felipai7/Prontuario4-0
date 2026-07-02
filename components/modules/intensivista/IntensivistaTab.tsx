@@ -1,7 +1,9 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { fmtData } from '@/lib/utils'
+import { fmtData, diaAtualATB } from '@/lib/utils'
+import { ATBS_SUGERIDOS, FOCOS_INFECCIOSOS } from '@/lib/config'
+import Combobox from '@/components/ui/Combobox'
 import type { Paciente, ATB, CuidadosHorizontais, ViaIBP, ViaAnticoag, Objetivo, DrogaAnticoag, ToastData } from '@/types'
 
 interface Props {
@@ -17,16 +19,10 @@ const VIAS_ANTICOAG: ViaAnticoag[] = ['Subcutâneo', 'Endovenoso', 'Oral']
 const DROGAS_ANTICOAG: DrogaAnticoag[] = ['Enoxaparina', 'Heparina Não Fracionada', 'Apixabana', 'Rivaroxabana', 'Outro']
 const UNIDADES_DOSE = ['mg', 'mg/kg', 'UI', 'UI/h', 'UI/kg/h']
 
-function diasEmUso(dataInicio: string): number {
-  const inicio = new Date(dataInicio + 'T00:00:00')
-  const hoje   = new Date(); hoje.setHours(0, 0, 0, 0)
-  return Math.floor((hoje.getTime() - inicio.getTime()) / (24 * 3600 * 1000))
-}
-
 function atbEmAlerta(atb: ATB): boolean {
-  const dias = diasEmUso(atb.data_inicio)
-  if (atb.dias_previstos != null) return dias >= atb.dias_previstos
-  return dias > 7
+  const dia = diaAtualATB(atb)
+  if (atb.dias_previstos != null) return dia >= atb.dias_previstos
+  return dia > 7
 }
 
 function noScrollInput(e: React.WheelEvent<HTMLInputElement>) { e.currentTarget.blur() }
@@ -41,14 +37,15 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, onRefresh, s
   const supabase = createClient()
 
   // ── ATB form ─────────────────────────────────────────────────────────────
-  const [atbFormOpen, setAtbFormOpen] = useState(false)
-  const [atbDroga,    setAtbDroga]    = useState('')
-  const [atbInicio,   setAtbInicio]   = useState(() => new Date().toISOString().split('T')[0])
-  const [atbDias,     setAtbDias]     = useState('')
-  const [atbFoco,     setAtbFoco]     = useState('')
-  const [atbSaving,   setAtbSaving]   = useState(false)
-  const [atbRemoving, setAtbRemoving] = useState<string | null>(null)
-  const [historyOpen, setHistoryOpen] = useState(false)
+  const [atbFormOpen,   setAtbFormOpen]   = useState(false)
+  const [atbDroga,      setAtbDroga]      = useState('')
+  const [atbInicio,     setAtbInicio]     = useState(() => new Date().toISOString().split('T')[0])
+  const [atbDiaInicial, setAtbDiaInicial] = useState<0 | 1>(0)
+  const [atbDias,       setAtbDias]       = useState('')
+  const [atbFoco,       setAtbFoco]       = useState('')
+  const [atbSaving,     setAtbSaving]     = useState(false)
+  const [atbRemoving,   setAtbRemoving]   = useState<string | null>(null)
+  const [historyOpen,   setHistoryOpen]   = useState(false)
 
   const ativosATB = atbs.filter(a => a.ativo)
   const historicoATB = atbs.filter(a => !a.ativo)
@@ -61,6 +58,7 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, onRefresh, s
       paciente_id:    paciente.id,
       droga:          atbDroga.trim(),
       data_inicio:    atbInicio,
+      dia_inicial:    atbDiaInicial,
       dias_previstos: atbDias ? parseFloat(atbDias) : null,
       foco:           atbFoco.trim() || null,
       ativo:          true,
@@ -68,7 +66,7 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, onRefresh, s
     setAtbSaving(false)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
     showToast('ATB registrado!')
-    setAtbFormOpen(false); setAtbDroga(''); setAtbDias(''); setAtbFoco('')
+    setAtbFormOpen(false); setAtbDroga(''); setAtbDias(''); setAtbFoco(''); setAtbDiaInicial(0)
     setAtbInicio(new Date().toISOString().split('T')[0])
     onRefresh()
   }
@@ -178,7 +176,7 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, onRefresh, s
         )}
 
         {ativosATB.map(atb => {
-          const dias  = diasEmUso(atb.data_inicio)
+          const dia   = diaAtualATB(atb)
           const alert = atbEmAlerta(atb)
           return (
             <div key={atb.id} className={`border rounded-lg p-3 flex items-start justify-between gap-3 ${
@@ -187,11 +185,11 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, onRefresh, s
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-bold text-slate-800">{atb.droga}</p>
-                  {alert && <span className="text-xs bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full font-semibold">⚠️ {dias} dias em uso</span>}
+                  {alert && <span className="text-xs bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full font-semibold">⚠️ D{dia}</span>}
                 </div>
                 <p className="text-xs text-slate-500 mt-1">
-                  Início: {fmtData(atb.data_inicio)} · {dias} dia(s) em uso
-                  {atb.dias_previstos != null && ` · previsto: ${atb.dias_previstos} dias`}
+                  Início: {fmtData(atb.data_inicio)} ({atb.dia_inicial === 1 ? 'D1' : 'D0'}) · D{dia}
+                  {atb.dias_previstos != null && ` / D${atb.dias_previstos} previsto`}
                   {atb.foco && ` · foco: ${atb.foco}`}
                 </p>
               </div>
@@ -208,12 +206,26 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, onRefresh, s
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>Droga *</label>
-                <input value={atbDroga} onChange={e => setAtbDroga(e.target.value)} placeholder="ex: Piperacilina-Tazobactam"
-                  className={inputCls} />
+                <Combobox value={atbDroga} onChange={setAtbDroga} options={ATBS_SUGERIDOS}
+                  placeholder="ex: Piperacilina + Tazobactam" className={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>Data de início *</label>
-                <input type="date" value={atbInicio} onChange={e => setAtbInicio(e.target.value)} className={inputCls} />
+                <div className="flex gap-2">
+                  <input type="date" value={atbInicio} onChange={e => setAtbInicio(e.target.value)} className={inputCls} />
+                  <div className="flex rounded-lg overflow-hidden border border-slate-300 flex-shrink-0">
+                    <button type="button" onClick={() => setAtbDiaInicial(0)}
+                      title="Dose não completada no 1º dia — conta como D0"
+                      className={`px-3 text-sm font-semibold transition-colors ${atbDiaInicial === 0 ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
+                      D0
+                    </button>
+                    <button type="button" onClick={() => setAtbDiaInicial(1)}
+                      title="Dose completa desde o início — conta como D1"
+                      className={`px-3 text-sm font-semibold transition-colors ${atbDiaInicial === 1 ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
+                      D1
+                    </button>
+                  </div>
+                </div>
               </div>
               <div>
                 <label className={labelCls}>Dias totais previstos</label>
@@ -222,7 +234,8 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, onRefresh, s
               </div>
               <div>
                 <label className={labelCls}>Foco / indicação</label>
-                <input value={atbFoco} onChange={e => setAtbFoco(e.target.value)} placeholder="ex: Pneumonia" className={inputCls} />
+                <Combobox value={atbFoco} onChange={setAtbFoco} options={FOCOS_INFECCIOSOS}
+                  placeholder="ex: Pulmonar (ou digite outro)" className={inputCls} />
               </div>
             </div>
             <button onClick={handleSaveATB} disabled={atbSaving}

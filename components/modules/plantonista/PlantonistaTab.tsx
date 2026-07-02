@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { calcBalanco, calcAcumuladoMovel } from '@/lib/utils'
+import { calcBalanco, calcAcumuladoMovel, diaAtualATB } from '@/lib/utils'
 import type { Paciente, SinalVital, DVA, PeriodoBalanco, ATB, CuidadosHorizontais, Intercorrencia, ToastData } from '@/types'
 
 interface Props {
@@ -19,12 +19,6 @@ const labelCls = 'text-xs text-slate-500 font-medium block mb-1'
 
 function fmtHora(iso: string): string {
   return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-}
-
-function diasEmUso(dataInicio: string): number {
-  const inicio = new Date(dataInicio + 'T00:00:00')
-  const hoje   = new Date(); hoje.setHours(0, 0, 0, 0)
-  return Math.floor((hoje.getTime() - inicio.getTime()) / (24 * 3600 * 1000))
 }
 
 /** Valor default para <input type="datetime-local">: agora, no fuso local. */
@@ -147,7 +141,7 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs,
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">💊 Antibioticoterapia</p>
             {atbsAtivos.length ? (
               <p className="text-sm text-slate-700">
-                {atbsAtivos.map(a => `${a.droga} (D${diasEmUso(a.data_inicio)}${a.dias_previstos != null ? `/${a.dias_previstos}` : ''})`).join(' · ')}
+                {atbsAtivos.map(a => `${a.droga} (D${diaAtualATB(a)}${a.dias_previstos != null ? `/${a.dias_previstos}` : ''})`).join(' · ')}
               </p>
             ) : <p className="text-sm text-slate-400">Sem ATB em curso.</p>}
           </div>

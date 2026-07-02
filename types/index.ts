@@ -151,6 +151,7 @@ export interface ATB {
   paciente_id: string
   droga: string
   data_inicio: string       // YYYY-MM-DD
+  dia_inicial: 0 | 1        // 0 = data de início conta como D0; 1 = conta como D1
   dias_previstos: number | null
   foco: string | null
   ativo: boolean
