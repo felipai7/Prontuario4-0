@@ -5,6 +5,7 @@ import AltaModal        from './AltaModal'
 import { fmtData, calcAge, pad, diasDesde } from '@/lib/utils'
 import { ALAS, ALAS_MAP, PLANOS, type AlaId } from '@/lib/config'
 import { modulosAtivos, type PacienteContext } from '@/lib/modules'
+import { montarEvolucaoDiaria } from '@/lib/evolucaoDiaria'
 import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, ToastData } from '@/types'
 
 const modulos = modulosAtivos()
@@ -54,6 +55,11 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
   const [aiLoading, setAiLoading] = useState(false)
   const [aiText,    setAiText]    = useState<string | null>(null)
   const aiAbortRef = useRef<AbortController | null>(null)
+
+  // Evolução Diária state (determinística, sem IA)
+  const [evoOpen,  setEvoOpen]  = useState(false)
+  const [evoText,  setEvoText]  = useState('')
+  const [evoCopied, setEvoCopied] = useState(false)
 
   const hoje = new Date().toISOString().split('T')[0]
 
@@ -128,12 +134,31 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (aiOpen) { setAiOpen(false); return }
+        if (evoOpen) { setEvoOpen(false); return }
         if (!editing) onClose()
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [editing, aiOpen])
+  }, [editing, aiOpen, evoOpen])
+
+  const handleAbrirEvolucao = () => {
+    setEvoText(montarEvolucaoDiaria({ paciente: pac, sinais, dvas, periodosHemo, periodos, atbs, cuidados, neuro, ventilatorio }))
+    setEvoOpen(true)
+  }
+
+  const handlePrintEvolucao = () => {
+    const win = window.open('', '_blank', 'width=800,height=700')
+    if (!win) return
+    win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+      <title>Evolução — ${pac.nome}</title>
+      <style>
+        body{font-family:Arial,sans-serif;font-size:12px;padding:20mm 15mm;color:#000;white-space:pre-wrap;line-height:1.6;}
+      </style></head><body>${evoText.replace(/&/g, '&amp;').replace(/</g, '&lt;')}
+      <script>window.onload=function(){setTimeout(function(){window.print();},400);};<\/script>
+      </body></html>`)
+    win.document.close()
+  }
 
   const handleAvaliarIA = async () => {
     aiAbortRef.current?.abort()
@@ -268,6 +293,10 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
                 )}
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
+                <button onClick={handleAbrirEvolucao} title="Evolução diária compilada dos resumos de cada aba (sem IA)"
+                  className="bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
+                  📝 Evolução do Dia
+                </button>
                 <button onClick={handleAvaliarIA} disabled={aiLoading} title="Avaliação clínica completa com IA"
                   className="bg-violet-500 hover:bg-violet-400 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
                   🧠 Avaliar com IA
@@ -391,6 +420,38 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
 
           {/* Body */}
           <div className="overflow-y-auto flex-1 p-6 relative">
+
+            {/* Evolução Diária overlay (determinística, sem IA) */}
+            {evoOpen && (
+              <div className="absolute inset-0 z-10 bg-white rounded-b-2xl flex flex-col">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 flex-shrink-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">📝</span>
+                    <span className="font-bold text-slate-800">Evolução do Dia</span>
+                    <span className="text-xs text-slate-400">{pac.nome}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => navigator.clipboard.writeText(evoText).then(() => { setEvoCopied(true); setTimeout(() => setEvoCopied(false), 2000) })}
+                      className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-colors ${
+                        evoCopied ? 'bg-teal-600 text-white border-teal-600' : 'text-teal-600 hover:text-teal-800 border-teal-200 hover:border-teal-400'
+                      }`}>
+                      {evoCopied ? '✓ Copiado' : '📋 Copiar'}
+                    </button>
+                    <button onClick={handlePrintEvolucao}
+                      className="text-xs text-teal-600 hover:text-teal-800 border border-teal-200 hover:border-teal-400 px-2.5 py-1.5 rounded-lg transition-colors">
+                      🖨️ Imprimir
+                    </button>
+                    <button onClick={() => setEvoOpen(false)}
+                      className="text-slate-400 hover:text-slate-700 w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100">
+                      ✕
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-6">
+                  <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">{evoText}</pre>
+                </div>
+              </div>
+            )}
 
             {/* AI evaluation overlay */}
             {aiOpen && (

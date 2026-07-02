@@ -155,6 +155,58 @@ function buildSummaryText(
   return inicio + meio + vitaisSuffix
 }
 
+/** Filtra as DVAs pertencentes ao período hemodinâmico atual (ou sem período, se não houver turno aberto). */
+function filtrarAtivasNoPeriodo(dvas: DVA[], currentPeriodo: PeriodoHemodinamica | null): DVA[] {
+  return dvas.filter(d =>
+    d.ativo && (
+      currentPeriodo
+        ? (d.periodo_id === currentPeriodo.id || d.periodo_id === null)
+        : d.periodo_id === null
+    )
+  )
+}
+
+/** Sinais vitais dentro da janela do período hemodinâmico atual (ou últimas 12h, se não houver turno aberto). */
+function sinaisNoPeriodo(sinais: SinalVital[], currentPeriodo: PeriodoHemodinamica | null): SinalVital[] {
+  if (currentPeriodo) {
+    const start = new Date(currentPeriodo.inicio).getTime()
+    const end   = currentPeriodo.fim ? new Date(currentPeriodo.fim).getTime() : Date.now()
+    return sinais.filter(s => {
+      const t = new Date(s.horario).getTime()
+      return t >= start && t <= end
+    })
+  }
+  const cutoff = Date.now() - 12 * 3600 * 1000
+  return sinais.filter(s => new Date(s.horario).getTime() >= cutoff)
+}
+
+function calcRanges(periodSinais: SinalVital[]): { fcRange: FcRange | null; paRange: PaRange | null } {
+  const fcVals  = periodSinais.filter(s => s.fc  !== null).map(s => s.fc!)
+  const pasVals = periodSinais.filter(s => s.pas !== null).map(s => s.pas!)
+  const padVals = periodSinais.filter(s => s.pad !== null).map(s => s.pad!)
+  const fcRange: FcRange | null = fcVals.length >= 2
+    ? { min: Math.min(...fcVals), max: Math.max(...fcVals) } : null
+  const paRange: PaRange | null = pasVals.length >= 2 && padVals.length >= 2
+    ? { pasMin: Math.min(...pasVals), pasMax: Math.max(...pasVals),
+        padMin: Math.min(...padVals), padMax: Math.max(...padVals) } : null
+  return { fcRange, paRange }
+}
+
+/** Resumo hemodinâmico determinístico do turno atual — usado no banner da aba e na Evolução Diária. */
+export function resumoHemodinamica(
+  dvas: DVA[],
+  periodos: PeriodoHemodinamica[],
+  sinais: SinalVital[],
+  peso: number | null,
+): string {
+  const currentPeriodo = [...periodos].sort((a, b) =>
+    new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime()
+  ).find(p => !p.fim) ?? null
+  const ativosDVA = filtrarAtivasNoPeriodo(dvas, currentPeriodo)
+  const { fcRange, paRange } = calcRanges(sinaisNoPeriodo(sinais, currentPeriodo))
+  return buildSummaryText(ativosDVA, peso, fcRange, paRange)
+}
+
 function fmtHora(iso: string): string {
   return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 }
@@ -190,37 +242,12 @@ export default function HemodinamicaTab({ paciente, dvas, periodos, sinais, onRe
   const currentPeriodo = sortedPeriodos.find(p => !p.fim) ?? null
   const pastPeriodos   = sortedPeriodos.filter(p => p.fim !== null)
 
-  const ativosDVA = dvas.filter(d =>
-    d.ativo && (
-      currentPeriodo
-        ? (d.periodo_id === currentPeriodo.id || d.periodo_id === null)
-        : d.periodo_id === null
-    )
-  )
+  const ativosDVA = filtrarAtivasNoPeriodo(dvas, currentPeriodo)
   const activeDrogaNomes = ativosDVA.map(d => d.droga)
 
   // ── FC/PA no período atual ─────────────────────────────────────────────────
-  const periodSinais = (() => {
-    if (currentPeriodo) {
-      const start = new Date(currentPeriodo.inicio).getTime()
-      const end   = currentPeriodo.fim ? new Date(currentPeriodo.fim).getTime() : Date.now()
-      return sinais.filter(s => {
-        const t = new Date(s.horario).getTime()
-        return t >= start && t <= end
-      })
-    }
-    const cutoff = Date.now() - 12 * 3600 * 1000
-    return sinais.filter(s => new Date(s.horario).getTime() >= cutoff)
-  })()
-
-  const fcVals  = periodSinais.filter(s => s.fc  !== null).map(s => s.fc!)
-  const pasVals = periodSinais.filter(s => s.pas !== null).map(s => s.pas!)
-  const padVals = periodSinais.filter(s => s.pad !== null).map(s => s.pad!)
-  const fcRange: FcRange | null = fcVals.length >= 2
-    ? { min: Math.min(...fcVals), max: Math.max(...fcVals) } : null
-  const paRange: PaRange | null = pasVals.length >= 2 && padVals.length >= 2
-    ? { pasMin: Math.min(...pasVals), pasMax: Math.max(...pasVals),
-        padMin: Math.min(...padVals), padMax: Math.max(...padVals) } : null
+  const periodSinais = sinaisNoPeriodo(sinais, currentPeriodo)
+  const { fcRange, paRange } = calcRanges(periodSinais)
 
   const summary   = buildSummaryText(ativosDVA, peso, fcRange, paRange)
   const emUsoDVA  = ativosDVA.length > 0
