@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getAI, generateWithFallback } from '@/lib/ai'
-import { calcAcumuladoTotal, calcAcumuladoMovel, calcBalanco, fmtData } from '@/lib/utils'
-import type { Paciente, Exame, SinalVital, ExameImagem, PeriodoBalanco, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais } from '@/types'
+import { calcAcumuladoTotal, calcAcumuladoMovel, calcBalanco, fmtData, resumoNeuro, resumoVentilatorio } from '@/lib/utils'
+import type { Paciente, Exame, SinalVital, ExameImagem, PeriodoBalanco, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio } from '@/types'
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
   if (!apiKey) return NextResponse.json({ error: 'Google AI API Key não configurada' }, { status: 500 })
 
   try {
-    const { paciente, exames, sinais, examesImagem, periodos, dvas, periodosHemo, atbs, cuidados }: {
+    const { paciente, exames, sinais, examesImagem, periodos, dvas, periodosHemo, atbs, cuidados, neuro, ventilatorio }: {
       paciente: Paciente
       exames: Exame[]
       sinais: SinalVital[]
@@ -23,6 +23,8 @@ export async function POST(request: NextRequest) {
       periodosHemo: PeriodoHemodinamica[]
       atbs?: ATB[]
       cuidados?: CuidadosHorizontais | null
+      neuro?: AvaliacaoNeurologica | null
+      ventilatorio?: SuporteVentilatorio | null
     } = await request.json()
 
     // ── Sinais Vitais (últimas 24h ou período atual) ─────────────────────────
@@ -128,6 +130,8 @@ export async function POST(request: NextRequest) {
       `Hipóteses: ${paciente.hipoteses || 'não informadas'}\n\n` +
       `SINAIS VITAIS (${currentPeriodo ? 'turno atual' : 'últimas 24h'}, ${recentSinais.length} aferições):\n${svSection}\n\n` +
       `HEMODINÂMICA:\n${hemoSection}\n\n` +
+      `NEUROLÓGICO/SEDAÇÃO: ${resumoNeuro(neuro)}\n` +
+      `VENTILATÓRIO: ${resumoVentilatorio(ventilatorio)}\n\n` +
       `EXAMES LABORATORIAIS (${examesOrdenados.length} mais recentes):\n${examesSection}\n\n` +
       `EXAMES DE IMAGEM:\n${imagemSection}\n\n` +
       `BALANÇO HÍDRICO:\n${bhSection}\n\n` +
@@ -143,7 +147,8 @@ export async function POST(request: NextRequest) {
       `4. Débito urinário: valor em mL/h${paciente.peso_kg ? ' e mL/kg/h' : ''}, correlacione com creatinina/ureia (função renal normal ou alterada)\n` +
       `5. Tendência hemodinâmica: vasopressores/inotrópicos e tendência geral dos sinais vitais\n` +
       `6. Antibioticoterapia: esquema atual, dias de uso e alerta se ultrapassar tempo previsto\n` +
-      `7. Profilaxias/anticoagulação (IBP e anticoagulante) e pendências relevantes registradas pela equipe`
+      `7. Estado neurológico (RASS/Glasgow, sedação, despertar diário) e suporte ventilatório (modalidade, via, dias de VM), se registrados\n` +
+      `8. Profilaxias/anticoagulação (IBP e anticoagulante) e pendências relevantes registradas pela equipe`
 
     const ai = getAI()
     const texto = await generateWithFallback(ai, prompt)

@@ -37,7 +37,7 @@ function noArrowInput(e: React.KeyboardEvent<HTMLInputElement>) {
 const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400'
 const labelCls = 'text-xs text-slate-500 font-medium block mb-1'
 
-export default function IntensivistaHorizontalTab({ paciente, atbs, cuidados, onRefresh, showToast }: Props) {
+export default function IntensivistaTab({ paciente, atbs, cuidados, onRefresh, showToast }: Props) {
   const supabase = createClient()
 
   // ── ATB form ─────────────────────────────────────────────────────────────
