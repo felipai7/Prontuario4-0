@@ -83,6 +83,13 @@ export default function UTIGrid({ initialPacientes, userEmail }: Props) {
           <div className="flex items-center gap-3 text-sm">
             <span className="text-indigo-200 hidden sm:block">{userEmail}</span>
             <button
+              onClick={() => router.push('/escalas')}
+              className="bg-white/20 hover:bg-white/30 border border-white/30
+                         px-3 py-1.5 rounded-lg text-white text-sm font-medium transition-colors"
+            >
+              📅 Escalas
+            </button>
+            <button
               onClick={handleLogout}
               className="bg-white/20 hover:bg-white/30 border border-white/30
                          px-3 py-1.5 rounded-lg text-white text-sm font-medium transition-colors"

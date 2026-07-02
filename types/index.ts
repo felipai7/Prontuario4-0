@@ -247,3 +247,24 @@ export interface RegistroIntensivista {
   criado_em: string
   updated_at: string
 }
+
+// ── Módulo de Escalas ────────────────────────────────────────────────────────
+
+export type StaffRole = 'intensivista' | 'chefe'
+
+export interface Unit {
+  id: string
+  name: string
+  active: boolean
+  created_at: string
+}
+
+export interface Staff {
+  id: string
+  user_id: string | null
+  unit_id: string
+  full_name: string
+  role: StaffRole
+  active: boolean
+  created_at: string
+}
