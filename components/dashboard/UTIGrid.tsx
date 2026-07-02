@@ -75,7 +75,7 @@ export default function UTIGrid({ initialPacientes, userEmail }: Props) {
       <header className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-xl font-bold">🏥 Sistema UTI</h1>
+            <h1 className="text-xl font-bold">🏥 ProMed UTI</h1>
             <p className="text-indigo-200 text-xs mt-0.5">
               {ocupados}/{total} leitos ocupados &nbsp;·&nbsp; Tempo real
             </p>

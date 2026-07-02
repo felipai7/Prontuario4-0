@@ -5,7 +5,7 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Sistema UTI',
+  title: 'ProMed UTI',
   description: 'Gerenciamento de pacientes internados',
 }
 
