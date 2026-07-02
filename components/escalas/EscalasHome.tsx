@@ -3,7 +3,10 @@ import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import ToastContainer, { useToast } from '@/components/ui/Toast'
-import type { Unit, Staff, StaffRole } from '@/types'
+import ShiftTypesAdmin from './ShiftTypesAdmin'
+import PaySettingsAdmin from './PaySettingsAdmin'
+import MonthScheduleView from './MonthScheduleView'
+import type { Unit, Staff, StaffRole, ShiftType } from '@/types'
 
 interface Props {
   units: Unit[]
@@ -42,6 +45,18 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
   }
 
   useEffect(() => { loadStaff(selectedUnitId) }, [selectedUnitId])
+
+  // ── Tipos de turno da unidade selecionada (para exibir nomes na escala) ────
+  const [shiftTypesList, setShiftTypesList] = useState<ShiftType[]>([])
+
+  const loadShiftTypes = async (unitId: string) => {
+    if (!unitId) { setShiftTypesList([]); return }
+    const { data, error } = await supabase.from('shift_types').select('*').eq('unit_id', unitId)
+    if (error) { showToast('Erro ao carregar tipos de turno: ' + error.message, 'error'); return }
+    setShiftTypesList((data as ShiftType[]) ?? [])
+  }
+
+  useEffect(() => { loadShiftTypes(selectedUnitId) }, [selectedUnitId])
 
   // ── Nova unidade ───────────────────────────────────────────────────────────
   const [novaUnidadeNome, setNovaUnidadeNome] = useState('')
@@ -104,7 +119,7 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-xl font-bold">📅 Escalas de Plantão</h1>
-            <p className="text-indigo-200 text-xs mt-0.5">Módulo em construção — Fase 0 (unidades e equipe)</p>
+            <p className="text-indigo-200 text-xs mt-0.5">Módulo em construção — Fase 1 (fundação)</p>
           </div>
           <div className="flex items-center gap-3 text-sm">
             <span className="text-indigo-200 hidden sm:block">{userEmail}</span>
@@ -204,6 +219,18 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
               </div>
             )}
           </section>
+        )}
+
+        {selectedUnitId && (
+          <MonthScheduleView unitId={selectedUnitId} staffList={staffList} shiftTypesList={shiftTypesList} showToast={showToast} />
+        )}
+
+        {selectedUnitId && (
+          <ShiftTypesAdmin unitId={selectedUnitId} souChefe={souChefeDaSelecionada} showToast={showToast} />
+        )}
+
+        {selectedUnitId && (
+          <PaySettingsAdmin unitId={selectedUnitId} souChefe={souChefeDaSelecionada} showToast={showToast} />
         )}
 
       </main>

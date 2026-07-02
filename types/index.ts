@@ -268,3 +268,61 @@ export interface Staff {
   active: boolean
   created_at: string
 }
+
+export interface ShiftType {
+  id: string
+  unit_id: string
+  name: string
+  start_time: string   // HH:MM:SS
+  end_time: string     // HH:MM:SS
+  duration_hours: number
+  active: boolean
+  created_at: string
+}
+
+export interface PaySettings {
+  unit_id: string
+  weekday_value: number
+  weekend_value: number
+  updated_at: string
+}
+
+export interface ScheduleTemplateShift {
+  id: string
+  unit_id: string
+  day_number: number
+  shift_type_id: string
+  staff_id: string
+  created_at: string
+}
+
+export interface PublishedMonth {
+  unit_id: string
+  month: string        // YYYY-MM-DD (dia 1)
+  published_at: string
+  published_by: string | null
+}
+
+export type ShiftStatus = 'scheduled' | 'swapped' | 'cancelled'
+
+export interface Shift {
+  id: string
+  unit_id: string
+  shift_type_id: string | null
+  staff_id: string | null
+  original_staff_id: string | null
+  source_template_day: number | null
+  date: string         // YYYY-MM-DD
+  status: ShiftStatus
+  created_by: string | null
+  created_at: string
+}
+
+export type PaymentStatus = 'pending' | 'paid'
+
+export interface ShiftPayment {
+  shift_id: string
+  payment_value: number
+  payment_status: PaymentStatus
+  paid_at: string | null
+}
