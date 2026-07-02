@@ -2,11 +2,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import AltaModal        from './AltaModal'
-import { fmtData, calcAge, pad, diasDesde, fmtNum } from '@/lib/utils'
+import { fmtData, calcAge, pad, diasDesde, fmtNum, toTitleCaseNome, ultimoPorTurno } from '@/lib/utils'
 import { ALAS, ALAS_MAP, PLANOS, type AlaId } from '@/lib/config'
 import { modulosAtivos, type PacienteContext } from '@/lib/modules'
 import { montarEvolucaoDiaria } from '@/lib/evolucaoDiaria'
-import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, ToastData } from '@/types'
+import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, ToastData } from '@/types'
 
 const modulos = modulosAtivos()
 
@@ -53,9 +53,11 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
   const [periodosHemo,  setPeriodosHemo]  = useState<PeriodoHemodinamica[]>([])
   const [atbs,          setAtbs]          = useState<ATB[]>([])
   const [cuidados,      setCuidados]      = useState<CuidadosHorizontais | null>(null)
-  const [neuro,         setNeuro]         = useState<AvaliacaoNeurologica | null>(null)
-  const [ventilatorio,  setVentilatorio]  = useState<SuporteVentilatorio | null>(null)
+  const [neuroHistorico, setNeuroHistorico] = useState<AvaliacaoNeurologica[]>([])
+  const [ventHistorico,  setVentHistorico]  = useState<SuporteVentilatorio[]>([])
   const [intercorrencias, setIntercorrencias] = useState<Intercorrencia[]>([])
+  const [pendencias,    setPendencias]    = useState<PendenciaIntensivista[]>([])
+  const [registrosIntensivista, setRegistrosIntensivista] = useState<RegistroIntensivista[]>([])
   const [loading,       setLoading]       = useState(true)
   const [showAlta,      setShowAlta]      = useState(false)
   const [pac,           setPac]           = useState<Paciente>(paciente)
@@ -129,16 +131,24 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     setCuidados((data as CuidadosHorizontais | null) ?? null)
   }
   const loadNeuro = async () => {
-    const { data } = await supabase.from('avaliacoes_neurologicas').select('*').eq('paciente_id', pac.id).maybeSingle()
-    setNeuro((data as AvaliacaoNeurologica | null) ?? null)
+    const { data } = await supabase.from('avaliacoes_neurologicas').select('*').eq('paciente_id', pac.id).order('data')
+    if (data) setNeuroHistorico(data as AvaliacaoNeurologica[])
   }
   const loadVentilatorio = async () => {
-    const { data } = await supabase.from('suportes_ventilatorios').select('*').eq('paciente_id', pac.id).maybeSingle()
-    setVentilatorio((data as SuporteVentilatorio | null) ?? null)
+    const { data } = await supabase.from('suportes_ventilatorios').select('*').eq('paciente_id', pac.id).order('data')
+    if (data) setVentHistorico(data as SuporteVentilatorio[])
   }
   const loadIntercorrencias = async () => {
     const { data } = await supabase.from('intercorrencias').select('*').eq('paciente_id', pac.id).order('horario', { ascending: false })
     if (data) setIntercorrencias(data as Intercorrencia[])
+  }
+  const loadPendencias = async () => {
+    const { data } = await supabase.from('pendencias_intensivista').select('*').eq('paciente_id', pac.id).order('criado_em')
+    if (data) setPendencias(data as PendenciaIntensivista[])
+  }
+  const loadRegistrosIntensivista = async () => {
+    const { data } = await supabase.from('registros_intensivista').select('*').eq('paciente_id', pac.id).order('data')
+    if (data) setRegistrosIntensivista(data as RegistroIntensivista[])
   }
 
   const loadData = async () => {
@@ -146,7 +156,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     await Promise.all([
       loadExames(), loadPeriodos(), loadSinais(), loadExamesImagem(), loadDvas(),
       loadPeriodosHemo(), loadAtbs(), loadCuidados(), loadNeuro(), loadVentilatorio(),
-      loadIntercorrencias(),
+      loadIntercorrencias(), loadPendencias(), loadRegistrosIntensivista(),
     ])
     setLoading(false)
   }
@@ -166,6 +176,8 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
       .on('postgres_changes', { event: '*', schema: 'public', table: 'avaliacoes_neurologicas', filter: `paciente_id=eq.${pac.id}` }, () => loadNeuro())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'suportes_ventilatorios', filter: `paciente_id=eq.${pac.id}` }, () => loadVentilatorio())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'intercorrencias',        filter: `paciente_id=eq.${pac.id}` }, () => loadIntercorrencias())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pendencias_intensivista', filter: `paciente_id=eq.${pac.id}` }, () => loadPendencias())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'registros_intensivista', filter: `paciente_id=eq.${pac.id}` }, () => loadRegistrosIntensivista())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pacientes',              filter: `id=eq.${pac.id}` },
         (payload) => { if (payload.new && payload.eventType !== 'DELETE') setPac(payload.new as Paciente) })
       .subscribe()
@@ -184,8 +196,14 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     return () => window.removeEventListener('keydown', handler)
   }, [editing, aiOpen, evoOpen])
 
+  const neuroAtual = ultimoPorTurno(neuroHistorico)
+  const ventAtual  = ultimoPorTurno(ventHistorico)
+
   const handleAbrirEvolucao = () => {
-    setEvoText(montarEvolucaoDiaria({ paciente: pac, sinais, dvas, periodosHemo, periodos, atbs, neuro, ventilatorio, intercorrencias }))
+    setEvoText(montarEvolucaoDiaria({
+      paciente: pac, sinais, dvas, periodosHemo, periodos, atbs,
+      neuro: neuroAtual, ventilatorio: ventAtual, intercorrencias,
+    }))
     setEvoOpen(true)
   }
 
@@ -223,8 +241,9 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
           periodosHemo,
           atbs,
           cuidados,
-          neuro,
-          ventilatorio,
+          neuro: neuroAtual,
+          ventilatorio: ventAtual,
+          pendencias,
         }),
       })
       const data = await res.json()
@@ -270,7 +289,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     setSaving(true)
     const planoFinal = editForm.plano === 'Outros' ? (editForm.planoOu.trim() || 'Outros') : editForm.plano
     const updates = {
-      nome: editForm.nome.trim(),
+      nome: toTitleCaseNome(editForm.nome),
       data_nascimento: editForm.data_nascimento,
       plano_saude: planoFinal,
       peso_kg: pesoNum,
@@ -292,7 +311,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
   const moduleCtx: PacienteContext = {
     paciente: pac,
     exames, periodos, sinais, examesImagem, dvas, periodosHemo, atbs, cuidados,
-    neuro, ventilatorio, intercorrencias,
+    neuroHistorico, ventHistorico, intercorrencias, pendencias, registrosIntensivista,
     onRefresh: loadData,
     showToast,
   }
@@ -314,9 +333,9 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
                       🕊️ Paliativo
                     </span>
                   )}
-                  {ventilatorio?.modalidade === 'ventilacao_mecanica' && (
+                  {ventAtual?.modalidade === 'ventilacao_mecanica' && (
                     <span className="bg-sky-900/60 border border-sky-300/40 text-sky-100 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
-                      🫁 VM{ventilatorio.vm_via ? ` · ${ventilatorio.vm_via}` : ''}{ventilatorio.vm_data_inicio ? ` · ${diasDesde(ventilatorio.vm_data_inicio)}d` : ''}
+                      🫁 VM{ventAtual.vm_via ? ` · ${ventAtual.vm_via}` : ''}{ventAtual.vm_data_inicio ? ` · ${diasDesde(ventAtual.vm_data_inicio)}d` : ''}
                     </span>
                   )}
                 </div>
@@ -540,12 +559,16 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
               </div>
             )}
 
-            {!loading && cuidados?.pendencias && (
+            {!loading && pendencias.some(p => !p.resolvida) && (
               <div className="mb-4 bg-amber-50 border-2 border-amber-300 rounded-xl p-3 flex items-start gap-2">
                 <span className="text-lg flex-shrink-0">📝</span>
                 <div className="min-w-0">
-                  <p className="text-xs font-bold text-amber-800 uppercase tracking-wide">Pendências e Programações</p>
-                  <p className="text-sm text-amber-900 whitespace-pre-wrap">{cuidados.pendencias}</p>
+                  <p className="text-xs font-bold text-amber-800 uppercase tracking-wide">Pendências em aberto</p>
+                  <ul className="text-sm text-amber-900 mt-0.5 space-y-0.5">
+                    {pendencias.filter(p => !p.resolvida).map(p => (
+                      <li key={p.id}>• {p.texto}</li>
+                    ))}
+                  </ul>
                 </div>
               </div>
             )}
@@ -571,8 +594,8 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
           dvas={dvas}
           atbs={atbs}
           cuidados={cuidados}
-          neuro={neuro}
-          ventilatorio={ventilatorio}
+          neuro={neuroAtual}
+          ventilatorio={ventAtual}
           onClose={() => setShowAlta(false)}
           onAltaConcedida={onAltaConcedida}
           showToast={showToast}

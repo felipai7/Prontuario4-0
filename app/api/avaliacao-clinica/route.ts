@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getAI, generateWithFallback } from '@/lib/ai'
 import { calcAcumuladoTotal, calcAcumuladoMovel, calcBalanco, fmtData, resumoNeuro, resumoVentilatorio, diaAtualATB } from '@/lib/utils'
-import type { Paciente, Exame, SinalVital, ExameImagem, PeriodoBalanco, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio } from '@/types'
+import type { Paciente, Exame, SinalVital, ExameImagem, PeriodoBalanco, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, PendenciaIntensivista } from '@/types'
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
   if (!apiKey) return NextResponse.json({ error: 'Google AI API Key não configurada' }, { status: 500 })
 
   try {
-    const { paciente, exames, sinais, examesImagem, periodos, dvas, periodosHemo, atbs, cuidados, neuro, ventilatorio }: {
+    const { paciente, exames, sinais, examesImagem, periodos, dvas, periodosHemo, atbs, cuidados, neuro, ventilatorio, pendencias }: {
       paciente: Paciente
       exames: Exame[]
       sinais: SinalVital[]
@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
       cuidados?: CuidadosHorizontais | null
       neuro?: AvaliacaoNeurologica | null
       ventilatorio?: SuporteVentilatorio | null
+      pendencias?: PendenciaIntensivista[]
     } = await request.json()
 
     // ── Sinais Vitais (últimas 24h ou período atual) ─────────────────────────
@@ -116,7 +117,10 @@ export async function POST(request: NextRequest) {
       ? `Em uso — ${cuidados.anticoag_droga === 'Outro' ? cuidados.anticoag_droga_outro : cuidados.anticoag_droga}, via ${cuidados.anticoag_via ?? '?'}, dose ${cuidados.anticoag_dose_valor ?? '?'} ${cuidados.anticoag_dose_unidade ?? ''}, objetivo ${cuidados.anticoag_objetivo ?? '?'}`
       : 'Sem anticoagulação em curso.'
     const previsaoAltaSection = cuidados?.previsao_alta ? fmtData(cuidados.previsao_alta) : 'não definida'
-    const pendenciasSection = cuidados?.pendencias || 'Nenhuma pendência registrada.'
+    const pendenciasAbertas = (pendencias ?? []).filter(p => !p.resolvida)
+    const pendenciasSection = pendenciasAbertas.length
+      ? pendenciasAbertas.map(p => p.texto).join('; ')
+      : 'Nenhuma pendência em aberto.'
 
     // ── Calcular idade ────────────────────────────────────────────────────────
     const dob = new Date(paciente.data_nascimento + 'T12:00:00')

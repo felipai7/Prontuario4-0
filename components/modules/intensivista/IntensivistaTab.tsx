@@ -4,12 +4,14 @@ import { createClient } from '@/lib/supabase/client'
 import { fmtData, diaAtualATB } from '@/lib/utils'
 import { ATBS_SUGERIDOS, FOCOS_INFECCIOSOS } from '@/lib/config'
 import Combobox from '@/components/ui/Combobox'
-import type { Paciente, ATB, CuidadosHorizontais, ViaIBP, ViaAnticoag, Objetivo, DrogaAnticoag, ToastData } from '@/types'
+import type { Paciente, ATB, CuidadosHorizontais, PendenciaIntensivista, RegistroIntensivista, ViaIBP, ViaAnticoag, Objetivo, DrogaAnticoag, ToastData } from '@/types'
 
 interface Props {
   paciente: Paciente
   atbs: ATB[]
   cuidados: CuidadosHorizontais | null
+  pendencias: PendenciaIntensivista[]
+  registrosIntensivista: RegistroIntensivista[]
   onRefresh: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
 }
@@ -33,7 +35,7 @@ function noArrowInput(e: React.KeyboardEvent<HTMLInputElement>) {
 const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400'
 const labelCls = 'text-xs text-slate-500 font-medium block mb-1'
 
-export default function IntensivistaTab({ paciente, atbs, cuidados, onRefresh, showToast }: Props) {
+export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, registrosIntensivista, onRefresh, showToast }: Props) {
   const supabase = createClient()
 
   // ── ATB form ─────────────────────────────────────────────────────────────
@@ -97,7 +99,6 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, onRefresh, s
   const [anticoagDoseUnid,  setAnticoagDoseUnid]  = useState(cuidados?.anticoag_dose_unidade ?? 'mg')
   const [anticoagObjetivo,  setAnticoagObjetivo]  = useState<Objetivo | ''>(cuidados?.anticoag_objetivo ?? '')
 
-  const [pendencias, setPendencias] = useState(cuidados?.pendencias ?? '')
   const [savingCuidados, setSavingCuidados] = useState(false)
 
   // Re-sync local state whenever the underlying record changes (realtime / reload)
@@ -115,7 +116,6 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, onRefresh, s
     setAnticoagDoseValor(cuidados?.anticoag_dose_valor != null ? String(cuidados.anticoag_dose_valor) : '')
     setAnticoagDoseUnid(cuidados?.anticoag_dose_unidade ?? 'mg')
     setAnticoagObjetivo(cuidados?.anticoag_objetivo ?? '')
-    setPendencias(cuidados?.pendencias ?? '')
   }, [cuidados?.updated_at])
 
   const handleSaveCuidados = async () => {
@@ -135,13 +135,97 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, onRefresh, s
       anticoag_dose_valor:   anticoagEmUso && anticoagDoseValor ? parseFloat(anticoagDoseValor) : null,
       anticoag_dose_unidade: anticoagEmUso ? anticoagDoseUnid : null,
       anticoag_objetivo:     anticoagEmUso ? (anticoagObjetivo || null) : null,
-      pendencias:            pendencias.trim() || null,
     }
     const { error } = await supabase.from('cuidados_horizontais').upsert(payload, { onConflict: 'paciente_id' })
     setSavingCuidados(false)
     if (error) { showToast('Erro ao salvar: ' + error.message, 'error'); return }
     showToast('Cuidados atualizados!')
     onRefresh()
+  }
+
+  // ── Pendências (checklist) ─────────────────────────────────────────────────
+  const [novaPendencia, setNovaPendencia] = useState('')
+  const [addingPendencia, setAddingPendencia] = useState(false)
+
+  const pendenciasOrdenadas = [...pendencias].sort((a, b) => {
+    if (a.resolvida !== b.resolvida) return a.resolvida ? 1 : -1
+    return new Date(a.criado_em).getTime() - new Date(b.criado_em).getTime()
+  })
+
+  const handleAddPendencia = async () => {
+    if (!novaPendencia.trim()) return
+    setAddingPendencia(true)
+    const { error } = await supabase.from('pendencias_intensivista').insert({
+      paciente_id: paciente.id, texto: novaPendencia.trim(),
+    })
+    setAddingPendencia(false)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    setNovaPendencia(''); onRefresh()
+  }
+
+  const handleTogglePendencia = async (p: PendenciaIntensivista) => {
+    const { error } = await supabase.from('pendencias_intensivista').update({
+      resolvida: !p.resolvida,
+      resolvida_em: !p.resolvida ? new Date().toISOString() : null,
+    }).eq('id', p.id)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    onRefresh()
+  }
+
+  const handleDeletePendencia = async (id: string) => {
+    if (!confirm('Excluir esta pendência?')) return
+    const { error } = await supabase.from('pendencias_intensivista').delete().eq('id', id)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    onRefresh()
+  }
+
+  // ── Orientações e Condutas (histórico por data) ────────────────────────────
+  const [orientFormMode, setOrientFormMode]     = useState<'add' | 'edit' | null>(null)
+  const [orientEditing,  setOrientEditing]      = useState<RegistroIntensivista | null>(null)
+  const [orientDate,     setOrientDate]         = useState(() => new Date().toISOString().split('T')[0])
+  const [orientTexto,    setOrientTexto]        = useState('')
+  const [orientSaving,   setOrientSaving]       = useState(false)
+  const [orientHistoryOpen, setOrientHistoryOpen] = useState(false)
+
+  const sortedRegistros = [...registrosIntensivista].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())
+  const ultimoRegistro = sortedRegistros[0] ?? null
+
+  const duplicadoData = orientFormMode === 'add'
+    ? registrosIntensivista.find(r => r.data === orientDate)
+    : undefined
+
+  const openOrientAdd = () => {
+    setOrientDate(new Date().toISOString().split('T')[0])
+    setOrientTexto('')
+    setOrientFormMode('add')
+  }
+  const startOrientEdit = (r: RegistroIntensivista) => {
+    setOrientEditing(r); setOrientDate(r.data); setOrientTexto(r.orientacoes_condutas)
+    setOrientFormMode('edit')
+  }
+  const cancelOrient = () => { setOrientFormMode(null); setOrientEditing(null); setOrientTexto('') }
+
+  const handleSaveOrient = async () => {
+    if (!orientTexto.trim()) { showToast('Escreva as orientações e condutas', 'error'); return }
+    if (orientFormMode === 'add' && duplicadoData) {
+      showToast('Já existe um registro para essa data — edite-o em vez de duplicar', 'error'); return
+    }
+    setOrientSaving(true)
+    if (orientFormMode === 'add') {
+      const { error } = await supabase.from('registros_intensivista').insert({
+        paciente_id: paciente.id, data: orientDate, orientacoes_condutas: orientTexto.trim(),
+      })
+      setOrientSaving(false)
+      if (error) { showToast('Erro: ' + error.message, 'error'); return }
+      showToast('Registro criado!')
+    } else if (orientEditing) {
+      const { error } = await supabase.from('registros_intensivista')
+        .update({ orientacoes_condutas: orientTexto.trim() }).eq('id', orientEditing.id)
+      setOrientSaving(false)
+      if (error) { showToast('Erro: ' + error.message, 'error'); return }
+      showToast('Registro atualizado!')
+    }
+    cancelOrient(); onRefresh()
   }
 
   return (
@@ -353,18 +437,130 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, onRefresh, s
         )}
       </section>
 
-      {/* Pendências */}
-      <section className="border border-slate-200 rounded-xl p-4 space-y-2">
-        <h3 className="font-semibold text-slate-700">📝 Pendências e Programações</h3>
-        <textarea value={pendencias} onChange={e => setPendencias(e.target.value)} rows={4}
-          placeholder="Ex: Solicitar TC de tórax amanhã, aguardar hemocultura, discutir com família..."
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-      </section>
-
       <button onClick={handleSaveCuidados} disabled={savingCuidados}
         className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-colors">
-        {savingCuidados ? 'Salvando...' : '💾 Salvar Cuidados Horizontais'}
+        {savingCuidados ? 'Salvando...' : '💾 Salvar Previsão de Alta / IBP / Anticoagulante'}
       </button>
+
+      {/* Pendências (checklist) */}
+      <section className="border border-slate-200 rounded-xl p-4 space-y-3">
+        <h3 className="font-semibold text-slate-700">📝 Pendências ({pendenciasOrdenadas.filter(p => !p.resolvida).length} em aberto)</h3>
+
+        {pendenciasOrdenadas.length === 0 && (
+          <p className="text-slate-400 text-sm italic text-center py-4">Nenhuma pendência registrada</p>
+        )}
+
+        <div className="space-y-1.5">
+          {pendenciasOrdenadas.map(p => (
+            <div key={p.id} className={`flex items-center gap-2 rounded-lg px-3 py-2 border ${p.resolvida ? 'bg-slate-50 border-slate-200' : 'bg-amber-50 border-amber-200'}`}>
+              <input type="checkbox" checked={p.resolvida} onChange={() => handleTogglePendencia(p)}
+                className="w-4 h-4 accent-emerald-600 flex-shrink-0" />
+              <span className={`text-sm flex-1 ${p.resolvida ? 'line-through text-slate-400' : 'text-amber-900'}`}>{p.texto}</span>
+              <button onClick={() => handleDeletePendencia(p.id)} title="Excluir"
+                className="text-slate-300 hover:text-red-500 flex-shrink-0 text-sm transition-colors">
+                🗑️
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex gap-2">
+          <input value={novaPendencia} onChange={e => setNovaPendencia(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleAddPendencia() }}
+            placeholder="Ex: Solicitar TC de tórax, aguardar hemocultura..."
+            className={inputCls} />
+          <button onClick={handleAddPendencia} disabled={addingPendencia || !novaPendencia.trim()}
+            className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors flex-shrink-0">
+            + Adicionar
+          </button>
+        </div>
+      </section>
+
+      {/* Orientações e Condutas (histórico por data) */}
+      <section className="border border-slate-200 rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-slate-700">🗒️ Orientações e Condutas ({registrosIntensivista.length})</h3>
+          <div className="flex gap-2">
+            {sortedRegistros.length > 1 && (
+              <button onClick={() => setOrientHistoryOpen(h => !h)} className="text-xs text-indigo-500 hover:text-indigo-700 font-medium">
+                {orientHistoryOpen ? '▲' : '▼'} Histórico ({sortedRegistros.length - 1})
+              </button>
+            )}
+            {orientFormMode === null ? (
+              <button onClick={openOrientAdd}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
+                + Novo Registro
+              </button>
+            ) : (
+              <button onClick={cancelOrient}
+                className="text-slate-500 hover:text-slate-700 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
+                ✕ Cancelar
+              </button>
+            )}
+          </div>
+        </div>
+
+        {orientFormMode === null && ultimoRegistro && (
+          <div className="border border-indigo-200 bg-indigo-50 rounded-xl p-3">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs font-bold text-indigo-700">{fmtData(ultimoRegistro.data)} (mais recente)</p>
+              <button onClick={() => startOrientEdit(ultimoRegistro)}
+                className="text-xs text-indigo-500 hover:text-indigo-700 border border-indigo-200 hover:border-indigo-400 px-2.5 py-1 rounded-lg transition-colors">
+                ✏️ Editar
+              </button>
+            </div>
+            <p className="text-sm text-indigo-900 whitespace-pre-wrap">{ultimoRegistro.orientacoes_condutas}</p>
+          </div>
+        )}
+
+        {!ultimoRegistro && orientFormMode === null && (
+          <p className="text-slate-400 text-sm italic text-center py-4">Nenhum registro ainda</p>
+        )}
+
+        {orientFormMode !== null && (
+          <div className="border-2 border-indigo-200 rounded-xl bg-indigo-50 p-4 space-y-3">
+            {orientFormMode === 'add' ? (
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">Data</label>
+                <input type="date" value={orientDate} onChange={e => setOrientDate(e.target.value)}
+                  className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+                {duplicadoData && (
+                  <p className="text-xs text-red-600 font-semibold mt-1">⚠️ Já existe registro para essa data — edite-o no histórico</p>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <p className="font-semibold text-indigo-900 text-sm">{orientEditing && fmtData(orientEditing.data)}</p>
+                <span className="bg-amber-100 text-amber-700 text-xs font-bold px-2 py-1 rounded-full">✏️ Editando</span>
+              </div>
+            )}
+            <textarea value={orientTexto} onChange={e => setOrientTexto(e.target.value)} rows={4}
+              placeholder="Ex: Manter conduta atual, discutir desmame de sedação, aguardar parecer da cirurgia..."
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            <button onClick={handleSaveOrient} disabled={orientSaving || (orientFormMode === 'add' && !!duplicadoData)}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors">
+              {orientSaving ? 'Salvando...' : orientFormMode === 'add' ? '+ Registrar' : '💾 Salvar Alterações'}
+            </button>
+          </div>
+        )}
+
+        {orientHistoryOpen && sortedRegistros.length > 1 && (
+          <div className="space-y-2 pt-2 border-t border-slate-200">
+            {sortedRegistros.slice(1).map(r => (
+              <div key={r.id} className="border border-slate-200 rounded-lg p-3 bg-slate-50">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-slate-600">{fmtData(r.data)}</span>
+                  <button onClick={() => startOrientEdit(r)}
+                    className="text-xs text-indigo-400 hover:text-indigo-700 border border-indigo-100 hover:border-indigo-300 px-2 py-1 rounded-lg transition-colors">
+                    ✏️ Editar
+                  </button>
+                </div>
+                <p className="text-xs text-slate-600 whitespace-pre-wrap">{r.orientacoes_condutas}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   )
 }

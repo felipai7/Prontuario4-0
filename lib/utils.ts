@@ -19,6 +19,27 @@ export function pad(n: number): string {
   return String(n).padStart(2, '0')
 }
 
+// Conectores que não recebem maiúscula (exceto se forem a 1ª palavra do nome).
+const CONECTORES_NOME = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'di', 'du', 'von', 'van'])
+
+/** Normaliza a capitalização de um nome próprio (primeira letra maiúscula por
+ * palavra/sobrenome, conectores como "de"/"dos" em minúsculo). */
+export function toTitleCaseNome(nome: string): string {
+  return nome
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLocaleLowerCase('pt-BR')
+    .split(' ')
+    .map((palavra, i) => {
+      if (i > 0 && CONECTORES_NOME.has(palavra)) return palavra
+      return palavra
+        .split('-')
+        .map(parte => parte ? parte.charAt(0).toLocaleUpperCase('pt-BR') + parte.slice(1) : parte)
+        .join('-')
+    })
+    .join(' ')
+}
+
 /** Formata número com casas decimais usando vírgula (padrão brasileiro). */
 export function fmtNum(n: number, decimais: number): string {
   return n.toFixed(decimais).replace('.', ',')
@@ -126,6 +147,30 @@ export function boundaryStart(dateStr: string, turno: 'diurno' | 'noturno'): Dat
 
 export function calcHoras(inicio: Date, fim: Date): number {
   return (fim.getTime() - inicio.getTime()) / 3_600_000
+}
+
+/** Registro mais recente de uma lista com data+turno (Neurológico, Ventilatório) — usado
+ * para exibir o "estado atual" no cabeçalho, na IA e na Evolução Diária. */
+export function ultimoPorTurno<T extends { data: string; turno: 'diurno' | 'noturno' }>(items: T[]): T | null {
+  if (!items.length) return null
+  return [...items].sort((a, b) =>
+    boundaryStart(b.data, b.turno).getTime() - boundaryStart(a.data, a.turno).getTime()
+  )[0]
+}
+
+/** Sugere o próximo turno a registrar (usado como valor inicial do seletor livre de
+ * data/turno em Neurológico, Ventilatório e Hemodinâmica) — o turno seguinte ao último
+ * já registrado, ou o turno atual se ainda não houver nenhum registro. */
+export function sugerirProximoTurno<T extends { data: string; turno: 'diurno' | 'noturno' }>(
+  historico: T[]
+): { data: string; turno: 'diurno' | 'noturno' } {
+  const ultimo = ultimoPorTurno(historico)
+  if (!ultimo) {
+    const agora = new Date()
+    return { data: agora.toISOString().split('T')[0], turno: getTurno(agora) }
+  }
+  const proximoInicio = new Date(boundaryStart(ultimo.data, ultimo.turno).getTime() + 12 * 3_600_000)
+  return { data: proximoInicio.toISOString().split('T')[0], turno: getTurno(proximoInicio) }
 }
 
 // ── Cálculos de Balanço Hídrico ───────────────────────────────────────────

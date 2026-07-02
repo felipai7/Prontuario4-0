@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { calcBalanco, calcAcumuladoMovel, diaAtualATB, fmtNum } from '@/lib/utils'
-import type { Paciente, SinalVital, DVA, PeriodoBalanco, ATB, CuidadosHorizontais, Intercorrencia, ToastData } from '@/types'
+import type { Paciente, SinalVital, DVA, PeriodoBalanco, ATB, CuidadosHorizontais, Intercorrencia, PendenciaIntensivista, ToastData } from '@/types'
 
 interface Props {
   paciente: Paciente
@@ -12,6 +12,7 @@ interface Props {
   atbs: ATB[]
   cuidados: CuidadosHorizontais | null
   intercorrencias: Intercorrencia[]
+  pendencias: PendenciaIntensivista[]
   onRefresh: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
 }
@@ -30,7 +31,7 @@ function agoraLocal(): string {
   return d.toISOString().slice(0, 16)
 }
 
-export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs, cuidados, intercorrencias, onRefresh, showToast }: Props) {
+export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs, cuidados, intercorrencias, pendencias, onRefresh, showToast }: Props) {
   const supabase = createClient()
 
   // Intercorrências são carregadas e assinadas pela casca (PacienteModal) — este
@@ -132,10 +133,12 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs,
             ) : <p className="text-sm text-slate-400">Sem ATB em curso.</p>}
           </div>
 
-          {cuidados?.pendencias && (
+          {pendencias.some(p => !p.resolvida) && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 md:col-span-2">
-              <p className="text-xs font-bold text-amber-700 uppercase tracking-wide mb-1">📝 Pendências e programações</p>
-              <p className="text-sm text-amber-900 whitespace-pre-wrap">{cuidados.pendencias}</p>
+              <p className="text-xs font-bold text-amber-700 uppercase tracking-wide mb-1">📝 Pendências em aberto</p>
+              <ul className="text-sm text-amber-900 space-y-0.5">
+                {pendencias.filter(p => !p.resolvida).map(p => <li key={p.id}>• {p.texto}</li>)}
+              </ul>
             </div>
           )}
         </div>

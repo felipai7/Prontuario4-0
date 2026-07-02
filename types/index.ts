@@ -165,6 +165,8 @@ export type Sedativo = 'Propofol' | 'Midazolam' | 'Fentanil' | 'Dexmedetomidina'
 export interface AvaliacaoNeurologica {
   id: string
   paciente_id: string
+  data: string                     // YYYY-MM-DD
+  turno: 'diurno' | 'noturno'
   escala: EscalaNeuro | null
   rass: number | null              // -5 a +4
   glasgow_ao: number | null        // 1-4
@@ -185,6 +187,8 @@ export type ViaAereaVM = 'TOT' | 'TQT'
 export interface SuporteVentilatorio {
   id: string
   paciente_id: string
+  data: string                     // YYYY-MM-DD
+  turno: 'diurno' | 'noturno'
   modalidade: ModalidadeVentilatoria | null
   o2_dispositivo: DispositivoO2 | null
   o2_fluxo_l_min: number | null
@@ -223,6 +227,23 @@ export interface CuidadosHorizontais {
   anticoag_dose_unidade: string | null
   anticoag_objetivo: Objetivo | null
 
-  pendencias: string | null
+  updated_at: string
+}
+
+export interface PendenciaIntensivista {
+  id: string
+  paciente_id: string
+  texto: string
+  resolvida: boolean
+  criado_em: string
+  resolvida_em: string | null
+}
+
+export interface RegistroIntensivista {
+  id: string
+  paciente_id: string
+  data: string              // YYYY-MM-DD
+  orientacoes_condutas: string
+  criado_em: string
   updated_at: string
 }
