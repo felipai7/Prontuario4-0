@@ -2,9 +2,8 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { isDateFuture } from '@/lib/utils'
+import { PLANOS } from '@/lib/config'
 import type { ToastData } from '@/types'
-
-const PLANOS = ['IPASGO', 'Unimed', 'Particular', 'Bradesco', 'Outros']
 
 interface Props {
   alaId: string

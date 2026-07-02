@@ -1,24 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { GoogleGenAI } from '@google/genai'
+import { getAI, generateWithFallback } from '@/lib/ai'
 import type { Exame, Paciente } from '@/types'
-
-const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-8b']
-
-async function generateWithFallback(ai: GoogleGenAI, prompt: string): Promise<string> {
-  let lastErr: Error | null = null
-  for (const model of MODELS) {
-    try {
-      const response = await ai.models.generateContent({ model, contents: [prompt] })
-      return response.text?.trim() ?? ''
-    } catch (e: any) {
-      lastErr = e
-      if (!e.message?.includes('503') && !e.message?.includes('UNAVAILABLE') && !e.message?.includes('overload')) throw e
-      await new Promise(r => setTimeout(r, 1500))
-    }
-  }
-  throw lastErr
-}
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -46,7 +29,7 @@ export async function POST(request: NextRequest) {
       `Forneça uma avaliação evolutiva objetiva e concisa: principais alterações encontradas, tendências evolutivas, ` +
       `correlações clínicas relevantes e pontos de atenção. Use linguagem médica técnica.`
 
-    const ai = new GoogleGenAI({ apiKey })
+    const ai = getAI()
     const texto = await generateWithFallback(ai, prompt)
 
     return NextResponse.json({ texto })

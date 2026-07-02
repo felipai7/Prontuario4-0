@@ -1,23 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { GoogleGenAI } from '@google/genai'
-
-const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-8b']
-
-async function generateWithFallback(ai: GoogleGenAI, contents: any[]): Promise<string> {
-  let lastErr: Error | null = null
-  for (const model of MODELS) {
-    try {
-      const resp = await ai.models.generateContent({ model, contents })
-      return resp.text?.trim() ?? ''
-    } catch (e: any) {
-      lastErr = e
-      if (!e.message?.includes('503') && !e.message?.includes('UNAVAILABLE') && !e.message?.includes('overload')) throw e
-      await new Promise(r => setTimeout(r, 1500))
-    }
-  }
-  throw lastErr
-}
+import { getAI, generateWithFallback } from '@/lib/ai'
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -29,7 +12,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const { base64, mediaType } = await request.json()
-    const ai = new GoogleGenAI({ apiKey })
+    const ai = getAI()
 
     const prompt =
       'Você é um especialista em medicina e laudos de exames de imagem (radiologia, ultrassonografia, TC, RM, ecocardiograma, etc.).\n' +
