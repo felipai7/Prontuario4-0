@@ -156,6 +156,16 @@ export interface ATB {
   updated_at: string
 }
 
+export interface Intercorrencia {
+  id: string
+  paciente_id: string
+  horario: string           // ISO timestamp
+  descricao: string
+  conduta: string | null
+  autor_email: string
+  created_at: string
+}
+
 export interface CuidadosHorizontais {
   id: string
   paciente_id: string

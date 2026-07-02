@@ -7,6 +7,7 @@
 //   3. Se ainda estiver em desenvolvimento, aponte `flag` para uma
 //      feature flag — o módulo só aparece com a flag ligada.
 
+import PlantonistaTab  from '@/components/paciente/PlantonistaTab'
 import ExamesTab       from '@/components/paciente/ExamesTab'
 import BalancoTab      from '@/components/paciente/BalancoTab'
 import SinaisVitaisTab from '@/components/paciente/SinaisVitaisTab'
@@ -41,6 +42,15 @@ export interface ModuleDef {
 
 export const MODULES = [
   {
+    id: 'plantonista',
+    label: '🚨 Médico Plantonista',
+    flag: 'novaEstrutura',
+    render: ctx => (
+      <PlantonistaTab paciente={ctx.paciente} sinais={ctx.sinais} dvas={ctx.dvas}
+        periodos={ctx.periodos} atbs={ctx.atbs} cuidados={ctx.cuidados} showToast={ctx.showToast} />
+    ),
+  },
+  {
     id: 'balanco',
     label: '💧 Balanço Hídrico',
     render: ctx => <BalancoTab paciente={ctx.paciente} periodos={ctx.periodos} onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
@@ -67,7 +77,7 @@ export const MODULES = [
   },
   {
     id: 'horizontal',
-    label: '🩺 Intensivista Horizontal',
+    label: '🩺 Médico Intensivista — Horizontal',
     render: ctx => <IntensivistaHorizontalTab paciente={ctx.paciente} atbs={ctx.atbs} cuidados={ctx.cuidados} onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
   },
 ] as const satisfies readonly ModuleDef[]
