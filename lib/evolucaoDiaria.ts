@@ -1,4 +1,4 @@
-import { resumoHemodinamica } from '@/components/modules/plantonista/HemodinamicaTab'
+import { resumoHemodinamica } from '@/lib/hemodinamica'
 import { fmtData, diaAtualATB, fmtNum } from '@/lib/utils'
 import type {
   Paciente, SinalVital, DVA, PeriodoHemodinamica, PeriodoBalanco,

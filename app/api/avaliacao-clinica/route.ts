@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getAI, generateWithFallback } from '@/lib/ai'
-import { calcAcumuladoTotal, calcAcumuladoMovel, calcBalanco, fmtData, resumoNeuro, resumoVentilatorio } from '@/lib/utils'
+import { calcAcumuladoTotal, calcAcumuladoMovel, calcBalanco, fmtData, resumoNeuro, resumoVentilatorio, diaAtualATB } from '@/lib/utils'
 import type { Paciente, Exame, SinalVital, ExameImagem, PeriodoBalanco, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio } from '@/types'
 
 export async function POST(request: NextRequest) {
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
     const atbSection = ativosATB.length === 0
       ? 'Sem antibioticoterapia em curso.'
       : ativosATB.map(a => {
-          const dias = Math.floor((Date.now() - new Date(a.data_inicio + 'T00:00:00').getTime()) / (24 * 3600 * 1000))
+          const dias = diaAtualATB(a)
           return `${a.droga} — dia ${dias} de uso${a.dias_previstos != null ? ` (previsto: ${a.dias_previstos} dias)` : ''}${a.foco ? `, foco: ${a.foco}` : ''}`
         }).join('; ')
 

@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import {
   calcAguaEndogena, calcPerdasInsensiveis, calcBalanco,
   calcAcumuladoTotal, calcAcumuladoMovel, calcFirstPeriod, calcNextPeriod,
-  fmtTurno, colorParcial, getTurno, fmtNum
+  fmtTurno, colorParcial, getTurno, fmtNum, boundaryStart, fmtDataHora
 } from '@/lib/utils'
 import type { Paciente, PeriodoBalanco, ToastData } from '@/types'
 
@@ -53,9 +53,10 @@ const SEPARATOR_AFTER = 'agua_endogena'
 
 function todayStr() { return new Date().toISOString().split('T')[0] }
 
-/** Turno padrão de 12h a partir de uma data + turno escolhidos livremente (07:00–19:00 / 19:00–07:00). */
+/** Turno padrão de 12h a partir de uma data + turno escolhidos livremente. Reaproveita o
+ * mesmo limite de turno (07:00/19:00) usado em calcNextPeriod/getNextBoundary. */
 function calcPeriodoEscolhido(dateStr: string, turno: 'diurno' | 'noturno'): { inicio: Date; fim: Date; horas: number; turno: 'diurno' | 'noturno' } {
-  const inicio = new Date(`${dateStr}T${turno === 'diurno' ? '07:00' : '19:00'}:00`)
+  const inicio = boundaryStart(dateStr, turno)
   const fim = new Date(inicio.getTime() + 12 * 3_600_000)
   return { inicio, fim, horas: 12, turno }
 }
@@ -159,6 +160,15 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
   const periodoDuplicado = periodSpec
     ? sorted.find(p => new Date(p.inicio).getTime() === periodSpec!.inicio.getTime())
     : undefined
+
+  // Turno escolhido não é contíguo ao último registrado? O acumulado (calcAcumuladoTotal/
+  // Móvel) e o débito urinário 24h assumem turnos sem lacunas — avisa sem bloquear, já que
+  // pode ser um lançamento retroativo intencional (turno esquecido).
+  const ultimoRegistrado = sorted.length > 0 ? sorted[sorted.length - 1] : null
+  const periodoNaoContiguo = !!(
+    periodos.length > 0 && periodSpec && ultimoRegistrado && !periodoDuplicado &&
+    new Date(ultimoRegistrado.fim).getTime() !== periodSpec.inicio.getTime()
+  )
 
   const peso    = paciente.peso_kg ?? 70
   const horas   = formMode === 'edit' && editingPeriodo ? editingPeriodo.horas_periodo : (periodSpec?.horas ?? 12)
@@ -345,6 +355,12 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
               </div>
               {periodoDuplicado && (
                 <p className="text-xs text-red-600 font-semibold">⚠️ Já existe registro para este turno — edite-o na tabela abaixo</p>
+              )}
+              {!periodoDuplicado && periodoNaoContiguo && ultimoRegistrado && (
+                <p className="text-xs text-amber-600 font-semibold">
+                  ⚠️ Turno não é contíguo ao último registrado (encerrado em {fmtDataHora(ultimoRegistrado.fim)}) —
+                  o saldo acumulado assume turnos sem lacunas
+                </p>
               )}
             </div>
           )}

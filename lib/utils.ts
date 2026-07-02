@@ -54,7 +54,7 @@ export function diasDesde(dataYYYYMMDD: string): number {
  * não completada no 1º dia) ou D1 (dose completa desde o início).
  */
 export function diaAtualATB(atb: ATB): number {
-  return diasDesde(atb.data_inicio) + atb.dia_inicial
+  return diasDesde(atb.data_inicio) + (atb.dia_inicial ?? 0)
 }
 
 // ── Resumos clínicos em texto (usados nos prompts de IA) ───────────────────
@@ -90,9 +90,15 @@ export function resumoVentilatorio(v: SuporteVentilatorio | null | undefined): s
 
 // ── Turnos ────────────────────────────────────────────────────────────────
 
+// Limites únicos dos turnos de 12h — única fonte de verdade. Se a escala do
+// hospital mudar, atualizar só aqui (getNextBoundary/boundaryStart/calcNextPeriod
+// e o seletor livre de turno do BalancoTab derivam todos daqui).
+export const HORA_INICIO_DIURNO = 7
+export const HORA_INICIO_NOTURNO = 19
+
 export function getTurno(dt: Date): 'diurno' | 'noturno' {
   const h = dt.getHours()
-  return h >= 7 && h < 19 ? 'diurno' : 'noturno'
+  return h >= HORA_INICIO_DIURNO && h < HORA_INICIO_NOTURNO ? 'diurno' : 'noturno'
 }
 
 /** Returns the next turn boundary (07:00 or 19:00) after a given datetime */
@@ -101,15 +107,21 @@ export function getNextBoundary(dt: Date): Date {
   result.setSeconds(0, 0)
   result.setMinutes(0)
   const h = dt.getHours()
-  if (h >= 7 && h < 19) {
-    result.setHours(19)                           // next boundary today at 19:00
-  } else if (h >= 19) {
+  if (h >= HORA_INICIO_DIURNO && h < HORA_INICIO_NOTURNO) {
+    result.setHours(HORA_INICIO_NOTURNO)          // next boundary today at 19:00
+  } else if (h >= HORA_INICIO_NOTURNO) {
     result.setDate(result.getDate() + 1)
-    result.setHours(7)                            // next boundary tomorrow at 07:00
+    result.setHours(HORA_INICIO_DIURNO)           // next boundary tomorrow at 07:00
   } else {
-    result.setHours(7)                            // between 00:00–07:00 → 07:00 today
+    result.setHours(HORA_INICIO_DIURNO)           // between 00:00–07:00 → 07:00 today
   }
   return result
+}
+
+/** Início (Date) de um turno de 12h numa data escolhida livremente (07:00 ou 19:00). */
+export function boundaryStart(dateStr: string, turno: 'diurno' | 'noturno'): Date {
+  const hora = turno === 'diurno' ? HORA_INICIO_DIURNO : HORA_INICIO_NOTURNO
+  return new Date(`${dateStr}T${String(hora).padStart(2, '0')}:00:00`)
 }
 
 export function calcHoras(inicio: Date, fim: Date): number {

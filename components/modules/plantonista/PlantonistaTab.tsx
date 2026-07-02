@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { calcBalanco, calcAcumuladoMovel, diaAtualATB, fmtNum } from '@/lib/utils'
 import type { Paciente, SinalVital, DVA, PeriodoBalanco, ATB, CuidadosHorizontais, Intercorrencia, ToastData } from '@/types'
@@ -11,6 +11,8 @@ interface Props {
   periodos: PeriodoBalanco[]
   atbs: ATB[]
   cuidados: CuidadosHorizontais | null
+  intercorrencias: Intercorrencia[]
+  onRefresh: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
 }
 
@@ -28,31 +30,15 @@ function agoraLocal(): string {
   return d.toISOString().slice(0, 16)
 }
 
-export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs, cuidados, showToast }: Props) {
+export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs, cuidados, intercorrencias, onRefresh, showToast }: Props) {
   const supabase = createClient()
 
-  // ── Intercorrências: o módulo carrega e assina seus próprios dados ────────
-  const [intercorrencias, setIntercorrencias] = useState<Intercorrencia[]>([])
-  const [loadingInt,      setLoadingInt]      = useState(true)
-  const [autorEmail,      setAutorEmail]      = useState('')
-
-  const loadIntercorrencias = useCallback(async () => {
-    const { data, error } = await supabase.from('intercorrencias')
-      .select('*').eq('paciente_id', paciente.id).order('horario', { ascending: false })
-    if (error) { showToast('Erro ao carregar intercorrências: ' + error.message, 'error') }
-    else setIntercorrencias(data as Intercorrencia[])
-    setLoadingInt(false)
-  }, [paciente.id])
-
+  // Intercorrências são carregadas e assinadas pela casca (PacienteModal) — este
+  // módulo só precisa do e-mail do autor logado para registrar novas entradas.
+  const [autorEmail, setAutorEmail] = useState('')
   useEffect(() => {
-    loadIntercorrencias()
     supabase.auth.getUser().then(({ data }) => setAutorEmail(data.user?.email ?? ''))
-    const channel = supabase
-      .channel(`intercorrencias-${paciente.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'intercorrencias', filter: `paciente_id=eq.${paciente.id}` }, () => loadIntercorrencias())
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [paciente.id])
+  }, [])
 
   // ── Form de nova intercorrência ────────────────────────────────────────────
   const [formOpen,  setFormOpen]  = useState(false)
@@ -76,7 +62,7 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs,
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
     showToast('Intercorrência registrada!')
     setFormOpen(false); setDescricao(''); setConduta(''); setHorario(agoraLocal())
-    loadIntercorrencias()
+    onRefresh()
   }
 
   const handleDelete = async (id: string) => {
@@ -84,7 +70,7 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs,
     const { error } = await supabase.from('intercorrencias').delete().eq('id', id)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
     showToast('Registro excluído')
-    loadIntercorrencias()
+    onRefresh()
   }
 
   // ── Dados do painel-resumo (derivados do que a casca já carregou) ─────────
@@ -192,11 +178,7 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs,
           </div>
         )}
 
-        {loadingInt ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="w-6 h-6 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : intercorrencias.length === 0 ? (
+        {intercorrencias.length === 0 ? (
           <p className="text-sm text-slate-400 py-4 text-center">Nenhuma intercorrência registrada para este paciente.</p>
         ) : (
           <ul className="space-y-2">
