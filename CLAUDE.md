@@ -15,4 +15,14 @@ Se o pull trouxer commits novos:
 2. Se o autor não for a pessoa que está pedindo a mudança nesta sessão, resuma brevemente o que o outro colaborador alterou antes de prosseguir.
 3. Só então continue com a tarefa pedida.
 
+## Sincronizar depois de editar
+
+**Regra obrigatória: ao final de toda sessão de trabalho em que arquivos do projeto foram alterados, faça commit e rode:**
+
+```
+git push origin main
+```
+
+Não deixe mudanças commitadas apenas localmente — se o push não acontecer, a outra pessoa vai puxar uma versão desatualizada do repositório mesmo seguindo a regra de pull corretamente.
+
 Isso evita sobrescrever trabalho em andamento do outro colaborador e reduz conflitos de merge.
