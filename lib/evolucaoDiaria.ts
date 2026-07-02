@@ -1,5 +1,5 @@
 import { resumoHemodinamica } from '@/components/modules/plantonista/HemodinamicaTab'
-import { fmtData, diaAtualATB } from '@/lib/utils'
+import { fmtData, diaAtualATB, fmtNum } from '@/lib/utils'
 import type {
   Paciente, SinalVital, DVA, PeriodoHemodinamica, PeriodoBalanco,
   ATB, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia,
@@ -112,7 +112,7 @@ function fraseDiurese(periodos: PeriodoBalanco[], pesoKg: number | null): string
   const sufixoJanela = desdeAdmissao ? `${Math.round(horasJanela)}h desde admissão` : '24h'
 
   const rate = pesoKg && horasJanela > 0 ? diureseTotal / (pesoKg * horasJanela) : null
-  const rateStr = rate != null ? `, ${rate.toFixed(2)}mL/Kg/h` : ''
+  const rateStr = rate != null ? `, ${fmtNum(rate, 2)}mL/Kg/h` : ''
 
   if (diureseTotal === 0) {
     return `Paciente anúrico, sem débito urinário nas últimas ${sufixoJanela}.`

@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { calcBalanco, calcAcumuladoMovel, diaAtualATB } from '@/lib/utils'
+import { calcBalanco, calcAcumuladoMovel, diaAtualATB, fmtNum } from '@/lib/utils'
 import type { Paciente, SinalVital, DVA, PeriodoBalanco, ATB, CuidadosHorizontais, Intercorrencia, ToastData } from '@/types'
 
 interface Props {
@@ -131,7 +131,7 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs,
             {ultimoPeriodo && bhUltimo ? (
               <p className="text-sm text-slate-700">
                 Último turno: {bhUltimo.parcial > 0 ? '+' : ''}{bhUltimo.parcial.toFixed(0)} mL
-                (diurese {ultimoPeriodo.diurese} mL{ultimoPeriodo.horas_periodo > 0 && <> → {(ultimoPeriodo.diurese / ultimoPeriodo.horas_periodo).toFixed(1)} mL/h</>})
+                (diurese {ultimoPeriodo.diurese} mL{ultimoPeriodo.horas_periodo > 0 && <> → {fmtNum(ultimoPeriodo.diurese / ultimoPeriodo.horas_periodo, 1)} mL/h</>})
                 · Acum. móvel: {bhMovel > 0 ? '+' : ''}{bhMovel.toFixed(0)} mL
               </p>
             ) : <p className="text-sm text-slate-400">Sem balanço registrado.</p>}

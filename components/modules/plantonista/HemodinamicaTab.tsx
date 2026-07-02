@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { fmtData, getTurno } from '@/lib/utils'
+import { fmtData, getTurno, fmtNum } from '@/lib/utils'
 import type { Paciente, DVA, PeriodoHemodinamica, SinalVital, ToastData } from '@/types'
 
 interface Props {
@@ -37,7 +37,7 @@ const DROGAS: DrogaConfig[] = [
     dose_alvo_label: '0,01 – 1,5 mcg/Kg/min',
     usaPeso: true,
     calcDose: (f, c, p) => (f * c) / (60 * p),
-    formatDose: d => d.toFixed(3),
+    formatDose: d => fmtNum(d, 3),
   },
   {
     nome: 'Vasopressina',
@@ -49,7 +49,7 @@ const DROGAS: DrogaConfig[] = [
     dose_alvo_label: '0,01 – 0,04 UI/min',
     usaPeso: false,
     calcDose: (f, c, _p) => (f * c) / 60,
-    formatDose: d => d.toFixed(3),
+    formatDose: d => fmtNum(d, 3),
   },
   {
     nome: 'Dopamina',
@@ -58,7 +58,7 @@ const DROGAS: DrogaConfig[] = [
     dose_alvo_label: '1 – 20 mcg/Kg/min',
     usaPeso: true,
     calcDose: (f, c, p) => (f * c) / (60 * p),
-    formatDose: d => d.toFixed(2),
+    formatDose: d => fmtNum(d, 2),
   },
   {
     nome: 'Dobutamina',
@@ -67,7 +67,7 @@ const DROGAS: DrogaConfig[] = [
     dose_alvo_label: '2 – 20 mcg/Kg/min',
     usaPeso: true,
     calcDose: (f, c, p) => (f * c) / (60 * p),
-    formatDose: d => d.toFixed(2),
+    formatDose: d => fmtNum(d, 2),
   },
   {
     nome: 'Nitroglicerina (Tridil)',
@@ -76,7 +76,7 @@ const DROGAS: DrogaConfig[] = [
     dose_alvo_label: '5 – 20 mcg/min (até 200 mcg/min)',
     usaPeso: false,
     calcDose: (f, c, _p) => (f * c) / 60,
-    formatDose: d => d.toFixed(1),
+    formatDose: d => fmtNum(d, 1),
   },
   {
     nome: 'Nitroprussiato (Nipride)',
@@ -85,7 +85,7 @@ const DROGAS: DrogaConfig[] = [
     dose_alvo_label: '0,3 – 10 mcg/Kg/min',
     usaPeso: true,
     calcDose: (f, c, p) => (f * c) / (60 * p),
-    formatDose: d => d.toFixed(3),
+    formatDose: d => fmtNum(d, 3),
   },
 ]
 
@@ -141,18 +141,18 @@ function buildSummaryText(
     vitaisSuffix = `, mantendo ${parts.join(', ')} no período`
   }
 
-  if (!ativos.length) return 'Hemodinâmica estável sem uso de agentes vasoativos' + vitaisSuffix
+  if (!ativos.length) return 'Hemodinâmica estável sem uso de agentes vasoativos' + vitaisSuffix + '.'
 
   const partes = ativos.map(dva => {
     const cfg = getDrogaConfig(dva.droga)
-    const fluxoStr = dva.fluxo_ml_h % 1 === 0 ? String(dva.fluxo_ml_h) : dva.fluxo_ml_h.toFixed(1)
+    const fluxoStr = dva.fluxo_ml_h % 1 === 0 ? String(dva.fluxo_ml_h) : fmtNum(dva.fluxo_ml_h, 1)
     if (!cfg || !peso) return `${dva.droga} ${fluxoStr} mL/h`
     const dose = cfg.calcDose(dva.fluxo_ml_h, dva.concentracao_valor, peso)
     return `${dva.droga} ${fluxoStr} mL/h (${cfg.formatDose(dose)} ${cfg.dose_unidade})`
   })
   const inicio = 'Hemodinâmica mantida às custas do uso de '
   const meio = partes.length === 1 ? partes[0] : partes.slice(0, -1).join(', ') + ' e ' + partes[partes.length - 1]
-  return inicio + meio + vitaisSuffix
+  return inicio + meio + vitaisSuffix + '.'
 }
 
 /** Filtra as DVAs pertencentes ao período hemodinâmico atual (ou sem período, se não houver turno aberto). */
@@ -497,7 +497,7 @@ export default function HemodinamicaTab({ paciente, dvas, periodos, sinais, onRe
           ? editCfg && (editCfg.usaPeso ? !!peso : true)
             ? editCfg.calcDose(editFNum, editVar.valor, peso ?? 1) : null
           : null
-        const fluxoStr = dva.fluxo_ml_h % 1 === 0 ? String(dva.fluxo_ml_h) : dva.fluxo_ml_h.toFixed(1)
+        const fluxoStr = dva.fluxo_ml_h % 1 === 0 ? String(dva.fluxo_ml_h) : fmtNum(dva.fluxo_ml_h, 1)
 
         return (
           <div key={dva.id} className={`border rounded-xl p-4 space-y-2 ${

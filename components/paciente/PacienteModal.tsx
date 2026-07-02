@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import AltaModal        from './AltaModal'
-import { fmtData, calcAge, pad, diasDesde } from '@/lib/utils'
+import { fmtData, calcAge, pad, diasDesde, fmtNum } from '@/lib/utils'
 import { ALAS, ALAS_MAP, PLANOS, type AlaId } from '@/lib/config'
 import { modulosAtivos, type PacienteContext } from '@/lib/modules'
 import { montarEvolucaoDiaria } from '@/lib/evolucaoDiaria'
@@ -20,6 +20,16 @@ interface Props {
 function diasInternado(dataInternacao: string, horaInternacao: string): number {
   const inicio = new Date(dataInternacao + 'T' + horaInternacao)
   return Math.max(0, Math.floor((Date.now() - inicio.getTime()) / (24 * 3600 * 1000)))
+}
+
+function fmtDataCurta(dataYYYYMMDD: string): string {
+  const [y, m, d] = dataYYYYMMDD.split('-')
+  return `${d}/${m}/${y.slice(2)}`
+}
+
+/** Junta hipóteses digitadas em linhas separadas (Enter na textarea) com " | ". */
+function fmtHipoteses(hipoteses: string): string {
+  return hipoteses.split('\n').map(h => h.trim()).filter(Boolean).join(' | ')
 }
 
 type EditForm = {
@@ -288,12 +298,13 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
                   🛏️ {ALAS_MAP[pac.ala_id]} — Leito {pad(pac.numero_leito)}
                 </p>
                 <p className="text-indigo-200 text-xs mt-0.5">
-                  🗓️ {diasInternado(pac.data_internacao, pac.hora_internacao)} dia(s) de internação
+                  🗓️ Internado em {fmtDataCurta(pac.data_internacao)}, às {pac.hora_internacao.substring(0, 5)}
+                  &nbsp;·&nbsp; {diasInternado(pac.data_internacao, pac.hora_internacao)} dia(s) de internação
                   {pac.saps3 != null && <> &nbsp;·&nbsp; 📊 SAPS-3: <span className="font-bold">{pac.saps3}</span></>}
-                  {pac.peso_kg && <> &nbsp;·&nbsp; ⚖️ {pac.peso_kg} Kg</>}
+                  {pac.peso_kg && <> &nbsp;·&nbsp; ⚖️ {pac.peso_kg % 1 === 0 ? pac.peso_kg : fmtNum(pac.peso_kg, 1)} Kg</>}
                 </p>
                 {pac.hipoteses && (
-                  <p className="text-indigo-300 text-xs mt-1 italic">🩺 {pac.hipoteses}</p>
+                  <p className="text-indigo-300 text-xs mt-1 italic">🩺 {fmtHipoteses(pac.hipoteses)}</p>
                 )}
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">

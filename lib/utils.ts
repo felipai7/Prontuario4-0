@@ -19,6 +19,11 @@ export function pad(n: number): string {
   return String(n).padStart(2, '0')
 }
 
+/** Formata número com casas decimais usando vírgula (padrão brasileiro). */
+export function fmtNum(n: number, decimais: number): string {
+  return n.toFixed(decimais).replace('.', ',')
+}
+
 export function calcAge(dateStr: string | null | undefined): string {
   if (!dateStr) return ''
   const dob   = new Date(dateStr + 'T12:00:00')
