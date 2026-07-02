@@ -1,27 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { calcAcumuladoTotal, calcAcumuladoMovel, calcBalanco, fmtData } from '@/lib/utils'
-import { GoogleGenAI } from '@google/genai'
-import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, ATB, CuidadosHorizontais } from '@/types'
-
-const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-8b']
-
-async function generateWithFallback(ai: GoogleGenAI, prompt: string): Promise<string> {
-  let lastErr: Error | null = null
-  for (const model of MODELS) {
-    try {
-      const response = await ai.models.generateContent({ model, contents: [prompt] })
-      return response.text?.trim() ?? ''
-    } catch (e: any) {
-      lastErr = e
-      if (!e.message?.includes('503') && !e.message?.includes('UNAVAILABLE') && !e.message?.includes('overload')) {
-        throw e
-      }
-      await new Promise(r => setTimeout(r, 1500))
-    }
-  }
-  throw lastErr
-}
+import { calcAcumuladoTotal, calcAcumuladoMovel, calcBalanco, fmtData, resumoNeuro, resumoVentilatorio } from '@/lib/utils'
+import { getAI, generateWithFallback } from '@/lib/ai'
+import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio } from '@/types'
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -32,7 +13,7 @@ export async function POST(request: NextRequest) {
   if (!apiKey) return NextResponse.json({ error: 'Google AI API Key não configurada' }, { status: 500 })
 
   try {
-    const { paciente, exames, periodos, sinais, examesImagem, dvas, atbs, cuidados }: {
+    const { paciente, exames, periodos, sinais, examesImagem, dvas, atbs, cuidados, neuro, ventilatorio }: {
       paciente: Paciente
       exames: Exame[]
       periodos: PeriodoBalanco[]
@@ -41,6 +22,8 @@ export async function POST(request: NextRequest) {
       dvas?: DVA[]
       atbs?: ATB[]
       cuidados?: CuidadosHorizontais | null
+      neuro?: AvaliacaoNeurologica | null
+      ventilatorio?: SuporteVentilatorio | null
     } = await request.json()
 
     // ── Exames laboratoriais ──────────────────────────────────────────────────
@@ -127,12 +110,14 @@ export async function POST(request: NextRequest) {
       `SINAIS VITAIS (range da internação):\n${svSection}\n\n` +
       `BALANÇO HÍDRICO:\n${bhSummary}\n\n` +
       `HEMODINÂMICA NA ALTA:\n${hemoSection}\n\n` +
+      `NEUROLÓGICO/SEDAÇÃO NA ALTA: ${resumoNeuro(neuro)}\n` +
+      `VENTILATÓRIO NA ALTA: ${resumoVentilatorio(ventilatorio)}\n\n` +
       `ANTIBIOTICOTERAPIA (histórico da internação):\n${atbSection}\n\n` +
       `IBP na alta: ${ibpSection}\n` +
       `ANTICOAGULAÇÃO na alta: ${anticoagSection}\n\n` +
-      `Redija resumo de alta com: motivo de internação, evolução clínica desde a admissão, principais achados laboratoriais e de imagem, balanço hídrico e débito urinário, condições hemodinâmicas na alta, antibioticoterapia recebida, profilaxias/anticoagulação mantidas na alta. Seja objetivo sem ser prolixo. Use linguagem médica formal.`
+      `Redija resumo de alta com: motivo de internação, evolução clínica desde a admissão, principais achados laboratoriais e de imagem, balanço hídrico e débito urinário, condições hemodinâmicas na alta, estado neurológico e suporte ventilatório na alta (se registrados), antibioticoterapia recebida, profilaxias/anticoagulação mantidas na alta. Seja objetivo sem ser prolixo. Use linguagem médica formal.`
 
-    const ai = new GoogleGenAI({ apiKey })
+    const ai = getAI()
     const texto = await generateWithFallback(ai, prompt)
 
     return NextResponse.json({ texto })

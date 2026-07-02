@@ -1,4 +1,4 @@
-import type { PeriodoBalanco, BalancoCalculado } from '@/types'
+import type { PeriodoBalanco, BalancoCalculado, AvaliacaoNeurologica, SuporteVentilatorio } from '@/types'
 
 // ── Formatação ─────────────────────────────────────────────────────────────
 
@@ -35,6 +35,44 @@ export function isDateFuture(str: string): boolean {
   const date  = new Date(y, m - 1, d)
   const today = new Date(); today.setHours(0, 0, 0, 0)
   return date > today
+}
+
+/** Dias corridos desde uma data YYYY-MM-DD até hoje (mínimo 0). */
+export function diasDesde(dataYYYYMMDD: string): number {
+  const inicio = new Date(dataYYYYMMDD + 'T00:00:00')
+  const hoje   = new Date(); hoje.setHours(0, 0, 0, 0)
+  return Math.max(0, Math.floor((hoje.getTime() - inicio.getTime()) / (24 * 3600 * 1000)))
+}
+
+// ── Resumos clínicos em texto (usados nos prompts de IA) ───────────────────
+
+export function resumoNeuro(neuro: AvaliacaoNeurologica | null | undefined): string {
+  if (!neuro) return 'Não registrado.'
+  const partes: string[] = []
+  if (neuro.escala === 'GLASGOW' && neuro.glasgow_ao != null && neuro.glasgow_rv != null && neuro.glasgow_rm != null) {
+    partes.push(`Glasgow ${neuro.glasgow_ao + neuro.glasgow_rv + neuro.glasgow_rm} (AO ${neuro.glasgow_ao} + RV ${neuro.glasgow_rv} + RM ${neuro.glasgow_rm})`)
+  } else if (neuro.rass != null) {
+    partes.push(`RASS ${neuro.rass > 0 ? '+' : ''}${neuro.rass}`)
+  }
+  if (neuro.sedacao_em_uso) {
+    const drogas = (neuro.sedativos ?? []).map(s => s === 'Outro' ? (neuro.sedativo_outro || 'outro sedativo') : s)
+    partes.push(`sedação com ${drogas.length ? drogas.join(' + ') : 'sedativo não especificado'}`)
+    if (neuro.despertar_diario === true)  partes.push('em despertar diário')
+    if (neuro.despertar_diario === false) partes.push('sem despertar diário')
+  } else {
+    partes.push('sem sedação')
+  }
+  return partes.length ? partes.join(', ') : 'Não registrado.'
+}
+
+export function resumoVentilatorio(v: SuporteVentilatorio | null | undefined): string {
+  if (!v || !v.modalidade) return 'Não registrado.'
+  if (v.modalidade === 'ar_ambiente') return 'Ar ambiente.'
+  if (v.modalidade === 'o2_suplementar') {
+    return `O₂ suplementar${v.o2_dispositivo ? ` por ${v.o2_dispositivo}` : ''}${v.o2_fluxo_l_min != null ? ` a ${v.o2_fluxo_l_min} L/min` : ''}.`
+  }
+  const dias = v.vm_data_inicio ? diasDesde(v.vm_data_inicio) : null
+  return `Ventilação mecânica${v.vm_via ? ` via ${v.vm_via}` : ''}${dias != null ? ` há ${dias} dia(s)` : ''}.`
 }
 
 // ── Turnos ────────────────────────────────────────────────────────────────

@@ -1,3 +1,5 @@
+import type { AlaId } from '@/lib/config'
+
 export interface Paciente {
   id: string
   nome: string
@@ -7,7 +9,7 @@ export interface Paciente {
   hora_internacao: string   // HH:MM
   peso_kg: number | null
   hipoteses: string | null
-  ala_id: 'uti-01' | 'uti-02'
+  ala_id: AlaId
   numero_leito: number
   saps3: number | null
   paliativo: boolean
@@ -68,6 +70,8 @@ export interface ResumoAlta {
   paciente_snapshot: Paciente
   exames_snapshot: Exame[] | null
   balanco_snapshot: PeriodoBalanco[] | null
+  neuro_snapshot: AvaliacaoNeurologica | null
+  ventilatorio_snapshot: SuporteVentilatorio | null
   texto_resumo: string | null
   created_at: string
 }
@@ -152,6 +156,51 @@ export interface ATB {
   ativo: boolean
   created_at: string
   updated_at: string
+}
+
+export type EscalaNeuro = 'RASS' | 'GLASGOW'
+export type Sedativo = 'Propofol' | 'Midazolam' | 'Fentanil' | 'Dexmedetomidina' | 'Cetamina' | 'Outro'
+
+export interface AvaliacaoNeurologica {
+  id: string
+  paciente_id: string
+  escala: EscalaNeuro | null
+  rass: number | null              // -5 a +4
+  glasgow_ao: number | null        // 1-4
+  glasgow_rv: number | null        // 1-5
+  glasgow_rm: number | null        // 1-6
+  sedacao_em_uso: boolean
+  sedativos: Sedativo[] | null
+  sedativo_outro: string | null
+  despertar_diario: boolean | null
+  created_at: string
+  updated_at: string
+}
+
+export type ModalidadeVentilatoria = 'ar_ambiente' | 'o2_suplementar' | 'ventilacao_mecanica'
+export type DispositivoO2 = 'Cateter nasal' | 'Máscara facial' | 'Máscara com reservatório' | 'CNAF' | 'VNI' | 'Outro'
+export type ViaAereaVM = 'TOT' | 'TQT'
+
+export interface SuporteVentilatorio {
+  id: string
+  paciente_id: string
+  modalidade: ModalidadeVentilatoria | null
+  o2_dispositivo: DispositivoO2 | null
+  o2_fluxo_l_min: number | null
+  vm_data_inicio: string | null    // YYYY-MM-DD
+  vm_via: ViaAereaVM | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Intercorrencia {
+  id: string
+  paciente_id: string
+  horario: string           // ISO timestamp
+  descricao: string
+  conduta: string | null
+  autor_email: string
+  created_at: string
 }
 
 export interface CuidadosHorizontais {

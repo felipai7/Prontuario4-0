@@ -6,12 +6,8 @@ import PacienteModal  from '@/components/paciente/PacienteModal'
 import CadastroForm   from '@/components/paciente/CadastroForm'
 import ToastContainer, { useToast } from '@/components/ui/Toast'
 import { pad, fmtData, calcAge } from '@/lib/utils'
+import { ALAS } from '@/lib/config'
 import type { Paciente } from '@/types'
-
-const ALAS = [
-  { id: 'uti-01', nome: 'UTI 01', leitos: Array.from({length: 9},  (_, i) => i + 1)  },
-  { id: 'uti-02', nome: 'UTI 02', leitos: Array.from({length: 10}, (_, i) => i + 10) },
-]
 
 interface Props { initialPacientes: Paciente[]; userEmail: string }
 
