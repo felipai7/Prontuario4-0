@@ -59,22 +59,6 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
 
   useEffect(() => { loadShiftTypes(selectedUnitId) }, [selectedUnitId])
 
-  // ── Nova unidade ───────────────────────────────────────────────────────────
-  const [novaUnidadeNome, setNovaUnidadeNome] = useState('')
-  const [savingUnidade, setSavingUnidade] = useState(false)
-  const [unitsState, setUnitsState] = useState(units)
-
-  const handleCreateUnit = async () => {
-    if (!novaUnidadeNome.trim()) { showToast('Informe o nome da unidade', 'error'); return }
-    setSavingUnidade(true)
-    const { data, error } = await supabase.from('units').insert({ name: novaUnidadeNome.trim() }).select().single()
-    setSavingUnidade(false)
-    if (error) { showToast('Erro: ' + error.message, 'error'); return }
-    setUnitsState(prev => [...prev, data as Unit].sort((a, b) => a.name.localeCompare(b.name)))
-    setNovaUnidadeNome('')
-    showToast('Unidade criada!')
-  }
-
   // ── Novo membro da equipe ─────────────────────────────────────────────────
   const [novoEmail, setNovoEmail] = useState('')
   const [novoNome, setNovoNome] = useState('')
@@ -134,13 +118,13 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
 
-        {unitsState.length === 0 ? (
-          <p className="text-sm text-slate-400">Nenhuma unidade cadastrada ainda.</p>
+        {units.length === 0 ? (
+          <p className="text-sm text-slate-400">Nenhuma unidade cadastrada ainda. Peça para configurarem uma.</p>
         ) : (
           <div className="bg-white border border-slate-200 rounded-xl p-4">
             <label className={labelCls}>Unidade</label>
             <select value={selectedUnitId} onChange={e => setSelectedUnitId(e.target.value)} className={inputCls}>
-              {unitsState.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+              {units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
           </div>
         )}
@@ -150,20 +134,6 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
             Você ainda não é chefe de nenhuma unidade, então não pode administrar escalas por aqui.
             {myStaff.length === 0 && ' Peça para um chefe te adicionar à equipe de uma unidade.'}
           </div>
-        )}
-
-        {souChefeDeAlgumaUnidade && (
-          <section className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
-            <h3 className="font-semibold text-slate-700">🏥 Nova unidade</h3>
-            <div className="flex gap-2">
-              <input value={novaUnidadeNome} onChange={e => setNovaUnidadeNome(e.target.value)}
-                placeholder="Ex: UTI Pediátrica" className={inputCls} />
-              <button onClick={handleCreateUnit} disabled={savingUnidade}
-                className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-bold px-4 py-2 rounded-lg whitespace-nowrap">
-                {savingUnidade ? 'Criando...' : '+ Criar'}
-              </button>
-            </div>
-          </section>
         )}
 
         {selectedUnitId && (
@@ -233,7 +203,7 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
         )}
 
         {selectedUnitId && (
-          <ShiftTypesAdmin unitId={selectedUnitId} souChefe={souChefeDaSelecionada} showToast={showToast} />
+          <ShiftTypesAdmin unitId={selectedUnitId} showToast={showToast} />
         )}
 
         {selectedUnitId && (

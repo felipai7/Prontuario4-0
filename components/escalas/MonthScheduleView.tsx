@@ -33,6 +33,20 @@ function fmtDiaSemana(dataStr: string): string {
   return d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })
 }
 
+const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+
+/** Grade do mês em semanas de 7 dias, com null nas células vazias antes/depois do mês. */
+function celulasDoMes(ref: Date): (string | null)[] {
+  const ano = ref.getFullYear(), mes = ref.getMonth()
+  const primeiroDiaSemana = new Date(ano, mes, 1).getDay()
+  const totalDias = new Date(ano, mes + 1, 0).getDate()
+  const celulas: (string | null)[] = []
+  for (let i = 0; i < primeiroDiaSemana; i++) celulas.push(null)
+  for (let d = 1; d <= totalDias; d++) celulas.push(`${ano}-${String(mes + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`)
+  while (celulas.length % 7 !== 0) celulas.push(null)
+  return celulas
+}
+
 export default function MonthScheduleView({ unitId, staffList, shiftTypesList, souChefe, showToast }: Props) {
   const supabase = createClient()
   const [ref, setRef] = useState(() => { const d = new Date(); d.setDate(1); return d })
@@ -46,7 +60,13 @@ export default function MonthScheduleView({ unitId, staffList, shiftTypesList, s
   const [publicando, setPublicando] = useState(false)
 
   const staffMap = useMemo(() => Object.fromEntries(staffList.map(s => [s.id, s.full_name])), [staffList])
+  const staffAtivo = useMemo(() => staffList.filter(s => s.active), [staffList])
   const shiftTypeMap = useMemo(() => Object.fromEntries(shiftTypesList.map(t => [t.id, t.name])), [shiftTypesList])
+  const shiftsPorDia = useMemo(() => {
+    const m = new Map<string, Shift[]>()
+    for (const s of shifts) m.set(s.date, [...(m.get(s.date) ?? []), s])
+    return m
+  }, [shifts])
 
   const load = async () => {
     if (!unitId) return
@@ -86,6 +106,15 @@ export default function MonthScheduleView({ unitId, staffList, shiftTypesList, s
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
     showToast('Mês publicado!')
     setRevisando(false); setPreview([])
+    load()
+  }
+
+  const handleAssignStaff = async (shift: Shift, newStaffId: string) => {
+    if (!newStaffId || newStaffId === shift.staff_id) return
+    const novoStatus = newStaffId === shift.original_staff_id ? 'scheduled' : 'swapped'
+    const { error } = await supabase.from('shifts').update({ staff_id: newStaffId, status: novoStatus }).eq('id', shift.id)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    showToast('Plantão atualizado!')
     load()
   }
 
@@ -162,18 +191,33 @@ export default function MonthScheduleView({ unitId, staffList, shiftTypesList, s
       ) : shifts.length === 0 ? (
         <p className="text-sm text-slate-400">Nenhum plantão registrado para este mês nesta unidade.</p>
       ) : (
-        <ul className="space-y-1.5">
-          {shifts.map(s => (
-            <li key={s.id} className="flex items-center justify-between gap-2 border border-slate-200 rounded-lg px-3 py-2 text-sm">
-              <span className="text-slate-500 capitalize">{fmtDiaSemana(s.date)}</span>
-              <span className="text-slate-700">{s.shift_type_id ? shiftTypeMap[s.shift_type_id] ?? '?' : '?'}</span>
-              <span className="font-medium text-slate-800">{s.staff_id ? staffMap[s.staff_id] ?? '?' : '—'}</span>
-              {s.status !== 'scheduled' && (
-                <span className="text-xs text-amber-600 uppercase font-bold">{s.status === 'swapped' ? 'trocado' : 'cancelado'}</span>
-              )}
-            </li>
+        <div className="grid grid-cols-7 gap-1">
+          {DIAS_SEMANA.map(d => (
+            <div key={d} className="text-center text-xs font-bold text-slate-400 py-1">{d}</div>
           ))}
-        </ul>
+          {celulasDoMes(ref).map((dataStr, i) => {
+            if (!dataStr) return <div key={i} className="min-h-[4.5rem]" />
+            const doDia = shiftsPorDia.get(dataStr) ?? []
+            return (
+              <div key={dataStr} className="min-h-[4.5rem] border border-slate-200 rounded-lg p-1 space-y-1">
+                <p className="text-xs font-semibold text-slate-500">{parseInt(dataStr.slice(8), 10)}</p>
+                {doDia.map(s => (
+                  <div key={s.id} className={`text-[11px] rounded px-1 py-0.5 ${s.status === 'swapped' ? 'bg-amber-50' : 'bg-slate-50'}`}>
+                    <p className="text-slate-500 truncate">{s.shift_type_id ? shiftTypeMap[s.shift_type_id] ?? '?' : '?'}</p>
+                    {souChefe ? (
+                      <select value={s.staff_id ?? ''} onChange={e => handleAssignStaff(s, e.target.value)}
+                        className="w-full border border-slate-300 rounded px-0.5 py-0.5 text-[11px] bg-white">
+                        {staffAtivo.map(st => <option key={st.id} value={st.id}>{st.full_name}</option>)}
+                      </select>
+                    ) : (
+                      <p className="font-medium text-slate-800 truncate">{s.staff_id ? staffMap[s.staff_id] ?? '?' : '—'}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )
+          })}
+        </div>
       )}
     </section>
   )
