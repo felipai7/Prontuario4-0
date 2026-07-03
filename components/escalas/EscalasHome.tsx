@@ -120,7 +120,7 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-xl font-bold">📅 Escalas de Plantão</h1>
-            <p className="text-indigo-200 text-xs mt-0.5">Módulo em construção — Fase 2 (editor do mês padrão)</p>
+            <p className="text-indigo-200 text-xs mt-0.5">Módulo em construção — Fase 3 (publicação do mês)</p>
           </div>
           <div className="flex items-center gap-3 text-sm">
             <span className="text-indigo-200 hidden sm:block">{userEmail}</span>
@@ -223,7 +223,8 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
         )}
 
         {selectedUnitId && (
-          <MonthScheduleView unitId={selectedUnitId} staffList={staffList} shiftTypesList={shiftTypesList} showToast={showToast} />
+          <MonthScheduleView unitId={selectedUnitId} staffList={staffList} shiftTypesList={shiftTypesList}
+            souChefe={souChefeDaSelecionada} showToast={showToast} />
         )}
 
         {selectedUnitId && (
