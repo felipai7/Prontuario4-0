@@ -326,3 +326,14 @@ export interface ShiftPayment {
   payment_status: PaymentStatus
   paid_at: string | null
 }
+
+export interface ScheduleTemplateAudit {
+  id: string
+  unit_id: string
+  day_number: number
+  shift_type_id: string | null
+  old_staff_id: string | null
+  new_staff_id: string | null
+  changed_by: string | null
+  changed_at: string
+}

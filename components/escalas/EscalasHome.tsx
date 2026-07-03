@@ -6,6 +6,7 @@ import ToastContainer, { useToast } from '@/components/ui/Toast'
 import ShiftTypesAdmin from './ShiftTypesAdmin'
 import PaySettingsAdmin from './PaySettingsAdmin'
 import MonthScheduleView from './MonthScheduleView'
+import TemplateEditor from './TemplateEditor'
 import type { Unit, Staff, StaffRole, ShiftType } from '@/types'
 
 interface Props {
@@ -119,7 +120,7 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-xl font-bold">📅 Escalas de Plantão</h1>
-            <p className="text-indigo-200 text-xs mt-0.5">Módulo em construção — Fase 1 (fundação)</p>
+            <p className="text-indigo-200 text-xs mt-0.5">Módulo em construção — Fase 2 (editor do mês padrão)</p>
           </div>
           <div className="flex items-center gap-3 text-sm">
             <span className="text-indigo-200 hidden sm:block">{userEmail}</span>
@@ -223,6 +224,11 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
 
         {selectedUnitId && (
           <MonthScheduleView unitId={selectedUnitId} staffList={staffList} shiftTypesList={shiftTypesList} showToast={showToast} />
+        )}
+
+        {selectedUnitId && (
+          <TemplateEditor unitId={selectedUnitId} staffList={staffList} shiftTypesList={shiftTypesList}
+            souChefe={souChefeDaSelecionada} showToast={showToast} />
         )}
 
         {selectedUnitId && (
