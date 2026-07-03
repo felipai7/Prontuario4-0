@@ -52,7 +52,7 @@ export default function PaySettingsAdmin({ unitId, souChefe, showToast }: Props)
 
   return (
     <section className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
-      <h3 className="font-semibold text-slate-700">💰 Valor da diária</h3>
+      <h3 className="font-semibold text-slate-700">💰 Valor do plantão</h3>
       {loading ? (
         <p className="text-sm text-slate-400">Carregando...</p>
       ) : (

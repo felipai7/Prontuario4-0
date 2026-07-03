@@ -109,7 +109,6 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-xl font-bold">📅 Escalas de Plantão</h1>
-            <p className="text-indigo-200 text-xs mt-0.5">Módulo em construção — Fase 6 (financeiro)</p>
           </div>
           <div className="flex items-center gap-3 text-sm">
             <span className="text-indigo-200 hidden sm:block">{userEmail}</span>
@@ -155,7 +154,7 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
                   <li key={s.id} className="flex items-center justify-between gap-2 border border-slate-200 rounded-lg p-3">
                     <div className="min-w-0">
                       <p className={`text-sm font-medium ${s.active ? 'text-slate-800' : 'text-slate-400 line-through'}`}>{s.full_name}</p>
-                      <p className="text-xs text-slate-400">{s.role === 'chefe' ? '👑 Médico Intensivista (chefe)' : '🩺 Médico Plantonista'}</p>
+                      <p className="text-xs text-slate-400">{s.role === 'chefe' ? '🎖️ Médico Intensivista (chefe)' : '🩺 Médico Plantonista'}</p>
                     </div>
                     {souChefeDaSelecionada && (
                       <div className="flex items-center gap-2 flex-shrink-0">
