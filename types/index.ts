@@ -327,6 +327,20 @@ export interface ShiftPayment {
   paid_at: string | null
 }
 
+export type SwapStatus = 'pending' | 'accepted' | 'rejected' | 'cancelled'
+
+export interface SwapRequest {
+  id: string
+  unit_id: string
+  shift_id: string
+  requester_id: string
+  target_staff_id: string
+  status: SwapStatus
+  reason: string | null
+  created_at: string
+  resolved_at: string | null
+}
+
 export interface ScheduleTemplateAudit {
   id: string
   unit_id: string
