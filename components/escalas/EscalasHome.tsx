@@ -8,6 +8,9 @@ import PaySettingsAdmin from './PaySettingsAdmin'
 import MonthScheduleView from './MonthScheduleView'
 import TemplateEditor from './TemplateEditor'
 import SwapRequests from './SwapRequests'
+import FinanceiroPlantonista from './FinanceiroPlantonista'
+import FinanceiroChefe from './FinanceiroChefe'
+import ComparativoView from './ComparativoView'
 import type { Unit, Staff, StaffRole, ShiftType } from '@/types'
 
 interface Props {
@@ -106,7 +109,7 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-xl font-bold">📅 Escalas de Plantão</h1>
-            <p className="text-indigo-200 text-xs mt-0.5">Módulo em construção — Fase 5 (trocas de plantão)</p>
+            <p className="text-indigo-200 text-xs mt-0.5">Módulo em construção — Fase 6 (financeiro)</p>
           </div>
           <div className="flex items-center gap-3 text-sm">
             <span className="text-indigo-200 hidden sm:block">{userEmail}</span>
@@ -207,6 +210,18 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
         {selectedUnitId && (
           <SwapRequests unitId={selectedUnitId} staffList={staffList} shiftTypesList={shiftTypesList}
             meuStaffId={meuStaffId} souChefe={souChefeDaSelecionada} showToast={showToast} />
+        )}
+
+        {selectedUnitId && (
+          <ComparativoView unitId={selectedUnitId} staffList={staffList} shiftTypesList={shiftTypesList} showToast={showToast} />
+        )}
+
+        {selectedUnitId && (
+          <FinanceiroPlantonista unitId={selectedUnitId} meuStaffId={meuStaffId} shiftTypesList={shiftTypesList} showToast={showToast} />
+        )}
+
+        {selectedUnitId && souChefeDaSelecionada && (
+          <FinanceiroChefe unitId={selectedUnitId} staffList={staffList} shiftTypesList={shiftTypesList} showToast={showToast} />
         )}
 
         {selectedUnitId && (
