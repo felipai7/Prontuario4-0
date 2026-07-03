@@ -58,6 +58,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
   const [intercorrencias, setIntercorrencias] = useState<Intercorrencia[]>([])
   const [pendencias,    setPendencias]    = useState<PendenciaIntensivista[]>([])
   const [registrosIntensivista, setRegistrosIntensivista] = useState<RegistroIntensivista[]>([])
+  const [souMedicoIntensivista, setSouMedicoIntensivista] = useState(false)
   const [loading,       setLoading]       = useState(true)
   const [showAlta,      setShowAlta]      = useState(false)
   const [pac,           setPac]           = useState<Paciente>(paciente)
@@ -160,6 +161,18 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     ])
     setLoading(false)
   }
+
+  // Cargo do usuário na escala (módulo Escalas) decide quem pode editar a
+  // aba do Médico Intensivista: cargo "chefe" em qualquer unidade edita
+  // tudo; sem cadastro em nenhuma unidade cai no comportamento padrão
+  // (só edita a aba do Médico Plantonista).
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (!data.user) return
+      supabase.from('staff').select('id').eq('user_id', data.user.id).eq('role', 'chefe').eq('active', true).limit(1)
+        .then(({ data: rows }) => setSouMedicoIntensivista((rows?.length ?? 0) > 0))
+    })
+  }, [])
 
   useEffect(() => {
     loadData()
@@ -312,6 +325,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     paciente: pac,
     exames, periodos, sinais, examesImagem, dvas, periodosHemo, atbs, cuidados,
     neuroHistorico, ventHistorico, intercorrencias, pendencias, registrosIntensivista,
+    souMedicoIntensivista,
     onRefresh: loadData,
     showToast,
   }

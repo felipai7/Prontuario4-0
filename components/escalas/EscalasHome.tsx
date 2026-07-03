@@ -62,7 +62,7 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
   // ── Novo membro da equipe ─────────────────────────────────────────────────
   const [novoEmail, setNovoEmail] = useState('')
   const [novoNome, setNovoNome] = useState('')
-  const [novoRole, setNovoRole] = useState<StaffRole>('intensivista')
+  const [novoRole, setNovoRole] = useState<StaffRole>('plantonista')
   const [savingStaff, setSavingStaff] = useState(false)
 
   const handleAddStaff = async () => {
@@ -78,7 +78,7 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
     setSavingStaff(false)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
     showToast('Membro adicionado!')
-    setNovoEmail(''); setNovoNome(''); setNovoRole('intensivista')
+    setNovoEmail(''); setNovoNome(''); setNovoRole('plantonista')
     loadStaff(selectedUnitId)
   }
 
@@ -150,7 +150,7 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
                   <li key={s.id} className="flex items-center justify-between gap-2 border border-slate-200 rounded-lg p-3">
                     <div className="min-w-0">
                       <p className={`text-sm font-medium ${s.active ? 'text-slate-800' : 'text-slate-400 line-through'}`}>{s.full_name}</p>
-                      <p className="text-xs text-slate-400">{s.role === 'chefe' ? '👑 Chefe' : '🩺 Intensivista'}</p>
+                      <p className="text-xs text-slate-400">{s.role === 'chefe' ? '👑 Médico Intensivista (chefe)' : '🩺 Médico Plantonista'}</p>
                     </div>
                     {souChefeDaSelecionada && (
                       <div className="flex items-center gap-2 flex-shrink-0">
@@ -177,8 +177,8 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
                   <input value={novoNome} onChange={e => setNovoNome(e.target.value)}
                     placeholder="Nome completo" className={inputCls} />
                   <select value={novoRole} onChange={e => setNovoRole(e.target.value as StaffRole)} className={inputCls}>
-                    <option value="intensivista">Intensivista</option>
-                    <option value="chefe">Chefe</option>
+                    <option value="plantonista">Médico Plantonista</option>
+                    <option value="chefe">Médico Intensivista (chefe)</option>
                   </select>
                 </div>
                 <div className="flex justify-end">

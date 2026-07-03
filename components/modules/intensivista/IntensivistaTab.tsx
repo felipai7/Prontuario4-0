@@ -12,6 +12,8 @@ interface Props {
   cuidados: CuidadosHorizontais | null
   pendencias: PendenciaIntensivista[]
   registrosIntensivista: RegistroIntensivista[]
+  /** Só o Médico Intensivista (chefe da escala) edita esta aba; demais cargos veem em modo leitura. */
+  podeEditar: boolean
   onRefresh: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
 }
@@ -35,7 +37,7 @@ function noArrowInput(e: React.KeyboardEvent<HTMLInputElement>) {
 const inputCls = 'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400'
 const labelCls = 'text-xs text-slate-500 font-medium block mb-1'
 
-export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, registrosIntensivista, onRefresh, showToast }: Props) {
+export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, registrosIntensivista, podeEditar, onRefresh, showToast }: Props) {
   const supabase = createClient()
 
   // ── ATB form ─────────────────────────────────────────────────────────────
@@ -234,8 +236,8 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
       {/* Previsão de alta */}
       <section className="border border-slate-200 rounded-xl p-4">
         <h3 className="font-semibold text-slate-700 mb-3">📅 Previsão de Alta</h3>
-        <input type="date" value={previsaoAlta} onChange={e => setPrevisaoAlta(e.target.value)}
-          className={`${inputCls} max-w-xs`} />
+        <input type="date" value={previsaoAlta} onChange={e => setPrevisaoAlta(e.target.value)} disabled={!podeEditar}
+          className={`${inputCls} max-w-xs disabled:opacity-60 disabled:cursor-not-allowed`} />
       </section>
 
       {/* ATBs */}
@@ -248,10 +250,12 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
                 {historyOpen ? '▲' : '▼'} Histórico ({historicoATB.length})
               </button>
             )}
-            <button onClick={() => setAtbFormOpen(o => !o)}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
-              {atbFormOpen ? '✕ Cancelar' : '+ Novo ATB'}
-            </button>
+            {podeEditar && (
+              <button onClick={() => setAtbFormOpen(o => !o)}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
+                {atbFormOpen ? '✕ Cancelar' : '+ Novo ATB'}
+              </button>
+            )}
           </div>
         </div>
 
@@ -277,10 +281,12 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
                   {atb.foco && ` · foco: ${atb.foco}`}
                 </p>
               </div>
-              <button onClick={() => handleEncerrarATB(atb.id)} disabled={atbRemoving === atb.id}
-                className="text-xs text-red-400 hover:text-red-700 border border-red-100 hover:border-red-300 px-2 py-1.5 rounded-lg transition-colors flex-shrink-0">
-                {atbRemoving === atb.id ? '⏳' : '⏹ Encerrar'}
-              </button>
+              {podeEditar && (
+                <button onClick={() => handleEncerrarATB(atb.id)} disabled={atbRemoving === atb.id}
+                  className="text-xs text-red-400 hover:text-red-700 border border-red-100 hover:border-red-300 px-2 py-1.5 rounded-lg transition-colors flex-shrink-0">
+                  {atbRemoving === atb.id ? '⏳' : '⏹ Encerrar'}
+                </button>
+              )}
             </div>
           )
         })}
@@ -345,13 +351,13 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
       {/* IBP */}
       <section className="border border-slate-200 rounded-xl p-4 space-y-3">
         <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked={ibpEmUso} onChange={e => setIbpEmUso(e.target.checked)}
-            className="w-4 h-4 accent-indigo-600" />
+          <input type="checkbox" checked={ibpEmUso} onChange={e => setIbpEmUso(e.target.checked)} disabled={!podeEditar}
+            className="w-4 h-4 accent-indigo-600 disabled:cursor-not-allowed" />
           <span className="font-semibold text-slate-700">💊 Em uso de IBP</span>
         </label>
 
         {ibpEmUso && (
-          <div className="grid grid-cols-3 gap-3 pl-6">
+          <fieldset disabled={!podeEditar} className="grid grid-cols-3 gap-3 pl-6 disabled:opacity-60">
             <div>
               <label className={labelCls}>Via</label>
               <select value={ibpVia} onChange={e => setIbpVia(e.target.value as ViaIBP)} className={inputCls}>
@@ -378,20 +384,20 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
                 <option value="terapeutico">Terapêutico</option>
               </select>
             </div>
-          </div>
+          </fieldset>
         )}
       </section>
 
       {/* Anticoagulante */}
       <section className="border border-slate-200 rounded-xl p-4 space-y-3">
         <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked={anticoagEmUso} onChange={e => setAnticoagEmUso(e.target.checked)}
-            className="w-4 h-4 accent-indigo-600" />
+          <input type="checkbox" checked={anticoagEmUso} onChange={e => setAnticoagEmUso(e.target.checked)} disabled={!podeEditar}
+            className="w-4 h-4 accent-indigo-600 disabled:cursor-not-allowed" />
           <span className="font-semibold text-slate-700">🩸 Em uso de Anticoagulante</span>
         </label>
 
         {anticoagEmUso && (
-          <div className="pl-6 space-y-3">
+          <fieldset disabled={!podeEditar} className="pl-6 space-y-3 disabled:opacity-60">
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className={labelCls}>Droga</label>
@@ -433,14 +439,16 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
                 </select>
               </div>
             </div>
-          </div>
+          </fieldset>
         )}
       </section>
 
-      <button onClick={handleSaveCuidados} disabled={savingCuidados}
-        className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-colors">
-        {savingCuidados ? 'Salvando...' : '💾 Salvar Previsão de Alta / IBP / Anticoagulante'}
-      </button>
+      {podeEditar && (
+        <button onClick={handleSaveCuidados} disabled={savingCuidados}
+          className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-colors">
+          {savingCuidados ? 'Salvando...' : '💾 Salvar Previsão de Alta / IBP / Anticoagulante'}
+        </button>
+      )}
 
       {/* Pendências (checklist) */}
       <section className="border border-slate-200 rounded-xl p-4 space-y-3">
@@ -453,27 +461,31 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
         <div className="space-y-1.5">
           {pendenciasOrdenadas.map(p => (
             <div key={p.id} className={`flex items-center gap-2 rounded-lg px-3 py-2 border ${p.resolvida ? 'bg-slate-50 border-slate-200' : 'bg-amber-50 border-amber-200'}`}>
-              <input type="checkbox" checked={p.resolvida} onChange={() => handleTogglePendencia(p)}
-                className="w-4 h-4 accent-emerald-600 flex-shrink-0" />
+              <input type="checkbox" checked={p.resolvida} onChange={() => handleTogglePendencia(p)} disabled={!podeEditar}
+                className="w-4 h-4 accent-emerald-600 flex-shrink-0 disabled:cursor-not-allowed" />
               <span className={`text-sm flex-1 ${p.resolvida ? 'line-through text-slate-400' : 'text-amber-900'}`}>{p.texto}</span>
-              <button onClick={() => handleDeletePendencia(p.id)} title="Excluir"
-                className="text-slate-300 hover:text-red-500 flex-shrink-0 text-sm transition-colors">
-                🗑️
-              </button>
+              {podeEditar && (
+                <button onClick={() => handleDeletePendencia(p.id)} title="Excluir"
+                  className="text-slate-300 hover:text-red-500 flex-shrink-0 text-sm transition-colors">
+                  🗑️
+                </button>
+              )}
             </div>
           ))}
         </div>
 
-        <div className="flex gap-2">
-          <input value={novaPendencia} onChange={e => setNovaPendencia(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleAddPendencia() }}
-            placeholder="Ex: Solicitar TC de tórax, aguardar hemocultura..."
-            className={inputCls} />
-          <button onClick={handleAddPendencia} disabled={addingPendencia || !novaPendencia.trim()}
-            className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors flex-shrink-0">
-            + Adicionar
-          </button>
-        </div>
+        {podeEditar && (
+          <div className="flex gap-2">
+            <input value={novaPendencia} onChange={e => setNovaPendencia(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleAddPendencia() }}
+              placeholder="Ex: Solicitar TC de tórax, aguardar hemocultura..."
+              className={inputCls} />
+            <button onClick={handleAddPendencia} disabled={addingPendencia || !novaPendencia.trim()}
+              className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors flex-shrink-0">
+              + Adicionar
+            </button>
+          </div>
+        )}
       </section>
 
       {/* Orientações e Condutas (histórico por data) */}
@@ -486,7 +498,7 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
                 {orientHistoryOpen ? '▲' : '▼'} Histórico ({sortedRegistros.length - 1})
               </button>
             )}
-            {orientFormMode === null ? (
+            {podeEditar && (orientFormMode === null ? (
               <button onClick={openOrientAdd}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
                 + Novo Registro
@@ -496,7 +508,7 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
                 className="text-slate-500 hover:text-slate-700 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
                 ✕ Cancelar
               </button>
-            )}
+            ))}
           </div>
         </div>
 
@@ -504,10 +516,12 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
           <div className="border border-indigo-200 bg-indigo-50 rounded-xl p-3">
             <div className="flex items-center justify-between mb-1">
               <p className="text-xs font-bold text-indigo-700">{fmtData(ultimoRegistro.data)} (mais recente)</p>
-              <button onClick={() => startOrientEdit(ultimoRegistro)}
-                className="text-xs text-indigo-500 hover:text-indigo-700 border border-indigo-200 hover:border-indigo-400 px-2.5 py-1 rounded-lg transition-colors">
-                ✏️ Editar
-              </button>
+              {podeEditar && (
+                <button onClick={() => startOrientEdit(ultimoRegistro)}
+                  className="text-xs text-indigo-500 hover:text-indigo-700 border border-indigo-200 hover:border-indigo-400 px-2.5 py-1 rounded-lg transition-colors">
+                  ✏️ Editar
+                </button>
+              )}
             </div>
             <p className="text-sm text-indigo-900 whitespace-pre-wrap">{ultimoRegistro.orientacoes_condutas}</p>
           </div>
@@ -550,10 +564,12 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
               <div key={r.id} className="border border-slate-200 rounded-lg p-3 bg-slate-50">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-bold text-slate-600">{fmtData(r.data)}</span>
-                  <button onClick={() => startOrientEdit(r)}
-                    className="text-xs text-indigo-400 hover:text-indigo-700 border border-indigo-100 hover:border-indigo-300 px-2 py-1 rounded-lg transition-colors">
-                    ✏️ Editar
-                  </button>
+                  {podeEditar && (
+                    <button onClick={() => startOrientEdit(r)}
+                      className="text-xs text-indigo-400 hover:text-indigo-700 border border-indigo-100 hover:border-indigo-300 px-2 py-1 rounded-lg transition-colors">
+                      ✏️ Editar
+                    </button>
+                  )}
                 </div>
                 <p className="text-xs text-slate-600 whitespace-pre-wrap">{r.orientacoes_condutas}</p>
               </div>

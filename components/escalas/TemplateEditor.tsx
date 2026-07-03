@@ -12,6 +12,7 @@ interface Props {
 }
 
 const DIAS = Array.from({ length: 35 }, (_, i) => i + 1)
+const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 const selectCls = 'w-full border border-slate-300 rounded-md px-1.5 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400'
 
 export default function TemplateEditor({ unitId, staffList, shiftTypesList, souChefe, showToast }: Props) {
@@ -109,53 +110,45 @@ export default function TemplateEditor({ unitId, staffList, shiftTypesList, souC
       {loading ? (
         <p className="text-sm text-slate-400">Carregando...</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs border-collapse">
-            <thead>
-              <tr>
-                <th className="border border-slate-200 px-2 py-1 bg-slate-50 sticky left-0">Dia</th>
-                {tiposAtivos.map(t => (
-                  <th key={t.id} className="border border-slate-200 px-2 py-1 bg-slate-50" colSpan={2}>{t.name}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {DIAS.map(dia => (
-                <tr key={dia}>
-                  <td className="border border-slate-200 px-2 py-1 text-center font-medium bg-slate-50 sticky left-0">{dia}</td>
-                  {tiposAtivos.map(t => {
-                    const slots = getSlots(dia, t.id)
-                    const slot1 = slots[0]
-                    const slot2 = slots[1]
-                    const completo = slots.length >= 2
-                    const bg = slots.length === 0 ? 'bg-red-50' : completo ? 'bg-emerald-50' : 'bg-amber-50'
-                    return (
-                      <td key={t.id} colSpan={2} className={`border border-slate-200 px-1 py-1 ${bg}`}>
-                        {souChefe ? (
-                          <div className="flex gap-1">
-                            <select value={slot1?.staff_id ?? ''} disabled={!souChefe}
-                              onChange={e => handleSlotChange(dia, t.id, slot1, e.target.value)} className={selectCls}>
-                              <option value="">—</option>
-                              {staffAtivo.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
-                            </select>
-                            <select value={slot2?.staff_id ?? ''} disabled={!souChefe}
-                              onChange={e => handleSlotChange(dia, t.id, slot2, e.target.value)} className={selectCls}>
-                              <option value="">—</option>
-                              {staffAtivo.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
-                            </select>
-                          </div>
-                        ) : (
-                          <p className="px-1 text-slate-700">
-                            {slots.length === 0 ? '—' : slots.map(s => staffMap[s.staff_id] ?? '?').join(' / ')}
-                          </p>
-                        )}
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="grid grid-cols-7 gap-1">
+          {DIAS_SEMANA.map(d => (
+            <div key={d} className="text-center text-xs font-bold text-slate-400 py-1">{d}</div>
+          ))}
+          {DIAS.map(dia => (
+            <div key={dia} className="border border-slate-200 rounded-lg p-1 space-y-1">
+              <p className="text-xs font-semibold text-slate-500">{dia}</p>
+              {tiposAtivos.map(t => {
+                const slots = getSlots(dia, t.id)
+                const slot1 = slots[0]
+                const slot2 = slots[1]
+                const completo = slots.length >= 2
+                const bg = slots.length === 0 ? 'bg-red-50' : completo ? 'bg-emerald-50' : 'bg-amber-50'
+                return (
+                  <div key={t.id} className={`rounded px-1 py-0.5 ${bg}`}>
+                    <p className="text-[11px] text-slate-500 truncate">{t.name}</p>
+                    {souChefe ? (
+                      <div className="space-y-0.5">
+                        <select value={slot1?.staff_id ?? ''}
+                          onChange={e => handleSlotChange(dia, t.id, slot1, e.target.value)} className={selectCls}>
+                          <option value="">—</option>
+                          {staffAtivo.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+                        </select>
+                        <select value={slot2?.staff_id ?? ''}
+                          onChange={e => handleSlotChange(dia, t.id, slot2, e.target.value)} className={selectCls}>
+                          <option value="">—</option>
+                          {staffAtivo.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+                        </select>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] font-medium text-slate-800 truncate">
+                        {slots.length === 0 ? '—' : slots.map(s => staffMap[s.staff_id] ?? '?').join(' / ')}
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          ))}
         </div>
       )}
 

@@ -37,6 +37,8 @@ export interface PacienteContext {
   intercorrencias: Intercorrencia[]
   pendencias: PendenciaIntensivista[]
   registrosIntensivista: RegistroIntensivista[]
+  /** Cargo (escalas.staff) do usuário logado em qualquer unidade: chefe = Médico Intensivista, com direito de editar tudo. */
+  souMedicoIntensivista: boolean
   onRefresh: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
 }
@@ -113,6 +115,7 @@ const cuidadosHorizontais: TabDef = {
   label: '📋 Cuidados Horizontais',
   render: ctx => <IntensivistaTab paciente={ctx.paciente} atbs={ctx.atbs} cuidados={ctx.cuidados}
     pendencias={ctx.pendencias} registrosIntensivista={ctx.registrosIntensivista}
+    podeEditar={ctx.souMedicoIntensivista}
     onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
 }
 

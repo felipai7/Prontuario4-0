@@ -250,7 +250,7 @@ export interface RegistroIntensivista {
 
 // ── Módulo de Escalas ────────────────────────────────────────────────────────
 
-export type StaffRole = 'intensivista' | 'chefe'
+export type StaffRole = 'plantonista' | 'chefe'
 
 export interface Unit {
   id: string
