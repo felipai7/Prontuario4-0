@@ -62,10 +62,6 @@ export default function LoginForm() {
       >
         {loading ? 'Entrando...' : 'Entrar'}
       </button>
-
-      <p className="text-center text-xs text-slate-400 mt-4">
-        Acesso restrito à equipe médica da UTI
-      </p>
     </form>
   )
 }

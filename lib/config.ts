@@ -15,3 +15,23 @@ export const ALAS_MAP: Record<AlaId, string> =
   Object.fromEntries(ALAS.map(a => [a.id, a.nome])) as Record<AlaId, string>
 
 export const PLANOS = ['IPASGO', 'Unimed', 'Particular', 'Bradesco', 'Outros']
+
+// Listas de sugestão para os campos de droga/foco de ATB (Combobox) — o
+// campo aceita digitação livre, então estas listas são só atalhos, não um enum.
+export const ATBS_SUGERIDOS = [
+  'Amicacina', 'Amoxicilina + Clavulanato', 'Ampicilina', 'Ampicilina + Sulbactam',
+  'Anfotericina B', 'Azitromicina', 'Aztreonam', 'Caspofungina', 'Cefalexina',
+  'Cefazolina', 'Cefepime', 'Ceftazidima', 'Ceftazidima + Avibactam', 'Ceftriaxona',
+  'Ceftolozano + Tazobactam', 'Ciprofloxacino', 'Claritromicina', 'Clindamicina',
+  'Colistina', 'Daptomicina', 'Doxiciclina', 'Ertapenem', 'Fluconazol',
+  'Gentamicina', 'Levofloxacino', 'Linezolida', 'Meropenem', 'Meropenem + Vaborbactam',
+  'Metronidazol', 'Micafungina', 'Oxacilina', 'Piperacilina + Tazobactam',
+  'Polimixina B', 'Sulfametoxazol + Trimetoprima', 'Teicoplanina', 'Tigeciclina',
+  'Vancomicina', 'Voriconazol',
+]
+
+export const FOCOS_INFECCIOSOS = [
+  'Urinário', 'Pulmonar', 'Abdominal', 'Cutâneo', 'Pele e Partes Moles',
+  'Sistema Nervoso Central', 'Otológico', 'Seios da Face', 'Ósseo', 'Articular',
+  'Cirúrgico', 'Corrente Sanguínea / Cateter', 'Endocárdico', 'Ginecológico/Pélvico',
+]

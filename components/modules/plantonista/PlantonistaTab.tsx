@@ -1,8 +1,9 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { calcBalanco, calcAcumuladoMovel } from '@/lib/utils'
-import type { Paciente, SinalVital, DVA, PeriodoBalanco, ATB, CuidadosHorizontais, Intercorrencia, ToastData } from '@/types'
+import { calcBalanco, calcAcumuladoMovel, diaAtualATB, fmtNum } from '@/lib/utils'
+import { fmtData } from '@/lib/utils'
+import type { Paciente, SinalVital, DVA, PeriodoBalanco, ATB, CuidadosHorizontais, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, ToastData } from '@/types'
 
 interface Props {
   paciente: Paciente
@@ -11,6 +12,10 @@ interface Props {
   periodos: PeriodoBalanco[]
   atbs: ATB[]
   cuidados: CuidadosHorizontais | null
+  intercorrencias: Intercorrencia[]
+  pendencias: PendenciaIntensivista[]
+  registrosIntensivista: RegistroIntensivista[]
+  onRefresh: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
 }
 
@@ -21,12 +26,6 @@ function fmtHora(iso: string): string {
   return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
-function diasEmUso(dataInicio: string): number {
-  const inicio = new Date(dataInicio + 'T00:00:00')
-  const hoje   = new Date(); hoje.setHours(0, 0, 0, 0)
-  return Math.floor((hoje.getTime() - inicio.getTime()) / (24 * 3600 * 1000))
-}
-
 /** Valor default para <input type="datetime-local">: agora, no fuso local. */
 function agoraLocal(): string {
   const d = new Date()
@@ -34,31 +33,15 @@ function agoraLocal(): string {
   return d.toISOString().slice(0, 16)
 }
 
-export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs, cuidados, showToast }: Props) {
+export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs, cuidados, intercorrencias, pendencias, registrosIntensivista, onRefresh, showToast }: Props) {
   const supabase = createClient()
 
-  // ── Intercorrências: o módulo carrega e assina seus próprios dados ────────
-  const [intercorrencias, setIntercorrencias] = useState<Intercorrencia[]>([])
-  const [loadingInt,      setLoadingInt]      = useState(true)
-  const [autorEmail,      setAutorEmail]      = useState('')
-
-  const loadIntercorrencias = useCallback(async () => {
-    const { data, error } = await supabase.from('intercorrencias')
-      .select('*').eq('paciente_id', paciente.id).order('horario', { ascending: false })
-    if (error) { showToast('Erro ao carregar intercorrências: ' + error.message, 'error') }
-    else setIntercorrencias(data as Intercorrencia[])
-    setLoadingInt(false)
-  }, [paciente.id])
-
+  // Intercorrências são carregadas e assinadas pela casca (PacienteModal) — este
+  // módulo só precisa do e-mail do autor logado para registrar novas entradas.
+  const [autorEmail, setAutorEmail] = useState('')
   useEffect(() => {
-    loadIntercorrencias()
     supabase.auth.getUser().then(({ data }) => setAutorEmail(data.user?.email ?? ''))
-    const channel = supabase
-      .channel(`intercorrencias-${paciente.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'intercorrencias', filter: `paciente_id=eq.${paciente.id}` }, () => loadIntercorrencias())
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [paciente.id])
+  }, [])
 
   // ── Form de nova intercorrência ────────────────────────────────────────────
   const [formOpen,  setFormOpen]  = useState(false)
@@ -82,7 +65,7 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs,
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
     showToast('Intercorrência registrada!')
     setFormOpen(false); setDescricao(''); setConduta(''); setHorario(agoraLocal())
-    loadIntercorrencias()
+    onRefresh()
   }
 
   const handleDelete = async (id: string) => {
@@ -90,7 +73,7 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs,
     const { error } = await supabase.from('intercorrencias').delete().eq('id', id)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
     showToast('Registro excluído')
-    loadIntercorrencias()
+    onRefresh()
   }
 
   // ── Dados do painel-resumo (derivados do que a casca já carregou) ─────────
@@ -102,6 +85,9 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs,
     : null
   const bhUltimo = ultimoPeriodo ? calcBalanco(ultimoPeriodo) : null
   const bhMovel  = calcAcumuladoMovel(periodos)
+  const ultimoRegistroIntensivista = registrosIntensivista.length
+    ? [...registrosIntensivista].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())[0]
+    : null
 
   return (
     <div className="space-y-6">
@@ -137,7 +123,7 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs,
             {ultimoPeriodo && bhUltimo ? (
               <p className="text-sm text-slate-700">
                 Último turno: {bhUltimo.parcial > 0 ? '+' : ''}{bhUltimo.parcial.toFixed(0)} mL
-                (diurese {ultimoPeriodo.diurese} mL{ultimoPeriodo.horas_periodo > 0 && <> → {(ultimoPeriodo.diurese / ultimoPeriodo.horas_periodo).toFixed(1)} mL/h</>})
+                (diurese {ultimoPeriodo.diurese} mL{ultimoPeriodo.horas_periodo > 0 && <> → {fmtNum(ultimoPeriodo.diurese / ultimoPeriodo.horas_periodo, 1)} mL/h</>})
                 · Acum. móvel: {bhMovel > 0 ? '+' : ''}{bhMovel.toFixed(0)} mL
               </p>
             ) : <p className="text-sm text-slate-400">Sem balanço registrado.</p>}
@@ -147,15 +133,26 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs,
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">💊 Antibioticoterapia</p>
             {atbsAtivos.length ? (
               <p className="text-sm text-slate-700">
-                {atbsAtivos.map(a => `${a.droga} (D${diasEmUso(a.data_inicio)}${a.dias_previstos != null ? `/${a.dias_previstos}` : ''})`).join(' · ')}
+                {atbsAtivos.map(a => `${a.droga} (D${diaAtualATB(a)}${a.dias_previstos != null ? `/${a.dias_previstos}` : ''})`).join(' · ')}
               </p>
             ) : <p className="text-sm text-slate-400">Sem ATB em curso.</p>}
           </div>
 
-          {cuidados?.pendencias && (
+          {pendencias.some(p => !p.resolvida) && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 md:col-span-2">
-              <p className="text-xs font-bold text-amber-700 uppercase tracking-wide mb-1">📝 Pendências e programações</p>
-              <p className="text-sm text-amber-900 whitespace-pre-wrap">{cuidados.pendencias}</p>
+              <p className="text-xs font-bold text-amber-700 uppercase tracking-wide mb-1">📝 Pendências em aberto</p>
+              <ul className="text-sm text-amber-900 space-y-0.5">
+                {pendencias.filter(p => !p.resolvida).map(p => <li key={p.id}>• {p.texto}</li>)}
+              </ul>
+            </div>
+          )}
+
+          {ultimoRegistroIntensivista && (
+            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 md:col-span-2">
+              <p className="text-xs font-bold text-indigo-700 uppercase tracking-wide mb-1">
+                🗒️ Orientações e Condutas (Médico Intensivista) — {fmtData(ultimoRegistroIntensivista.data)}
+              </p>
+              <p className="text-sm text-indigo-900 whitespace-pre-wrap">{ultimoRegistroIntensivista.orientacoes_condutas}</p>
             </div>
           )}
         </div>
@@ -198,11 +195,7 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs,
           </div>
         )}
 
-        {loadingInt ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="w-6 h-6 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : intercorrencias.length === 0 ? (
+        {intercorrencias.length === 0 ? (
           <p className="text-sm text-slate-400 py-4 text-center">Nenhuma intercorrência registrada para este paciente.</p>
         ) : (
           <ul className="space-y-2">

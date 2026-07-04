@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import {
   calcAguaEndogena, calcPerdasInsensiveis, calcBalanco,
   calcAcumuladoTotal, calcAcumuladoMovel, calcFirstPeriod, calcNextPeriod,
-  fmtTurno, colorParcial
+  fmtTurno, colorParcial, getTurno, fmtNum, boundaryStart, fmtDataHora
 } from '@/lib/utils'
 import type { Paciente, PeriodoBalanco, ToastData } from '@/types'
 
@@ -50,6 +50,16 @@ const ROWS: RowDef[] = [
 
 // Separator between gains block and losses block
 const SEPARATOR_AFTER = 'agua_endogena'
+
+function todayStr() { return new Date().toISOString().split('T')[0] }
+
+/** Turno padrão de 12h a partir de uma data + turno escolhidos livremente. Reaproveita o
+ * mesmo limite de turno (07:00/19:00) usado em calcNextPeriod/getNextBoundary. */
+function calcPeriodoEscolhido(dateStr: string, turno: 'diurno' | 'noturno'): { inicio: Date; fim: Date; horas: number; turno: 'diurno' | 'noturno' } {
+  const inicio = boundaryStart(dateStr, turno)
+  const fim = new Date(inicio.getTime() + 12 * 3_600_000)
+  return { inicio, fim, horas: 12, turno }
+}
 
 function getVal(key: string, p: PeriodoBalanco, acum: number): number {
   switch (key) {
@@ -103,6 +113,8 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
   const [editingPeriodo, setEditingPeriodo] = useState<PeriodoBalanco | null>(null)
   const [form,           setForm]           = useState<FormState>(emptyForm())
   const [saving,         setSaving]         = useState(false)
+  const [formDate,       setFormDate]       = useState(todayStr)
+  const [formTurno,      setFormTurno]      = useState<'diurno' | 'noturno'>(() => getTurno(new Date()))
 
   const setField = (k: keyof FormState, v: string) => setForm(f => ({ ...f, [k]: v }))
 
@@ -130,15 +142,33 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
   // Última evacuação
   const lastEvac = [...sorted].reverse().find(p => p.evacuacao > 0)
 
-  // Next period spec
+  // Sugestão automática do próximo turno (usada como valor inicial do seletor,
+  // e forçada para o 1º turno, cuja duração é parcial desde a admissão)
   const horaHHMM    = (paciente.hora_internacao ?? '12:00').substring(0, 5)
   const admissionISO = `${paciente.data_internacao}T${horaHHMM}:00`
-  let periodSpec: ReturnType<typeof calcFirstPeriod> | null = null
+  let sugerido: ReturnType<typeof calcFirstPeriod> | null = null
   try {
-    periodSpec = periodos.length === 0
+    sugerido = periodos.length === 0
       ? calcFirstPeriod(admissionISO)
       : calcNextPeriod(periodos[periodos.length - 1].fim)
   } catch {}
+
+  // Turno efetivamente selecionado: livre a partir do 2º turno, forçado no 1º
+  const periodSpec = periodos.length === 0 ? sugerido : calcPeriodoEscolhido(formDate, formTurno)
+
+  // Já existe um registro para o turno escolhido? (evita duplicar)
+  const periodoDuplicado = periodSpec
+    ? sorted.find(p => new Date(p.inicio).getTime() === periodSpec!.inicio.getTime())
+    : undefined
+
+  // Turno escolhido não é contíguo ao último registrado? O acumulado (calcAcumuladoTotal/
+  // Móvel) e o débito urinário 24h assumem turnos sem lacunas — avisa sem bloquear, já que
+  // pode ser um lançamento retroativo intencional (turno esquecido).
+  const ultimoRegistrado = sorted.length > 0 ? sorted[sorted.length - 1] : null
+  const periodoNaoContiguo = !!(
+    periodos.length > 0 && periodSpec && ultimoRegistrado && !periodoDuplicado &&
+    new Date(ultimoRegistrado.fim).getTime() !== periodSpec.inicio.getTime()
+  )
 
   const peso    = paciente.peso_kg ?? 70
   const horas   = formMode === 'edit' && editingPeriodo ? editingPeriodo.horas_periodo : (periodSpec?.horas ?? 12)
@@ -148,6 +178,7 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
   // ── Save new ──
   const handleSave = async () => {
     if (!periodSpec) return
+    if (periodoDuplicado) { showToast('Já existe um registro para esse turno — edite-o em vez de duplicar', 'error'); return }
     setSaving(true)
     const { error } = await supabase.from('periodos_balanco').insert({
       paciente_id: paciente.id,
@@ -204,7 +235,7 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
   const formSpec = formMode === 'edit' && editingPeriodo
     ? { label: fmtTurno(editingPeriodo.turno, editingPeriodo.inicio), sub: 'Editando registro existente' }
     : periodSpec
-      ? { label: fmtTurno(periodSpec.turno, periodSpec.inicio.toISOString()), sub: `${periodSpec.horas.toFixed(1)}h de duração` }
+      ? { label: fmtTurno(periodSpec.turno, periodSpec.inicio.toISOString()), sub: `${fmtNum(periodSpec.horas, 1)}h de duração` }
       : null
 
   return (
@@ -237,7 +268,7 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
                 <p className={`text-2xl font-black ${valueCls}`}>{duTotal.toFixed(0)} mL</p>
                 {duMlKgH !== null && (
                   <p className={`text-xs font-bold mt-1 ${valueCls}`}>
-                    {duMlKgH.toFixed(2)} mL/Kg/h
+                    {fmtNum(duMlKgH, 2)} mL/Kg/h
                     {isAnuria   && <span className="ml-1.5 bg-red-600 text-white text-xs font-black px-1.5 py-0.5 rounded-full">🚨 ANÚRIA</span>}
                     {isOliguria && <span className="ml-1.5 bg-orange-500 text-white text-xs font-black px-1.5 py-0.5 rounded-full">⚠️ OLIGÚRIA</span>}
                   </p>
@@ -275,7 +306,12 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
         <h3 className="font-semibold text-slate-700">Registros ({periodos.length} turnos)</h3>
         {formMode === null ? (
           <button
-            onClick={() => periodSpec ? setFormMode('add') : showToast('Não foi possível calcular o próximo turno', 'error')}
+            onClick={() => {
+              if (!sugerido) { showToast('Não foi possível calcular o próximo turno', 'error'); return }
+              setFormDate(sugerido.inicio.toISOString().split('T')[0])
+              setFormTurno(sugerido.turno)
+              setFormMode('add')
+            }}
             className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors">
             + Novo Turno
           </button>
@@ -300,6 +336,35 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
             )}
           </div>
 
+          {formMode === 'add' && periodos.length > 0 && (
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">Data</label>
+                <input type="date" value={formDate} onChange={e => setFormDate(e.target.value)}
+                  className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+              </div>
+              <div className="flex rounded-lg overflow-hidden border border-slate-300">
+                {(['diurno','noturno'] as const).map(t => (
+                  <button key={t} onClick={() => setFormTurno(t)}
+                    className={`px-3 py-1.5 text-sm font-semibold transition-colors ${
+                      formTurno === t ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+                    }`}>
+                    {t === 'diurno' ? '☀️ Diurno (07–18h)' : '🌙 Noturno (19–06h)'}
+                  </button>
+                ))}
+              </div>
+              {periodoDuplicado && (
+                <p className="text-xs text-red-600 font-semibold">⚠️ Já existe registro para este turno — edite-o na tabela abaixo</p>
+              )}
+              {!periodoDuplicado && periodoNaoContiguo && ultimoRegistrado && (
+                <p className="text-xs text-amber-600 font-semibold">
+                  ⚠️ Turno não é contíguo ao último registrado (encerrado em {fmtDataHora(ultimoRegistrado.fim)}) —
+                  o saldo acumulado assume turnos sem lacunas
+                </p>
+              )}
+            </div>
+          )}
+
           <div>
             <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-1">🟢 Ganhos (mL)</p>
             <p className="text-xs text-slate-400 mb-2 italic">Aceita expressões: ex. 200+100+50 = 350</p>
@@ -310,7 +375,7 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
               ))}
               <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
                 <p className="text-xs text-emerald-700 font-medium">Água Endógena (auto)</p>
-                <p className="font-bold text-emerald-800">{aguaEnd.toFixed(1)} mL</p>
+                <p className="font-bold text-emerald-800">{fmtNum(aguaEnd, 1)} mL</p>
               </div>
             </div>
           </div>
@@ -324,13 +389,14 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
               ))}
               <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                 <p className="text-xs text-red-600 font-medium">Perdas Insensíveis (auto)</p>
-                <p className="font-bold text-red-700">{perdIns.toFixed(1)} mL</p>
+                <p className="font-bold text-red-700">{fmtNum(perdIns, 1)} mL</p>
                 {!paciente.peso_kg && <p className="text-xs text-red-400">Usando 70 Kg</p>}
               </div>
             </div>
           </div>
 
-          <button onClick={formMode === 'add' ? handleSave : handleUpdate} disabled={saving}
+          <button onClick={formMode === 'add' ? handleSave : handleUpdate}
+            disabled={saving || (formMode === 'add' && !!periodoDuplicado)}
             className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors">
             {saving ? 'Salvando...' : formMode === 'add' ? 'Registrar Balanço' : 'Atualizar Balanço'}
           </button>

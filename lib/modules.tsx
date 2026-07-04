@@ -19,7 +19,7 @@ import IntensivistaTab from '@/components/modules/intensivista/IntensivistaTab'
 import ExamesTab       from '@/components/modules/shared/ExamesTab'
 import ExamesImagemTab from '@/components/modules/shared/ExamesImagemTab'
 import { featureFlags } from '@/lib/featureFlags'
-import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, ToastData } from '@/types'
+import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, ToastData } from '@/types'
 
 /** Dados do paciente carregados pela casca e disponíveis a todas as abas. */
 export interface PacienteContext {
@@ -32,8 +32,13 @@ export interface PacienteContext {
   periodosHemo: PeriodoHemodinamica[]
   atbs: ATB[]
   cuidados: CuidadosHorizontais | null
-  neuro: AvaliacaoNeurologica | null
-  ventilatorio: SuporteVentilatorio | null
+  neuroHistorico: AvaliacaoNeurologica[]
+  ventHistorico: SuporteVentilatorio[]
+  intercorrencias: Intercorrencia[]
+  pendencias: PendenciaIntensivista[]
+  registrosIntensivista: RegistroIntensivista[]
+  /** Cargo (escalas.staff) do usuário logado em qualquer unidade: chefe = Médico Intensivista, com direito de editar tudo. */
+  souMedicoIntensivista: boolean
   onRefresh: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
 }
@@ -57,7 +62,10 @@ const painelPlantao: TabDef = {
   label: '🚨 Painel do Plantão',
   render: ctx => (
     <PlantonistaTab paciente={ctx.paciente} sinais={ctx.sinais} dvas={ctx.dvas}
-      periodos={ctx.periodos} atbs={ctx.atbs} cuidados={ctx.cuidados} showToast={ctx.showToast} />
+      periodos={ctx.periodos} atbs={ctx.atbs} cuidados={ctx.cuidados}
+      intercorrencias={ctx.intercorrencias} pendencias={ctx.pendencias}
+      registrosIntensivista={ctx.registrosIntensivista}
+      onRefresh={ctx.onRefresh} showToast={ctx.showToast} />
   ),
 }
 
@@ -82,13 +90,13 @@ const hemodinamica: TabDef = {
 const neurologico: TabDef = {
   id: 'neuro',
   label: '🧠 Neurológico',
-  render: ctx => <NeurologicoTab paciente={ctx.paciente} neuro={ctx.neuro} onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
+  render: ctx => <NeurologicoTab paciente={ctx.paciente} historico={ctx.neuroHistorico} onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
 }
 
 const ventilatorio: TabDef = {
   id: 'ventilatorio',
   label: '🫁 Ventilatório',
-  render: ctx => <VentilatorioTab paciente={ctx.paciente} ventilatorio={ctx.ventilatorio} onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
+  render: ctx => <VentilatorioTab paciente={ctx.paciente} historico={ctx.ventHistorico} onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
 }
 
 const examesLab: TabDef = {
@@ -106,7 +114,10 @@ const examesImagem: TabDef = {
 const cuidadosHorizontais: TabDef = {
   id: 'horizontal',
   label: '📋 Cuidados Horizontais',
-  render: ctx => <IntensivistaTab paciente={ctx.paciente} atbs={ctx.atbs} cuidados={ctx.cuidados} onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
+  render: ctx => <IntensivistaTab paciente={ctx.paciente} atbs={ctx.atbs} cuidados={ctx.cuidados}
+    pendencias={ctx.pendencias} registrosIntensivista={ctx.registrosIntensivista}
+    podeEditar={ctx.souMedicoIntensivista}
+    onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
 }
 
 // ── Módulos (nova estrutura) ────────────────────────────────────────────────

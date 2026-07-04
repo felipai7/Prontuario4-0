@@ -1,4 +1,4 @@
-import type { PeriodoBalanco, BalancoCalculado, AvaliacaoNeurologica, SuporteVentilatorio } from '@/types'
+import type { PeriodoBalanco, BalancoCalculado, AvaliacaoNeurologica, SuporteVentilatorio, ATB } from '@/types'
 
 // ── Formatação ─────────────────────────────────────────────────────────────
 
@@ -17,6 +17,32 @@ export function fmtDataHora(str: string | null | undefined): string {
 
 export function pad(n: number): string {
   return String(n).padStart(2, '0')
+}
+
+// Conectores que não recebem maiúscula (exceto se forem a 1ª palavra do nome).
+const CONECTORES_NOME = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'di', 'du', 'von', 'van'])
+
+/** Normaliza a capitalização de um nome próprio (primeira letra maiúscula por
+ * palavra/sobrenome, conectores como "de"/"dos" em minúsculo). */
+export function toTitleCaseNome(nome: string): string {
+  return nome
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLocaleLowerCase('pt-BR')
+    .split(' ')
+    .map((palavra, i) => {
+      if (i > 0 && CONECTORES_NOME.has(palavra)) return palavra
+      return palavra
+        .split('-')
+        .map(parte => parte ? parte.charAt(0).toLocaleUpperCase('pt-BR') + parte.slice(1) : parte)
+        .join('-')
+    })
+    .join(' ')
+}
+
+/** Formata número com casas decimais usando vírgula (padrão brasileiro). */
+export function fmtNum(n: number, decimais: number): string {
+  return n.toFixed(decimais).replace('.', ',')
 }
 
 export function calcAge(dateStr: string | null | undefined): string {
@@ -42,6 +68,14 @@ export function diasDesde(dataYYYYMMDD: string): number {
   const inicio = new Date(dataYYYYMMDD + 'T00:00:00')
   const hoje   = new Date(); hoje.setHours(0, 0, 0, 0)
   return Math.max(0, Math.floor((hoje.getTime() - inicio.getTime()) / (24 * 3600 * 1000)))
+}
+
+/**
+ * Dia atual de um ATB, respeitando se a data de início conta como D0 (dose
+ * não completada no 1º dia) ou D1 (dose completa desde o início).
+ */
+export function diaAtualATB(atb: ATB): number {
+  return diasDesde(atb.data_inicio) + (atb.dia_inicial ?? 0)
 }
 
 // ── Resumos clínicos em texto (usados nos prompts de IA) ───────────────────
@@ -77,9 +111,15 @@ export function resumoVentilatorio(v: SuporteVentilatorio | null | undefined): s
 
 // ── Turnos ────────────────────────────────────────────────────────────────
 
+// Limites únicos dos turnos de 12h — única fonte de verdade. Se a escala do
+// hospital mudar, atualizar só aqui (getNextBoundary/boundaryStart/calcNextPeriod
+// e o seletor livre de turno do BalancoTab derivam todos daqui).
+export const HORA_INICIO_DIURNO = 7
+export const HORA_INICIO_NOTURNO = 19
+
 export function getTurno(dt: Date): 'diurno' | 'noturno' {
   const h = dt.getHours()
-  return h >= 7 && h < 19 ? 'diurno' : 'noturno'
+  return h >= HORA_INICIO_DIURNO && h < HORA_INICIO_NOTURNO ? 'diurno' : 'noturno'
 }
 
 /** Returns the next turn boundary (07:00 or 19:00) after a given datetime */
@@ -88,19 +128,49 @@ export function getNextBoundary(dt: Date): Date {
   result.setSeconds(0, 0)
   result.setMinutes(0)
   const h = dt.getHours()
-  if (h >= 7 && h < 19) {
-    result.setHours(19)                           // next boundary today at 19:00
-  } else if (h >= 19) {
+  if (h >= HORA_INICIO_DIURNO && h < HORA_INICIO_NOTURNO) {
+    result.setHours(HORA_INICIO_NOTURNO)          // next boundary today at 19:00
+  } else if (h >= HORA_INICIO_NOTURNO) {
     result.setDate(result.getDate() + 1)
-    result.setHours(7)                            // next boundary tomorrow at 07:00
+    result.setHours(HORA_INICIO_DIURNO)           // next boundary tomorrow at 07:00
   } else {
-    result.setHours(7)                            // between 00:00–07:00 → 07:00 today
+    result.setHours(HORA_INICIO_DIURNO)           // between 00:00–07:00 → 07:00 today
   }
   return result
 }
 
+/** Início (Date) de um turno de 12h numa data escolhida livremente (07:00 ou 19:00). */
+export function boundaryStart(dateStr: string, turno: 'diurno' | 'noturno'): Date {
+  const hora = turno === 'diurno' ? HORA_INICIO_DIURNO : HORA_INICIO_NOTURNO
+  return new Date(`${dateStr}T${String(hora).padStart(2, '0')}:00:00`)
+}
+
 export function calcHoras(inicio: Date, fim: Date): number {
   return (fim.getTime() - inicio.getTime()) / 3_600_000
+}
+
+/** Registro mais recente de uma lista com data+turno (Neurológico, Ventilatório) — usado
+ * para exibir o "estado atual" no cabeçalho, na IA e na Evolução Diária. */
+export function ultimoPorTurno<T extends { data: string; turno: 'diurno' | 'noturno' }>(items: T[]): T | null {
+  if (!items.length) return null
+  return [...items].sort((a, b) =>
+    boundaryStart(b.data, b.turno).getTime() - boundaryStart(a.data, a.turno).getTime()
+  )[0]
+}
+
+/** Sugere o próximo turno a registrar (usado como valor inicial do seletor livre de
+ * data/turno em Neurológico, Ventilatório e Hemodinâmica) — o turno seguinte ao último
+ * já registrado, ou o turno atual se ainda não houver nenhum registro. */
+export function sugerirProximoTurno<T extends { data: string; turno: 'diurno' | 'noturno' }>(
+  historico: T[]
+): { data: string; turno: 'diurno' | 'noturno' } {
+  const ultimo = ultimoPorTurno(historico)
+  if (!ultimo) {
+    const agora = new Date()
+    return { data: agora.toISOString().split('T')[0], turno: getTurno(agora) }
+  }
+  const proximoInicio = new Date(boundaryStart(ultimo.data, ultimo.turno).getTime() + 12 * 3_600_000)
+  return { data: proximoInicio.toISOString().split('T')[0], turno: getTurno(proximoInicio) }
 }
 
 // ── Cálculos de Balanço Hídrico ───────────────────────────────────────────

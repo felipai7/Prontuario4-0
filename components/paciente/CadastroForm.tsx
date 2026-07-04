@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { isDateFuture } from '@/lib/utils'
+import { isDateFuture, toTitleCaseNome } from '@/lib/utils'
 import { PLANOS } from '@/lib/config'
 import type { ToastData } from '@/types'
 
@@ -50,7 +50,7 @@ export default function CadastroForm({ alaId, numeroLeito, onClose, onSaved, sho
     const planoFinal = plano === 'Outros' ? (planoOu.trim() || 'Outros') : plano
 
     const { error } = await supabase.from('pacientes').insert({
-      nome: nome.trim(),
+      nome: toTitleCaseNome(nome),
       data_nascimento: dataNasc,
       plano_saude:     planoFinal,
       data_internacao: dataInt,
