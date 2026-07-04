@@ -141,8 +141,8 @@ export interface ExameImagem {
 export type ToastType = 'success' | 'error' | 'warn'
 export interface ToastData { id: string; msg: string; tipo: ToastType }
 
-export type ViaIBP = 'Oral' | 'Endovenoso'
-export type ViaAnticoag = 'Subcutâneo' | 'Endovenoso' | 'Oral'
+export type ViaIBP = 'Enteral' | 'Endovenoso'
+export type ViaAnticoag = 'Subcutâneo' | 'Endovenoso' | 'Enteral'
 export type Objetivo = 'profilatico' | 'terapeutico'
 export type DrogaAnticoag = 'Enoxaparina' | 'Heparina Não Fracionada' | 'Apixabana' | 'Rivaroxabana' | 'Outro'
 

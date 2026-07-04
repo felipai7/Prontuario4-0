@@ -18,9 +18,21 @@ interface Props {
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
 }
 
-const VIAS_IBP: ViaIBP[] = ['Oral', 'Endovenoso']
-const VIAS_ANTICOAG: ViaAnticoag[] = ['Subcutâneo', 'Endovenoso', 'Oral']
+const VIAS_IBP: ViaIBP[] = ['Enteral', 'Endovenoso']
+const LABEL_VIA: Record<ViaIBP | ViaAnticoag, string> = {
+  'Enteral': 'Enteral (Oral/SNE/GTT)',
+  'Endovenoso': 'Endovenoso',
+  'Subcutâneo': 'Subcutâneo',
+}
 const DROGAS_ANTICOAG: DrogaAnticoag[] = ['Enoxaparina', 'Heparina Não Fracionada', 'Apixabana', 'Rivaroxabana', 'Outro']
+// Vias clinicamente válidas por droga — evita registros como "Enoxaparina VO".
+const VIAS_POR_DROGA: Record<DrogaAnticoag, ViaAnticoag[]> = {
+  'Enoxaparina': ['Subcutâneo'],
+  'Heparina Não Fracionada': ['Subcutâneo', 'Endovenoso'],
+  'Apixabana': ['Enteral'],
+  'Rivaroxabana': ['Enteral'],
+  'Outro': ['Subcutâneo', 'Endovenoso', 'Enteral'],
+}
 const UNIDADES_DOSE = ['mg', 'mg/kg', 'UI', 'UI/h', 'UI/kg/h']
 
 function atbEmAlerta(atb: ATB): boolean {
@@ -119,6 +131,13 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
     setAnticoagDoseUnid(cuidados?.anticoag_dose_unidade ?? 'mg')
     setAnticoagObjetivo(cuidados?.anticoag_objetivo ?? '')
   }, [cuidados?.updated_at])
+
+  const viasDisponiveis = anticoagDroga ? VIAS_POR_DROGA[anticoagDroga] : ['Subcutâneo', 'Endovenoso', 'Enteral'] as ViaAnticoag[]
+
+  const handleAnticoagDrogaChange = (droga: DrogaAnticoag) => {
+    setAnticoagDroga(droga)
+    if (anticoagVia && !VIAS_POR_DROGA[droga].includes(anticoagVia)) setAnticoagVia('')
+  }
 
   const handleSaveCuidados = async () => {
     setSavingCuidados(true)
@@ -353,7 +372,7 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
         <label className="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" checked={ibpEmUso} onChange={e => setIbpEmUso(e.target.checked)} disabled={!podeEditar}
             className="w-4 h-4 accent-indigo-600 disabled:cursor-not-allowed" />
-          <span className="font-semibold text-slate-700">💊 Em uso de IBP</span>
+          <span className="font-semibold text-slate-700">💊 Em uso de Pantoprazol (IBP)</span>
         </label>
 
         {ibpEmUso && (
@@ -362,7 +381,7 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
               <label className={labelCls}>Via</label>
               <select value={ibpVia} onChange={e => setIbpVia(e.target.value as ViaIBP)} className={inputCls}>
                 <option value="">Selecione...</option>
-                {VIAS_IBP.map(v => <option key={v} value={v}>{v}</option>)}
+                {VIAS_IBP.map(v => <option key={v} value={v}>{LABEL_VIA[v]}</option>)}
               </select>
             </div>
             <div>
@@ -401,7 +420,7 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className={labelCls}>Droga</label>
-                <select value={anticoagDroga} onChange={e => setAnticoagDroga(e.target.value as DrogaAnticoag)} className={inputCls}>
+                <select value={anticoagDroga} onChange={e => handleAnticoagDrogaChange(e.target.value as DrogaAnticoag)} className={inputCls}>
                   <option value="">Selecione...</option>
                   {DROGAS_ANTICOAG.map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
@@ -410,7 +429,7 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
                 <label className={labelCls}>Via</label>
                 <select value={anticoagVia} onChange={e => setAnticoagVia(e.target.value as ViaAnticoag)} className={inputCls}>
                   <option value="">Selecione...</option>
-                  {VIAS_ANTICOAG.map(v => <option key={v} value={v}>{v}</option>)}
+                  {viasDisponiveis.map(v => <option key={v} value={v}>{LABEL_VIA[v]}</option>)}
                 </select>
               </div>
               <div>
@@ -461,8 +480,8 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
         <div className="space-y-1.5">
           {pendenciasOrdenadas.map(p => (
             <div key={p.id} className={`flex items-center gap-2 rounded-lg px-3 py-2 border ${p.resolvida ? 'bg-slate-50 border-slate-200' : 'bg-amber-50 border-amber-200'}`}>
-              <input type="checkbox" checked={p.resolvida} onChange={() => handleTogglePendencia(p)} disabled={!podeEditar}
-                className="w-4 h-4 accent-emerald-600 flex-shrink-0 disabled:cursor-not-allowed" />
+              <input type="checkbox" checked={p.resolvida} onChange={() => handleTogglePendencia(p)}
+                className="w-4 h-4 accent-emerald-600 flex-shrink-0" />
               <span className={`text-sm flex-1 ${p.resolvida ? 'line-through text-slate-400' : 'text-amber-900'}`}>{p.texto}</span>
               {podeEditar && (
                 <button onClick={() => handleDeletePendencia(p.id)} title="Excluir"

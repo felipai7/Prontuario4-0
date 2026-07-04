@@ -2,7 +2,8 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { calcBalanco, calcAcumuladoMovel, diaAtualATB, fmtNum } from '@/lib/utils'
-import type { Paciente, SinalVital, DVA, PeriodoBalanco, ATB, CuidadosHorizontais, Intercorrencia, PendenciaIntensivista, ToastData } from '@/types'
+import { fmtData } from '@/lib/utils'
+import type { Paciente, SinalVital, DVA, PeriodoBalanco, ATB, CuidadosHorizontais, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, ToastData } from '@/types'
 
 interface Props {
   paciente: Paciente
@@ -13,6 +14,7 @@ interface Props {
   cuidados: CuidadosHorizontais | null
   intercorrencias: Intercorrencia[]
   pendencias: PendenciaIntensivista[]
+  registrosIntensivista: RegistroIntensivista[]
   onRefresh: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
 }
@@ -31,7 +33,7 @@ function agoraLocal(): string {
   return d.toISOString().slice(0, 16)
 }
 
-export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs, cuidados, intercorrencias, pendencias, onRefresh, showToast }: Props) {
+export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs, cuidados, intercorrencias, pendencias, registrosIntensivista, onRefresh, showToast }: Props) {
   const supabase = createClient()
 
   // Intercorrências são carregadas e assinadas pela casca (PacienteModal) — este
@@ -83,6 +85,9 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs,
     : null
   const bhUltimo = ultimoPeriodo ? calcBalanco(ultimoPeriodo) : null
   const bhMovel  = calcAcumuladoMovel(periodos)
+  const ultimoRegistroIntensivista = registrosIntensivista.length
+    ? [...registrosIntensivista].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())[0]
+    : null
 
   return (
     <div className="space-y-6">
@@ -139,6 +144,15 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs,
               <ul className="text-sm text-amber-900 space-y-0.5">
                 {pendencias.filter(p => !p.resolvida).map(p => <li key={p.id}>• {p.texto}</li>)}
               </ul>
+            </div>
+          )}
+
+          {ultimoRegistroIntensivista && (
+            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 md:col-span-2">
+              <p className="text-xs font-bold text-indigo-700 uppercase tracking-wide mb-1">
+                🗒️ Orientações e Condutas (Médico Intensivista) — {fmtData(ultimoRegistroIntensivista.data)}
+              </p>
+              <p className="text-sm text-indigo-900 whitespace-pre-wrap">{ultimoRegistroIntensivista.orientacoes_condutas}</p>
             </div>
           )}
         </div>

@@ -64,6 +64,7 @@ const painelPlantao: TabDef = {
     <PlantonistaTab paciente={ctx.paciente} sinais={ctx.sinais} dvas={ctx.dvas}
       periodos={ctx.periodos} atbs={ctx.atbs} cuidados={ctx.cuidados}
       intercorrencias={ctx.intercorrencias} pendencias={ctx.pendencias}
+      registrosIntensivista={ctx.registrosIntensivista}
       onRefresh={ctx.onRefresh} showToast={ctx.showToast} />
   ),
 }
