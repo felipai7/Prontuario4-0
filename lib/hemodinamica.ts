@@ -3,7 +3,7 @@
 // Fica em lib/ — não em components/ — porque lib/evolucaoDiaria.ts depende
 // dela e não deve importar de um arquivo de componente 'use client'.
 
-import { fmtNum } from '@/lib/utils'
+import { fmtNum, boundaryStart } from '@/lib/utils'
 import type { DVA, PeriodoHemodinamica, SinalVital } from '@/types'
 
 export interface Variante { label: string; valor: number; unidade_conc: string }
@@ -185,11 +185,15 @@ export function calcRanges(periodSinais: SinalVital[]): { fcRange: FcRange | nul
   return { fcRange, paRange }
 }
 
-/** Encontra o período hemodinâmico atualmente aberto (sem fim), se houver. */
-function currentPeriodoAberto(periodos: PeriodoHemodinamica[]): PeriodoHemodinamica | null {
+/**
+ * Turno hemodinâmico mais recente pela ordenação de data/turno. No modelo
+ * atual todo turno já nasce com início e fim definidos, então "o turno
+ * vigente" é sempre o mais recente — não existe mais turno "aberto".
+ */
+export function ultimoPeriodoHemo(periodos: PeriodoHemodinamica[]): PeriodoHemodinamica | null {
   return [...periodos].sort((a, b) =>
-    new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime()
-  ).find(p => !p.fim) ?? null
+    boundaryStart(b.data, b.turno).getTime() - boundaryStart(a.data, a.turno).getTime()
+  )[0] ?? null
 }
 
 /** Resumo hemodinâmico determinístico do turno atual — usado no banner da aba e na Evolução Diária. */
@@ -199,7 +203,7 @@ export function resumoHemodinamica(
   sinais: SinalVital[],
   peso: number | null,
 ): string {
-  const currentPeriodo = currentPeriodoAberto(periodos)
+  const currentPeriodo = ultimoPeriodoHemo(periodos)
   const ativosDVA = filtrarAtivasNoPeriodo(dvas, currentPeriodo)
   const { fcRange, paRange } = calcRanges(sinaisNoPeriodo(sinais, currentPeriodo))
   return buildSummaryText(ativosDVA, peso, fcRange, paRange)

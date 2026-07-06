@@ -341,6 +341,18 @@ export interface SwapRequest {
   resolved_at: string | null
 }
 
+export interface AuditoriaIntensivista {
+  id: string
+  paciente_id: string
+  tabela: 'cuidados_horizontais' | 'atbs' | 'pendencias_intensivista' | 'registros_intensivista'
+  acao: 'INSERT' | 'UPDATE' | 'DELETE'
+  changed_by: string | null
+  changed_by_email: string | null
+  dados_antigos: Record<string, unknown> | null
+  dados_novos: Record<string, unknown> | null
+  changed_at: string
+}
+
 export interface ScheduleTemplateAudit {
   id: string
   unit_id: string

@@ -11,6 +11,11 @@ import type { Paciente } from '@/types'
 
 interface Props { initialPacientes: Paciente[]; userEmail: string }
 
+/** Normaliza para busca: minúsculas e sem acentos. */
+function normalizarBusca(s: string): string {
+  return s.toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+}
+
 export default function UTIGrid({ initialPacientes, userEmail }: Props) {
   const router           = useRouter()
   const supabase         = createClient()
@@ -20,6 +25,7 @@ export default function UTIGrid({ initialPacientes, userEmail }: Props) {
   const [selectedPac,     setSelectedPac]     = useState<Paciente | null>(null)
   const [showCadastro,    setShowCadastro]    = useState(false)
   const [selectedLeito,   setSelectedLeito]   = useState<{ alaId: string; numero: number } | null>(null)
+  const [busca,           setBusca]           = useState('')
 
   // Realtime subscription
   useEffect(() => {
@@ -33,6 +39,37 @@ export default function UTIGrid({ initialPacientes, userEmail }: Props) {
       })
       .subscribe()
 
+    return () => { supabase.removeChannel(channel) }
+  }, [])
+
+  // Trocas de plantão pendentes aguardando a resposta do usuário logado —
+  // mostradas como badge no botão Escalas, atualizado em tempo real.
+  const [trocasPendentes, setTrocasPendentes] = useState(0)
+  useEffect(() => {
+    let meusStaffIds: string[] = []
+
+    const contar = async () => {
+      if (!meusStaffIds.length) { setTrocasPendentes(0); return }
+      const { count } = await supabase
+        .from('swap_requests')
+        .select('id', { count: 'exact', head: true })
+        .in('target_staff_id', meusStaffIds)
+        .eq('status', 'pending')
+      setTrocasPendentes(count ?? 0)
+    }
+
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return
+      const { data: staffRows } = await supabase
+        .from('staff').select('id').eq('user_id', data.user.id).eq('active', true)
+      meusStaffIds = (staffRows ?? []).map(s => s.id)
+      contar()
+    })
+
+    const channel = supabase
+      .channel('swaps-badge')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'swap_requests' }, () => contar())
+      .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [])
 
@@ -69,6 +106,11 @@ export default function UTIGrid({ initialPacientes, userEmail }: Props) {
   const ocupados = pacientesVisiveis.length
   const total    = 19
 
+  const buscaNorm = normalizarBusca(busca.trim())
+  const resultadosBusca = buscaNorm
+    ? pacientes.filter(p => normalizarBusca(p.nome).includes(buscaNorm))
+    : []
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
@@ -84,10 +126,17 @@ export default function UTIGrid({ initialPacientes, userEmail }: Props) {
             <span className="text-indigo-200 hidden sm:block">{userEmail}</span>
             <button
               onClick={() => router.push('/escalas')}
-              className="bg-white/20 hover:bg-white/30 border border-white/30
+              className="relative bg-white/20 hover:bg-white/30 border border-white/30
                          px-3 py-1.5 rounded-lg text-white text-sm font-medium transition-colors"
             >
               📅 Escalas
+              {trocasPendentes > 0 && (
+                <span title={`${trocasPendentes} troca(s) de plantão aguardando sua resposta`}
+                  className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold
+                             min-w-[1.25rem] h-5 px-1 rounded-full flex items-center justify-center shadow">
+                  {trocasPendentes}
+                </span>
+              )}
             </button>
             <button
               onClick={handleLogout}
@@ -99,6 +148,35 @@ export default function UTIGrid({ initialPacientes, userEmail }: Props) {
           </div>
         </div>
       </header>
+
+      {/* Busca por nome */}
+      <div className="max-w-7xl mx-auto px-4 pt-4">
+        <div className="relative max-w-md">
+          <input
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+            placeholder="🔍 Buscar paciente por nome..."
+            className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm bg-white shadow-sm
+                       focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          />
+          {buscaNorm && (
+            <div className="absolute z-30 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+              {resultadosBusca.length === 0 ? (
+                <p className="px-4 py-3 text-sm text-slate-400">Nenhum paciente encontrado.</p>
+              ) : resultadosBusca.map(p => (
+                <button key={p.id}
+                  onClick={() => { setSelectedPac(p); setBusca('') }}
+                  className="w-full text-left px-4 py-2.5 hover:bg-indigo-50 transition-colors border-b border-slate-100 last:border-b-0">
+                  <span className="text-sm font-medium text-slate-800">{p.nome}</span>
+                  <span className="text-xs text-slate-400 ml-2">
+                    {ALAS.find(a => a.id === p.ala_id)?.nome ?? p.ala_id} — Leito {pad(p.numero_leito)} · {calcAge(p.data_nascimento)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Ghost patient warning */}
       {pacientesFantasmas.length > 0 && (

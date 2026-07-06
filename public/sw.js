@@ -6,12 +6,14 @@
 // disponível, para nunca mostrar informação desatualizada sem o usuário
 // perceber. Offline, essas chamadas simplesmente falham como de costume.
 
-const CACHE_NAME = 'promed-uti-v1'
+const CACHE_NAME = 'promed-uti-v2'
 
 self.addEventListener('install', (event) => {
   self.skipWaiting()
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(['/manifest.json', '/icons/icon.svg']))
+    caches.open(CACHE_NAME).then((cache) =>
+      cache.addAll(['/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'])
+    )
   )
 })
 

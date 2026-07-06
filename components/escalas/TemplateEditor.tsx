@@ -77,8 +77,8 @@ export default function TemplateEditor({ unitId, staffList, shiftTypesList, souC
   if (tiposAtivos.length === 0) {
     return (
       <section className="bg-white border border-slate-200 rounded-xl p-4">
-        <h3 className="font-semibold text-slate-700 mb-2">📋 Mês padrão (35 dias)</h3>
-        <p className="text-sm text-slate-400">Cadastre ao menos um tipo de turno ativo para poder montar o mês padrão.</p>
+        <h3 className="font-semibold text-slate-700 mb-2">📋 Espelho da escala (mês padrão de 35 dias)</h3>
+        <p className="text-sm text-slate-400">Cadastre ao menos um tipo de turno ativo para poder montar o espelho.</p>
       </section>
     )
   }
@@ -86,7 +86,13 @@ export default function TemplateEditor({ unitId, staffList, shiftTypesList, souC
   return (
     <section className="bg-white border border-slate-200 rounded-xl p-4 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h3 className="font-semibold text-slate-700">📋 Mês padrão (35 dias)</h3>
+        <div>
+          <h3 className="font-semibold text-slate-700">📋 Espelho da escala (mês padrão de 35 dias)</h3>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Permanente: todos os meses são publicados a partir deste espelho, em ciclo contínuo.
+            Só precisa ser editado quando alguém entra ou sai da escala em definitivo.
+          </p>
+        </div>
         {souChefe && (
           <button onClick={handleToggleAudit} className="text-xs font-medium text-slate-500 hover:text-indigo-600 border border-slate-200 rounded-lg px-2 py-1">
             {showAudit ? 'Ocultar histórico' : 'Ver histórico de alterações'}

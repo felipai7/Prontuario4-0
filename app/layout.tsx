@@ -9,6 +9,10 @@ export const metadata: Metadata = {
   title: 'ProMed UTI',
   description: 'Gerenciamento de pacientes internados',
   manifest: '/manifest.json',
+  icons: {
+    icon: '/icons/icon-192.png',
+    apple: '/icons/apple-touch-icon.png',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',

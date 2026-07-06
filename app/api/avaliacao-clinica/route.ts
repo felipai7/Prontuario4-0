@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getAI, generateWithFallback } from '@/lib/ai'
 import { calcAcumuladoTotal, calcAcumuladoMovel, calcBalanco, fmtData, resumoNeuro, resumoVentilatorio, diaAtualATB } from '@/lib/utils'
+import { ultimoPeriodoHemo } from '@/lib/hemodinamica'
 import type { Paciente, Exame, SinalVital, ExameImagem, PeriodoBalanco, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, PendenciaIntensivista } from '@/types'
 
 export async function POST(request: NextRequest) {
@@ -29,7 +30,8 @@ export async function POST(request: NextRequest) {
     } = await request.json()
 
     // ── Sinais Vitais (últimas 24h ou período atual) ─────────────────────────
-    const currentPeriodo = periodosHemo.find(p => !p.fim)
+    // Turnos hemodinâmicos já nascem com fim definido — o "vigente" é o mais recente.
+    const currentPeriodo = ultimoPeriodoHemo(periodosHemo)
     const cutoff = currentPeriodo
       ? new Date(currentPeriodo.inicio).getTime()
       : Date.now() - 24 * 3600 * 1000

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import { fmtData, diaAtualATB } from '@/lib/utils'
 import { ATBS_SUGERIDOS, FOCOS_INFECCIOSOS } from '@/lib/config'
 import Combobox from '@/components/ui/Combobox'
+import AuditoriaIntensivistaView from './AuditoriaIntensivista'
 import type { Paciente, ATB, CuidadosHorizontais, PendenciaIntensivista, RegistroIntensivista, ViaIBP, ViaAnticoag, Objetivo, DrogaAnticoag, ToastData } from '@/types'
 
 interface Props {
@@ -596,6 +597,9 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
           </div>
         )}
       </section>
+
+      {/* Auditoria — quem alterou o quê nesta aba */}
+      <AuditoriaIntensivistaView pacienteId={paciente.id} showToast={showToast} />
     </div>
   )
 }
