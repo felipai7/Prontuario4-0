@@ -12,6 +12,8 @@ export interface Paciente {
   ala_id: AlaId
   numero_leito: number
   saps3: number | null
+  /** Quando o SAPS 3 foi pontuado — revela pontuação retrospectiva (feita já sabendo o desfecho). */
+  saps3_calculado_em: string | null
   paliativo: boolean
   oncologico: boolean
   /** Alta anterior deste mesmo paciente, quando esta internação é uma reinternação. */

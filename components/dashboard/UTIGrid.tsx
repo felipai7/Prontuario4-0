@@ -295,6 +295,12 @@ function LeitoCard({ numero, paciente, onClick }: {
           </div>
           <div className="text-xs text-slate-500 mt-1">{calcAge(paciente.data_nascimento)}</div>
           <div className="text-xs text-slate-400 truncate">{paciente.plano_saude}</div>
+          {paciente.saps3 == null && (
+            <div className="text-[11px] font-semibold text-amber-600 mt-1"
+              title="SAPS-3 não pontuado — obrigatório para dar saída">
+              ⚠️ SAPS-3
+            </div>
+          )}
         </>
       )}
     </button>

@@ -43,6 +43,10 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
   const [dataSaida, setDataSaida] = useState(() => new Date().toISOString().split('T')[0])
   const [horaSaida, setHoraSaida] = useState(() => new Date().toTimeString().slice(0, 5))
 
+  // Sem SAPS 3 não há saída: sem ele o paciente fica fora do SMR para sempre,
+  // e a alta é a última chance de cobrar.
+  const semSaps3 = paciente.saps3 == null
+
   /** Instante da saída em ISO, a partir dos campos locais. */
   const saidaISO = () => new Date(`${dataSaida}T${horaSaida}:00`).toISOString()
 
@@ -196,6 +200,20 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
                 <p><strong>Turnos de BH:</strong> {periodos.length}</p>
               </div>
 
+              {semSaps3 && (
+                <div className="border border-red-300 bg-red-50 rounded-xl p-4">
+                  <p className="text-sm font-bold text-red-800">🚫 SAPS-3 não pontuado</p>
+                  <p className="text-xs text-red-700 mt-1">
+                    A saída não pode ser registrada sem o SAPS-3. Feche esta janela, use
+                    “✏️ Editar” para pontuar e volte aqui.
+                  </p>
+                  <p className="text-xs text-red-600/80 mt-1.5">
+                    Pontue com os dados da <strong>primeira hora</strong> de internação — é assim
+                    que o escore é definido, e é o que mantém o SMR da unidade confiável.
+                  </p>
+                </div>
+              )}
+
               <div>
                 <p className="text-sm font-medium text-slate-700 mb-2">Tipo de saída *</p>
                 <div className="grid grid-cols-3 gap-2">
@@ -227,7 +245,7 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
                 </div>
               </div>
 
-              <button onClick={handleAltaDireta} disabled={!tipoSaida}
+              <button onClick={handleAltaDireta} disabled={!tipoSaida || semSaps3}
                 className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed
                            text-white font-bold py-3 rounded-xl transition-colors">
                 ✅ Registrar Saída Agora
@@ -239,7 +257,7 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
                 <div className="flex-1 border-t border-slate-200" />
               </div>
 
-              <button onClick={handleGenerateFirst} disabled={!tipoSaida}
+              <button onClick={handleGenerateFirst} disabled={!tipoSaida || semSaps3}
                 className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed
                            text-white font-semibold py-3 rounded-xl transition-colors text-sm">
                 🤖 Gerar Resumo com IA e Registrar Saída

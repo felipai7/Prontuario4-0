@@ -44,6 +44,12 @@ export function toTitleCaseNome(nome: string): string {
 // RegExp para não depender de escapes unicode literais no fonte.
 const DIACRITICOS = new RegExp('[\\u0300-\\u036f]', 'g')
 
+/** Horas decorridas desde a admissão — usado para cobrar o SAPS 3 na janela certa. */
+export function horasDesdeAdmissao(p: { data_internacao: string; hora_internacao: string | null }): number {
+  const hh = (p.hora_internacao ?? '12:00').substring(0, 5)
+  return (Date.now() - new Date(`${p.data_internacao}T${hh}:00`).getTime()) / 3_600_000
+}
+
 /** Normaliza nome para comparação/busca: minúsculas e sem acentos. */
 export function normalizarNome(s: string): string {
   return s.toLocaleLowerCase('pt-BR').normalize('NFD').replace(DIACRITICOS, '')

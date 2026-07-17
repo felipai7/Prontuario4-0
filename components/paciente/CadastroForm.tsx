@@ -41,6 +41,7 @@ export default function CadastroForm({ alaId, numeroLeito, onClose, onSaved, sho
   const [pesoKg,    setPesoKg]    = useState('')
   const [hipoteses, setHipoteses] = useState('')
   const [oncologico, setOncologico] = useState(false)
+  const [saps3,     setSaps3]     = useState('')
   const [errors,    setErrors]    = useState<Record<string, string>>({})
   const [saving,    setSaving]    = useState(false)
 
@@ -88,6 +89,10 @@ export default function CadastroForm({ alaId, numeroLeito, onClose, onSaved, sho
     if (!dataInt)      e.dataInt  = 'Obrigatório'
     else if (isDateFuture(dataInt)) e.dataInt = 'Não pode ser futura'
     if (!horaInt)      e.horaInt  = 'Obrigatório'
+    if (saps3) {
+      const n = parseFloat(saps3)
+      if (Number.isNaN(n) || n < 0 || n > 300) e.saps3 = 'SAPS-3 inválido'
+    }
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -111,6 +116,8 @@ export default function CadastroForm({ alaId, numeroLeito, onClose, onSaved, sho
       numero_leito:    numeroLeito,
       oncologico,
       readmissao_de:   confirmouReint && altaAnterior ? altaAnterior.id : null,
+      saps3:              saps3 ? parseFloat(saps3) : null,
+      saps3_calculado_em: saps3 ? new Date().toISOString() : null,
     })
 
     setSaving(false)
@@ -185,6 +192,16 @@ export default function CadastroForm({ alaId, numeroLeito, onClose, onSaved, sho
                 onChange={e => setHoraInt(e.target.value)} className={input(errors.horaInt)} />
             </Field>
           </div>
+
+          <Field label="SAPS-3" error={errors.saps3}>
+            <input type="number" value={saps3} onChange={e => setSaps3(e.target.value)}
+              placeholder="Escore" min="0" max="300" step="1" className={input(errors.saps3)} />
+            <p className="text-xs text-slate-400 mt-1">
+              {saps3
+                ? 'Pontuado na admissão — é aqui que o escore vale.'
+                : 'Pode ficar para depois, mas será cobrado até a saída. O escore usa os dados da primeira hora.'}
+            </p>
+          </Field>
 
           <Field label="Hipóteses Diagnósticas">
             <textarea value={hipoteses} onChange={e => setHipoteses(e.target.value)}

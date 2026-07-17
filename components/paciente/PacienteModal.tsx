@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import AltaModal        from './AltaModal'
-import { fmtData, calcAge, pad, diasDesde, fmtNum, toTitleCaseNome, ultimoPorTurno } from '@/lib/utils'
+import { fmtData, calcAge, pad, diasDesde, fmtNum, toTitleCaseNome, ultimoPorTurno, horasDesdeAdmissao } from '@/lib/utils'
 import { ALAS, ALAS_MAP, PLANOS, type AlaId } from '@/lib/config'
 import { modulosAtivos, type PacienteContext } from '@/lib/modules'
 import { montarEvolucaoDiaria } from '@/lib/evolucaoDiaria'
@@ -313,6 +313,11 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
       saps3: saps3Num,
       paliativo: editForm.paliativo,
       oncologico: editForm.oncologico,
+      // Carimba a hora da PRIMEIRA pontuação e não a sobrescreve depois: é ela
+      // que revela se o SAPS 3 foi pontuado na janela certa ou já sabendo o
+      // desfecho. Corrigir o escore depois não deve apagar esse rastro.
+      saps3_calculado_em: saps3Num === null ? null
+        : (pac.saps3_calculado_em ?? new Date().toISOString()),
     }
     const { error } = await supabase.from('pacientes').update(updates).eq('id', pac.id)
     setSaving(false)
@@ -479,6 +484,26 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
                     {saving ? 'Salvando...' : 'Salvar alterações'}
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* SAPS 3 pendente: fica acima do seletor de módulo, então plantonista
+                e intensivista veem o mesmo aviso. Endurece depois de 24h porque
+                é essa a janela em que a pontuação ainda não conhece o desfecho. */}
+            {pac.saps3 == null && (
+              <div className={`mt-4 rounded-xl px-3 py-2 border ${
+                horasDesdeAdmissao(pac) > 24
+                  ? 'bg-red-500/25 border-red-300/50'
+                  : 'bg-amber-400/20 border-amber-200/40'
+              }`}>
+                <p className="text-xs font-semibold text-white">
+                  ⚠️ SAPS-3 não pontuado
+                  {horasDesdeAdmissao(pac) > 24 && ' — já se passaram mais de 24h da admissão'}
+                </p>
+                <p className="text-[11px] text-white/70 mt-0.5">
+                  Pontue em “✏️ Editar”. É obrigatório para dar saída, e deve usar os dados
+                  da primeira hora de internação.
+                </p>
               </div>
             )}
 
