@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import ToastContainer, { useToast } from '@/components/ui/Toast'
 import { calcularIndicadores, CATEGORIAS, calcularLeitosDia } from '@/lib/indicadores/formulas'
+import { gerarCsvDadosMensais, nomeArquivoCsv, baixarCsv, COLUNAS_PREENCHIDAS, COLUNAS_TOTAIS } from '@/lib/indicadores/exportar'
 import { fmtNum } from '@/lib/utils'
 import { ALAS } from '@/lib/config'
 import type { ContagensMes, Indicador } from '@/types'
@@ -65,6 +66,16 @@ export default function IndicadoresHome({ souChefe, userEmail }: Props) {
 
   const vivos = indicadores.filter(i => !i.aguarda).length
 
+  const handleExportar = () => {
+    if (!contagens) return
+    const leitosDia = calcularLeitosDia(primeiroDia, LEITOS_ATIVOS)
+    baixarCsv(
+      nomeArquivoCsv(primeiroDia),
+      gerarCsvDadosMensais(primeiroDia, { ...contagens, leitos_dia: leitosDia, leitos_ativos: LEITOS_ATIVOS }),
+    )
+    showToast('CSV baixado — cole a linha na aba "Dados Mensais".')
+  }
+
   if (!souChefe) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
@@ -114,6 +125,12 @@ export default function IndicadoresHome({ souChefe, userEmail }: Props) {
           <p className="text-xs text-slate-400 ml-auto">
             {vivos} de {indicadores.length} indicadores com dado disponível
           </p>
+          <button onClick={handleExportar} disabled={!contagens}
+            title={`Baixa a linha do mês no formato da aba "Dados Mensais" — ${COLUNAS_PREENCHIDAS} dos ${COLUNAS_TOTAIS} campos preenchidos`}
+            className="text-xs font-medium border border-slate-300 text-slate-600 hover:bg-slate-50
+                       disabled:opacity-40 rounded-lg px-3 py-2">
+            ⬇️ Exportar para a planilha
+          </button>
         </section>
 
         {loading ? (
