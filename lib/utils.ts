@@ -40,7 +40,17 @@ export function toTitleCaseNome(nome: string): string {
     .join(' ')
 }
 
+// Marcas de acento que o normalize('NFD') separa das letras. Construído via
+// RegExp para não depender de escapes unicode literais no fonte.
+const DIACRITICOS = new RegExp('[\\u0300-\\u036f]', 'g')
+
+/** Normaliza nome para comparação/busca: minúsculas e sem acentos. */
+export function normalizarNome(s: string): string {
+  return s.toLocaleLowerCase('pt-BR').normalize('NFD').replace(DIACRITICOS, '')
+}
+
 /** Formata número com casas decimais usando vírgula (padrão brasileiro). */
+
 export function fmtNum(n: number, decimais: number): string {
   return n.toFixed(decimais).replace('.', ',')
 }

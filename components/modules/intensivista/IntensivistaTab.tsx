@@ -114,6 +114,12 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
   const [anticoagDoseUnid,  setAnticoagDoseUnid]  = useState(cuidados?.anticoag_dose_unidade ?? 'mg')
   const [anticoagObjetivo,  setAnticoagObjetivo]  = useState<Objetivo | ''>(cuidados?.anticoag_objetivo ?? '')
 
+  // Corticoide e opioide: sim/não, sem dose. Alimentam "% disfunção glicêmica +
+  // corticoide" e "constipação relacionada a opioides". Guardam o estado atual —
+  // o histórico "usou em algum momento do mês" sai da auditoria.
+  const [corticoideEmUso, setCorticoideEmUso] = useState(cuidados?.corticoide_em_uso ?? false)
+  const [opioideEmUso,    setOpioideEmUso]    = useState(cuidados?.opioide_em_uso ?? false)
+
   const [savingCuidados, setSavingCuidados] = useState(false)
 
   // Re-sync local state whenever the underlying record changes (realtime / reload)
@@ -131,6 +137,8 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
     setAnticoagDoseValor(cuidados?.anticoag_dose_valor != null ? String(cuidados.anticoag_dose_valor) : '')
     setAnticoagDoseUnid(cuidados?.anticoag_dose_unidade ?? 'mg')
     setAnticoagObjetivo(cuidados?.anticoag_objetivo ?? '')
+    setCorticoideEmUso(cuidados?.corticoide_em_uso ?? false)
+    setOpioideEmUso(cuidados?.opioide_em_uso ?? false)
   }, [cuidados?.updated_at])
 
   const viasDisponiveis = anticoagDroga ? VIAS_POR_DROGA[anticoagDroga] : ['Subcutâneo', 'Endovenoso', 'Enteral'] as ViaAnticoag[]
@@ -157,6 +165,8 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
       anticoag_dose_valor:   anticoagEmUso && anticoagDoseValor ? parseFloat(anticoagDoseValor) : null,
       anticoag_dose_unidade: anticoagEmUso ? anticoagDoseUnid : null,
       anticoag_objetivo:     anticoagEmUso ? (anticoagObjetivo || null) : null,
+      corticoide_em_uso:     corticoideEmUso,
+      opioide_em_uso:        opioideEmUso,
     }
     const { error } = await supabase.from('cuidados_horizontais').upsert(payload, { onConflict: 'paciente_id' })
     setSavingCuidados(false)
@@ -463,10 +473,24 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
         )}
       </section>
 
+      {/* Corticoide e opioide: só sim/não — a dose não entra em nenhum indicador. */}
+      <section className="border border-slate-200 rounded-xl p-4 space-y-2">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={corticoideEmUso} onChange={e => setCorticoideEmUso(e.target.checked)}
+            disabled={!podeEditar} className="w-4 h-4 accent-emerald-600 disabled:opacity-50" />
+          <span className="font-semibold text-slate-700">💊 Em uso de corticoide</span>
+        </label>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={opioideEmUso} onChange={e => setOpioideEmUso(e.target.checked)}
+            disabled={!podeEditar} className="w-4 h-4 accent-emerald-600 disabled:opacity-50" />
+          <span className="font-semibold text-slate-700">💊 Em uso de opioide</span>
+        </label>
+      </section>
+
       {podeEditar && (
         <button onClick={handleSaveCuidados} disabled={savingCuidados}
           className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-colors">
-          {savingCuidados ? 'Salvando...' : '💾 Salvar Previsão de Alta / IBP / Anticoagulante'}
+          {savingCuidados ? 'Salvando...' : '💾 Salvar Cuidados Horizontais'}
         </button>
       )}
 

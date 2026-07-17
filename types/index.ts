@@ -13,6 +13,9 @@ export interface Paciente {
   numero_leito: number
   saps3: number | null
   paliativo: boolean
+  oncologico: boolean
+  /** Alta anterior deste mesmo paciente, quando esta internação é uma reinternação. */
+  readmissao_de: string | null
   ativo: boolean
   created_at: string
   updated_at: string
@@ -62,11 +65,17 @@ export interface PeriodoBalanco {
   updated_at: string
 }
 
+export type TipoSaida = 'alta' | 'obito' | 'transferencia'
+
 export interface ResumoAlta {
   id: string
+  paciente_id: string | null
   paciente_nome: string
   data_internacao: string
+  /** Instante da saída (ISO). Editável: o registro pode ser feito depois do fato. */
   data_alta: string
+  /** Null nos registros anteriores à Fase 1 — ficam de fora das contagens. */
+  tipo_saida: TipoSaida | null
   paciente_snapshot: Paciente
   exames_snapshot: Exame[] | null
   balanco_snapshot: PeriodoBalanco[] | null
@@ -227,6 +236,9 @@ export interface CuidadosHorizontais {
   anticoag_dose_unidade: string | null
   anticoag_objetivo: Objetivo | null
 
+  corticoide_em_uso: boolean
+  opioide_em_uso: boolean
+
   updated_at: string
 }
 
@@ -351,6 +363,66 @@ export interface AuditoriaIntensivista {
   dados_antigos: Record<string, unknown> | null
   dados_novos: Record<string, unknown> | null
   changed_at: string
+}
+
+// ── Indicadores ──────────────────────────────────────────────────────────────
+
+/**
+ * Contagens brutas de um mês, vindas da RPC `contagens_mes`.
+ * Equivale a uma linha da aba "Dados Mensais" da planilha do Dr. Flaubert —
+ * de propósito, para permitir conferência lado a lado.
+ * Leitos-dia e nº de leitos não vêm daqui: saem de lib/config.ts.
+ */
+export interface ContagensMes {
+  pacientes_dia: number
+  admissoes: number
+  saidas: number
+  saidas_altas: number
+  saidas_obitos: number
+  saidas_transferencias: number
+  dias_permanencia_saidas: number
+  obitos_ate_24h: number
+  obitos_apos_24h: number
+  obitos_paliativos: number
+  saidas_paliativos: number
+  obitos_oncologicos: number
+  saidas_oncologicos: number
+  soma_mortalidade_esperada: number
+  saidas_com_saps3: number
+  obitos_com_saps3: number
+  reinternacoes_48h: number
+  reinternacoes_30d: number
+  pacientes_internados_mes: number
+  ventilador_dia: number
+  pacientes_hemodialise: number
+  pacientes_hipoglicemia: number
+  pacientes_hiperglicemia: number
+  pacientes_monitorados_glicemia: number
+  pacientes_disfuncao_glicemica: number
+  pacientes_disfuncao_glicemica_corticoide: number
+}
+
+export type CategoriaIndicador =
+  | 'Operacional' | 'Mortalidade' | 'IRAS e segurança' | 'Dispositivos'
+  | 'Nutrição' | 'Metabólico' | 'Fisioterapia respiratória'
+
+export type UnidadeIndicador = '%' | 'razão' | 'dias' | 'saídas/leito' | '/1000 pac-dia'
+  | '/1000 CVC-dia' | '/1000 SVD-dia' | '/1000 ventilador-dia' | '/100 adm'
+
+/** Módulo que ainda precisa ser construído para o indicador sair do "pendente". */
+export type ModuloPendente = 'Enfermagem' | 'Fisioterapia' | 'Nutrição' | 'Intensivista'
+
+export interface Indicador {
+  id: string
+  nome: string
+  categoria: CategoriaIndicador
+  unidade: UnidadeIndicador
+  /** null = não calculável ainda (aguarda módulo) ou denominador zero. */
+  valor: number | null
+  numerador: number | null
+  denominador: number | null
+  /** Preenchido quando o dado de origem ainda não é coletado. */
+  aguarda?: ModuloPendente
 }
 
 export interface ScheduleTemplateAudit {

@@ -5,16 +5,11 @@ import { createClient } from '@/lib/supabase/client'
 import PacienteModal  from '@/components/paciente/PacienteModal'
 import CadastroForm   from '@/components/paciente/CadastroForm'
 import ToastContainer, { useToast } from '@/components/ui/Toast'
-import { pad, fmtData, calcAge } from '@/lib/utils'
+import { pad, fmtData, calcAge, normalizarNome } from '@/lib/utils'
 import { ALAS } from '@/lib/config'
 import type { Paciente } from '@/types'
 
 interface Props { initialPacientes: Paciente[]; userEmail: string }
-
-/** Normaliza para busca: minúsculas e sem acentos. */
-function normalizarBusca(s: string): string {
-  return s.toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-}
 
 export default function UTIGrid({ initialPacientes, userEmail }: Props) {
   const router           = useRouter()
@@ -45,6 +40,8 @@ export default function UTIGrid({ initialPacientes, userEmail }: Props) {
   // Trocas de plantão pendentes aguardando a resposta do usuário logado —
   // mostradas como badge no botão Escalas, atualizado em tempo real.
   const [trocasPendentes, setTrocasPendentes] = useState(0)
+  // Só o chefe (Médico Intensivista) vê o atalho de Indicadores — dado de gestão.
+  const [souChefe, setSouChefe] = useState(false)
   useEffect(() => {
     let meusStaffIds: string[] = []
 
@@ -61,8 +58,9 @@ export default function UTIGrid({ initialPacientes, userEmail }: Props) {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return
       const { data: staffRows } = await supabase
-        .from('staff').select('id').eq('user_id', data.user.id).eq('active', true)
+        .from('staff').select('id, role').eq('user_id', data.user.id).eq('active', true)
       meusStaffIds = (staffRows ?? []).map(s => s.id)
+      setSouChefe((staffRows ?? []).some(s => s.role === 'chefe'))
       contar()
     })
 
@@ -106,9 +104,9 @@ export default function UTIGrid({ initialPacientes, userEmail }: Props) {
   const ocupados = pacientesVisiveis.length
   const total    = 19
 
-  const buscaNorm = normalizarBusca(busca.trim())
+  const buscaNorm = normalizarNome(busca.trim())
   const resultadosBusca = buscaNorm
-    ? pacientes.filter(p => normalizarBusca(p.nome).includes(buscaNorm))
+    ? pacientes.filter(p => normalizarNome(p.nome).includes(buscaNorm))
     : []
 
   return (
@@ -124,6 +122,15 @@ export default function UTIGrid({ initialPacientes, userEmail }: Props) {
           </div>
           <div className="flex items-center gap-3 text-sm">
             <span className="text-indigo-200 hidden sm:block">{userEmail}</span>
+            {souChefe && (
+              <button
+                onClick={() => router.push('/indicadores')}
+                className="bg-white/20 hover:bg-white/30 border border-white/30
+                           px-3 py-1.5 rounded-lg text-white text-sm font-medium transition-colors"
+              >
+                📊 Indicadores
+              </button>
+            )}
             <button
               onClick={() => router.push('/escalas')}
               className="relative bg-white/20 hover:bg-white/30 border border-white/30

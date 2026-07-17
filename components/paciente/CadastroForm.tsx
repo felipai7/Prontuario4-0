@@ -1,7 +1,7 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { isDateFuture, toTitleCaseNome } from '@/lib/utils'
+import { isDateFuture, toTitleCaseNome, normalizarNome, fmtDataHora } from '@/lib/utils'
 import { PLANOS } from '@/lib/config'
 import type { ToastData } from '@/types'
 
@@ -11,6 +11,20 @@ interface Props {
   onClose: () => void
   onSaved: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
+}
+
+/** Alta anterior do mesmo paciente, detectada pelo app. */
+interface AltaAnterior {
+  id: string
+  nome: string
+  dataAlta: string
+  horasAtras: number
+}
+
+function descreverIntervalo(horas: number): string {
+  if (horas < 1)  return `${Math.max(1, Math.round(horas * 60))} min`
+  if (horas < 48) return `${Math.round(horas)}h`
+  return `${Math.round(horas / 24)} dias`
 }
 
 export default function CadastroForm({ alaId, numeroLeito, onClose, onSaved, showToast }: Props) {
@@ -26,8 +40,44 @@ export default function CadastroForm({ alaId, numeroLeito, onClose, onSaved, sho
   const [horaInt,   setHoraInt]   = useState(agoraH)
   const [pesoKg,    setPesoKg]    = useState('')
   const [hipoteses, setHipoteses] = useState('')
+  const [oncologico, setOncologico] = useState(false)
   const [errors,    setErrors]    = useState<Record<string, string>>({})
   const [saving,    setSaving]    = useState(false)
+
+  // Reinternação: o app procura uma alta anterior do mesmo paciente e calcula o
+  // intervalo. Quem admite confirma — nunca digita "<48h" ou "<30 dias" à mão.
+  const [altaAnterior,  setAltaAnterior]  = useState<AltaAnterior | null>(null)
+  const [confirmouReint, setConfirmouReint] = useState(false)
+
+  useEffect(() => {
+    if (!nome.trim() || !dataNasc) { setAltaAnterior(null); return }
+    let cancelado = false
+
+    const buscar = async () => {
+      // Filtra pela data de nascimento no banco (índice do jsonb) e confere o
+      // nome no cliente, normalizado — nomes vêm com acentuação inconsistente.
+      const { data } = await supabase
+        .from('resumos_alta')
+        .select('id, paciente_nome, data_alta')
+        .eq('paciente_snapshot->>data_nascimento', dataNasc)
+        .order('data_alta', { ascending: false })
+        .limit(10)
+      if (cancelado || !data?.length) { setAltaAnterior(null); return }
+
+      const alvo = normalizarNome(nome.trim())
+      const match = data.find(r => normalizarNome(r.paciente_nome) === alvo)
+      if (!match) { setAltaAnterior(null); return }
+
+      const horas = (Date.now() - new Date(match.data_alta).getTime()) / 3_600_000
+      setAltaAnterior({ id: match.id, nome: match.paciente_nome, dataAlta: match.data_alta, horasAtras: horas })
+    }
+
+    const t = setTimeout(buscar, 400)
+    return () => { cancelado = true; clearTimeout(t) }
+  }, [nome, dataNasc, supabase])
+
+  // Se o paciente detectado mudar, a confirmação anterior não vale mais.
+  useEffect(() => { setConfirmouReint(false) }, [altaAnterior?.id])
 
   const validate = () => {
     const e: Record<string, string> = {}
@@ -59,6 +109,8 @@ export default function CadastroForm({ alaId, numeroLeito, onClose, onSaved, sho
       hipoteses:       hipoteses.trim() || null,
       ala_id:          alaId,
       numero_leito:    numeroLeito,
+      oncologico,
+      readmissao_de:   confirmouReint && altaAnterior ? altaAnterior.id : null,
     })
 
     setSaving(false)
@@ -94,6 +146,24 @@ export default function CadastroForm({ alaId, numeroLeito, onClose, onSaved, sho
             </Field>
           </div>
 
+          {altaAnterior && (
+            <div className="border border-amber-300 bg-amber-50 rounded-lg p-3">
+              <p className="text-sm text-amber-900">
+                ⚠️ <span className="font-semibold">{altaAnterior.nome}</span> teve alta em{' '}
+                <span className="font-semibold">{fmtDataHora(altaAnterior.dataAlta)}</span> — reinternação em{' '}
+                <span className="font-semibold">{descreverIntervalo(altaAnterior.horasAtras)}</span>.
+              </p>
+              <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                <input type="checkbox" checked={confirmouReint}
+                  onChange={e => setConfirmouReint(e.target.checked)}
+                  className="w-4 h-4 accent-amber-600" />
+                <span className="text-xs font-medium text-amber-900">
+                  Confirmo que é o mesmo paciente (registra como reinternação)
+                </span>
+              </label>
+            </div>
+          )}
+
           <Field label="Plano de Saúde *" error={errors.plano}>
             <select value={plano} onChange={e => { setPlano(e.target.value); setPlanoOu('') }} className={input(errors.plano)}>
               <option value="">Selecione...</option>
@@ -121,6 +191,13 @@ export default function CadastroForm({ alaId, numeroLeito, onClose, onSaved, sho
               placeholder="Ex: Insuficiência respiratória aguda, Sepse..."
               rows={3} className={input()} style={{resize:'vertical'}} />
           </Field>
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={oncologico}
+              onChange={e => setOncologico(e.target.checked)}
+              className="w-4 h-4 accent-indigo-600" />
+            <span className="text-sm font-medium text-slate-700">🎗️ Paciente oncológico</span>
+          </label>
 
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose}

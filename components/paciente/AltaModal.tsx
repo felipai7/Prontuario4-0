@@ -2,7 +2,15 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { fmtData, calcAge } from '@/lib/utils'
-import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, ToastData } from '@/types'
+import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, TipoSaida, ToastData } from '@/types'
+
+// O tipo de saída é o que sustenta todo o bloco de mortalidade dos indicadores.
+// Transferência entra em "saídas" no denominador, conforme definição do Dr. Flaubert.
+const TIPOS_SAIDA: { id: TipoSaida; label: string; emoji: string }[] = [
+  { id: 'alta',          label: 'Alta hospitalar', emoji: '🏠' },
+  { id: 'obito',         label: 'Óbito',           emoji: '🕯️' },
+  { id: 'transferencia', label: 'Transferência',   emoji: '🚑' },
+]
 
 interface Props {
   paciente: Paciente
@@ -28,6 +36,22 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
   const [resumo,             setResumo]           = useState<string | null>(null)
   const [resumoAltaId,       setResumoAltaId]     = useState<string | null>(null)
   const [alreadyDischarged,  setAlreadyDischarged] = useState(false)
+
+  // Data/hora da saída: pré-preenchida com agora, mas editável — o registro é
+  // muitas vezes feito depois do fato, e a hora define o corte de óbito <24h.
+  const [tipoSaida, setTipoSaida] = useState<TipoSaida | ''>('')
+  const [dataSaida, setDataSaida] = useState(() => new Date().toISOString().split('T')[0])
+  const [horaSaida, setHoraSaida] = useState(() => new Date().toTimeString().slice(0, 5))
+
+  /** Instante da saída em ISO, a partir dos campos locais. */
+  const saidaISO = () => new Date(`${dataSaida}T${horaSaida}:00`).toISOString()
+
+  /** Campos de saída comuns aos dois caminhos de alta (direto e com resumo). */
+  const camposSaida = () => ({
+    paciente_id: paciente.id,
+    tipo_saida:  tipoSaida || null,
+    data_alta:   saidaISO(),
+  })
   const [busy,               setBusy]             = useState(false)
 
   // Flow A: discharge immediately, no AI required
@@ -43,6 +67,7 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
       neuro_snapshot:        neuro,
       ventilatorio_snapshot: ventilatorio,
       texto_resumo:          null,
+      ...camposSaida(),
     }).select('id').single()
     setResumoAltaId(data?.id ?? null)
     await supabase.from('pacientes').update({ ativo: false }).eq('id', paciente.id)
@@ -105,6 +130,7 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
       neuro_snapshot:        neuro,
       ventilatorio_snapshot: ventilatorio,
       texto_resumo:          resumo,
+      ...camposSaida(),
     })
     await supabase.from('pacientes').update({ ativo: false }).eq('id', paciente.id)
     onAltaConcedida()
@@ -149,7 +175,7 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
         {/* Header */}
         <div className="bg-gradient-to-r from-red-500 to-rose-600 text-white px-6 py-4 rounded-t-2xl flex justify-between items-center flex-shrink-0">
           <div>
-            <h2 className="font-bold text-lg">Alta Médica</h2>
+            <h2 className="font-bold text-lg">Registrar Saída</h2>
             <p className="text-red-100 text-sm">{paciente.nome}</p>
           </div>
           {canClose && (
@@ -170,9 +196,41 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
                 <p><strong>Turnos de BH:</strong> {periodos.length}</p>
               </div>
 
-              <button onClick={handleAltaDireta}
-                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl transition-colors">
-                ✅ Dar Alta Agora
+              <div>
+                <p className="text-sm font-medium text-slate-700 mb-2">Tipo de saída *</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {TIPOS_SAIDA.map(t => (
+                    <button key={t.id} type="button" onClick={() => setTipoSaida(t.id)}
+                      className={`border rounded-xl px-2 py-3 text-xs font-semibold transition-colors ${
+                        tipoSaida === t.id
+                          ? 'border-red-500 bg-red-50 text-red-700 ring-2 ring-red-200'
+                          : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+                      }`}>
+                      <span className="block text-lg mb-0.5">{t.emoji}</span>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Data da saída *</label>
+                  <input type="date" value={dataSaida} onChange={e => setDataSaida(e.target.value)}
+                    max={new Date().toISOString().split('T')[0]}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Hora da saída *</label>
+                  <input type="time" value={horaSaida} onChange={e => setHoraSaida(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400" />
+                </div>
+              </div>
+
+              <button onClick={handleAltaDireta} disabled={!tipoSaida}
+                className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed
+                           text-white font-bold py-3 rounded-xl transition-colors">
+                ✅ Registrar Saída Agora
               </button>
 
               <div className="relative flex items-center">
@@ -181,9 +239,10 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
                 <div className="flex-1 border-t border-slate-200" />
               </div>
 
-              <button onClick={handleGenerateFirst}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition-colors text-sm">
-                🤖 Gerar Resumo com IA e Dar Alta
+              <button onClick={handleGenerateFirst} disabled={!tipoSaida}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed
+                           text-white font-semibold py-3 rounded-xl transition-colors text-sm">
+                🤖 Gerar Resumo com IA e Registrar Saída
               </button>
             </div>
           )}

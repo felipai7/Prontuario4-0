@@ -37,7 +37,7 @@ type EditForm = {
   plano: string; planoOu: string
   peso_kg: string; ala_id: AlaId; numero_leito: string
   hipoteses: string
-  saps3: string; paliativo: boolean
+  saps3: string; paliativo: boolean; oncologico: boolean
 }
 
 export default function PacienteModal({ paciente, onClose, onAltaConcedida, showToast }: Props) {
@@ -90,6 +90,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
       hipoteses: p.hipoteses ?? '',
       saps3: String(p.saps3 ?? ''),
       paliativo: p.paliativo,
+      oncologico: p.oncologico,
     }
   }
 
@@ -311,6 +312,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
       hipoteses: editForm.hipoteses.trim() || null,
       saps3: saps3Num,
       paliativo: editForm.paliativo,
+      oncologico: editForm.oncologico,
     }
     const { error } = await supabase.from('pacientes').update(updates).eq('id', pac.id)
     setSaving(false)
@@ -345,6 +347,11 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
                   {pac.paliativo && (
                     <span className="bg-slate-900/60 border border-slate-300/40 text-slate-100 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
                       🕊️ Paliativo
+                    </span>
+                  )}
+                  {pac.oncologico && (
+                    <span className="bg-slate-900/60 border border-slate-300/40 text-slate-100 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
+                      🎗️ Oncológico
                     </span>
                   )}
                   {ventAtual?.modalidade === 'ventilacao_mecanica' && (
@@ -447,12 +454,18 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
                         className="w-full bg-white/20 text-white placeholder-white/40 border border-white/30 rounded-lg px-3 py-1.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-white/50"/>
                     </EF>
                   </div>
-                  <div className="col-span-2">
+                  <div className="col-span-2 flex flex-wrap gap-x-5 gap-y-2">
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input type="checkbox" checked={editForm.paliativo}
                         onChange={e => setEditForm(f => ({...f, paliativo: e.target.checked}))}
                         className="w-4 h-4 accent-white"/>
                       <span className="text-xs text-white/80 font-medium">🕊️ Paciente em cuidados paliativos</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={editForm.oncologico}
+                        onChange={e => setEditForm(f => ({...f, oncologico: e.target.checked}))}
+                        className="w-4 h-4 accent-white"/>
+                      <span className="text-xs text-white/80 font-medium">🎗️ Paciente oncológico</span>
                     </label>
                   </div>
                 </div>
