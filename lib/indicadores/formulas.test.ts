@@ -70,11 +70,35 @@ describe('paridade com a planilha do Dr. Flaubert', () => {
     ['reinternacao_30d',               5.5555555556],
     ['utilizacao_vm',                  31.3725490196],
     ['hemodialise_100adm',             5.3571428571],
-    ['prev_hipoglicemia',              8.1818181818],
-    ['prev_hiperglicemia',             19.0909090909],
     ['disfuncao_glicemica_corticoide', 37.0370370370],
   ])('%s = %f', (id, esperado) => {
     expect(valor(id as string)).toBeCloseTo(esperado as number, 6)
+  })
+})
+
+describe('disglicemia: divergência deliberada da planilha', () => {
+  // A planilha divide por "pacientes monitorados" (110 de 118 no exemplo).
+  // Decisão do Dr. Felipe: dividir por TODOS os internados. Só se deixa de aferir
+  // HGT em quem não é diabético, não tem dieta restrita e não usa corticoide —
+  // em quem não se flagraria disglicemia de qualquer jeito. Sem registro = normal.
+  //
+  // Este bloco existe separado do de paridade para a divergência ficar registrada
+  // como decisão, e não passar por engano quando alguém reencostar na planilha.
+  it('divide por todos os internados (118), não pelos monitorados (110)', () => {
+    expect(valor('prev_hipoglicemia')).toBeCloseTo(9 / 118 * 100, 6)
+    expect(valor('prev_hiperglicemia')).toBeCloseTo(21 / 118 * 100, 6)
+  })
+
+  it('não usa mais o campo de monitorados — mudar a política de HGT não move o indicador', () => {
+    const comMaisMonitorados = calcular({ pacientes_monitorados_glicemia: 118 })
+    const comMenos           = calcular({ pacientes_monitorados_glicemia: 40 })
+    expect(pegar(comMaisMonitorados, 'prev_hipoglicemia').valor)
+      .toBe(pegar(comMenos, 'prev_hipoglicemia').valor)
+  })
+
+  it('paciente sem HGT conta como normal, não como desconhecido', () => {
+    // 118 internados, ninguém com disglicemia registrada → 0%, não null.
+    expect(valor('prev_hipoglicemia', { pacientes_hipoglicemia: 0 })).toBe(0)
   })
 })
 

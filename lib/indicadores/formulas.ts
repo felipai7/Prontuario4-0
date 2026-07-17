@@ -89,10 +89,19 @@ export function calcularIndicadores({ contagens: c, leitosDia, leitosAtivos }: E
 
     // ── Metabólico ────────────────────────────────────────────────────────
     // Derivados do HGT já registrado em Sinais Vitais — nenhum campo novo.
+    //
+    // DIVERGE DA PLANILHA DE PROPÓSITO: ela divide por "pacientes monitorados"
+    // (110 de 118 no exemplo); aqui o denominador é TODO paciente internado.
+    // Decisão clínica do Dr. Felipe: só se deixa de aferir HGT em quem não é
+    // diabético, não está com dieta restrita e não usa corticoide — gente em quem
+    // não se flagraria disglicemia de qualquer jeito. Sem registro = sem
+    // disglicemia. Isso também estabiliza o indicador: com denominador de
+    // monitorados, monitorar mais gente de baixo risco derruba a prevalência sem
+    // nada clínico mudar.
     viva('prev_hipoglicemia', 'Prevalência de hipoglicemia (<70)', 'Metabólico', '%',
-      c.pacientes_hipoglicemia, c.pacientes_monitorados_glicemia, 100),
+      c.pacientes_hipoglicemia, c.pacientes_internados_mes, 100),
     viva('prev_hiperglicemia', 'Prevalência de hiperglicemia (>180)', 'Metabólico', '%',
-      c.pacientes_hiperglicemia, c.pacientes_monitorados_glicemia, 100),
+      c.pacientes_hiperglicemia, c.pacientes_internados_mes, 100),
     viva('disfuncao_glicemica_corticoide', '% disfunção glicêmica + corticoide', 'Metabólico', '%',
       c.pacientes_disfuncao_glicemica_corticoide, c.pacientes_disfuncao_glicemica, 100),
 
