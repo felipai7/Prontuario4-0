@@ -19,7 +19,7 @@ import IntensivistaTab from '@/components/modules/intensivista/IntensivistaTab'
 import ExamesTab       from '@/components/modules/shared/ExamesTab'
 import ExamesImagemTab from '@/components/modules/shared/ExamesImagemTab'
 import { featureFlags } from '@/lib/featureFlags'
-import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, ToastData } from '@/types'
+import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, ToastData, Cargo, Profissao } from '@/types'
 
 /** Dados do paciente carregados pela casca e disponíveis a todas as abas. */
 export interface PacienteContext {
@@ -37,8 +37,13 @@ export interface PacienteContext {
   intercorrencias: Intercorrencia[]
   pendencias: PendenciaIntensivista[]
   registrosIntensivista: RegistroIntensivista[]
-  /** Cargo (escalas.staff) do usuário logado em qualquer unidade: chefe = Médico Intensivista, com direito de editar tudo. */
-  souMedicoIntensivista: boolean
+  /** Cargo do usuário logado. Null = sem cadastro em `staff` (cai no padrão). */
+  cargo: Cargo | null
+  /**
+   * Se o usuário pode escrever no módulo ATIVO. Calculado pela casca a partir do
+   * cargo e do dono do módulo — as abas não precisam conhecer a regra.
+   */
+  podeEditar: boolean
   onRefresh: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
 }
@@ -52,6 +57,13 @@ export interface TabDef {
 export interface ModuloDef {
   id: string
   label: string
+  /** Profissão que edita este módulo. Todo mundo enxerga; só o dono escreve. */
+  profissaoDona: Profissao
+  /**
+   * Só o chefe da profissão edita. Necessário porque a profissão sozinha não
+   * separa os dois módulos médicos — ambos são de médico.
+   */
+  exigeChefe?: boolean
   tabs: readonly TabDef[]
 }
 
@@ -116,21 +128,26 @@ const cuidadosHorizontais: TabDef = {
   label: '📋 Cuidados Horizontais',
   render: ctx => <IntensivistaTab paciente={ctx.paciente} atbs={ctx.atbs} cuidados={ctx.cuidados}
     pendencias={ctx.pendencias} registrosIntensivista={ctx.registrosIntensivista}
-    podeEditar={ctx.souMedicoIntensivista}
+    podeEditar={ctx.podeEditar}
     onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
 }
 
 // ── Módulos (nova estrutura) ────────────────────────────────────────────────
 
+// Ao acrescentar um módulo (Enfermagem, Fisioterapia, Nutrição), declare a
+// profissão dona: a regra de edição sai de graça, sem tocar em lib/cargos.ts.
 export const MODULOS: readonly ModuloDef[] = [
   {
     id: 'plantonista',
     label: '🩺 Médico Plantonista',
+    profissaoDona: 'medico',
     tabs: [painelPlantao, balanco, sinais, hemodinamica, neurologico, ventilatorio, examesLab, examesImagem],
   },
   {
     id: 'intensivista',
     label: '📋 Médico Intensivista',
+    profissaoDona: 'medico',
+    exigeChefe: true,
     tabs: [cuidadosHorizontais, examesLab, examesImagem],
   },
 ]
@@ -140,6 +157,7 @@ export const MODULOS: readonly ModuloDef[] = [
 const LEGACY: ModuloDef = {
   id: 'legacy',
   label: '',
+  profissaoDona: 'medico',
   tabs: [
     balanco, sinais, examesLab, examesImagem, hemodinamica,
     { ...cuidadosHorizontais, label: '🩺 Médico Intensivista — Horizontal' },

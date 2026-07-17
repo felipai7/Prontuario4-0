@@ -6,6 +6,7 @@ import PacienteModal  from '@/components/paciente/PacienteModal'
 import CadastroForm   from '@/components/paciente/CadastroForm'
 import ToastContainer, { useToast } from '@/components/ui/Toast'
 import { pad, fmtData, calcAge, normalizarNome } from '@/lib/utils'
+import { ehIntensivista, apenasMedicos } from '@/lib/cargos'
 import { ALAS } from '@/lib/config'
 import type { Paciente } from '@/types'
 
@@ -58,9 +59,10 @@ export default function UTIGrid({ initialPacientes, userEmail }: Props) {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return
       const { data: staffRows } = await supabase
-        .from('staff').select('id, role').eq('user_id', data.user.id).eq('active', true)
-      meusStaffIds = (staffRows ?? []).map(s => s.id)
-      setSouChefe((staffRows ?? []).some(s => s.role === 'chefe'))
+        .from('staff').select('id, profissao, nivel').eq('user_id', data.user.id).eq('active', true)
+      // Só médicos entram na escala, então o badge de trocas só faz sentido para eles.
+      meusStaffIds = apenasMedicos(staffRows ?? []).map(s => s.id)
+      setSouChefe((staffRows ?? []).some(ehIntensivista))
       contar()
     })
 

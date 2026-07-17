@@ -264,7 +264,20 @@ export interface RegistroIntensivista {
 
 // ── Módulo de Escalas ────────────────────────────────────────────────────────
 
-export type StaffRole = 'plantonista' | 'chefe'
+// Cargo = profissão × nível. Duas dimensões porque enfermeiro/fisio/nutri ainda
+// vão ganhar chefes: com enum plano isso viraria uma lista que toda regra
+// precisa conhecer; assim, é um update. Ver supabase/cargos.sql.
+export type Profissao = 'medico' | 'enfermeiro' | 'fisioterapeuta' | 'nutricionista'
+export type Nivel = 'chefe' | 'plantonista'
+
+/** Cargo do usuário logado. */
+export interface Cargo {
+  profissao: Profissao
+  nivel: Nivel
+}
+
+// Os helpers de cargo (ehIntensivista, podeEditarModulo, labels) ficam em
+// lib/cargos.ts — este arquivo é só de tipos, e é importado com `import type`.
 
 export interface Unit {
   id: string
@@ -278,7 +291,8 @@ export interface Staff {
   user_id: string | null
   unit_id: string
   full_name: string
-  role: StaffRole
+  profissao: Profissao
+  nivel: Nivel
   active: boolean
   created_at: string
 }

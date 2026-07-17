@@ -11,7 +11,8 @@ import SwapRequests from './SwapRequests'
 import FinanceiroPlantonista from './FinanceiroPlantonista'
 import FinanceiroChefe from './FinanceiroChefe'
 import ComparativoView from './ComparativoView'
-import type { Unit, Staff, StaffRole, ShiftType } from '@/types'
+import { labelCargo, apenasMedicos, PROFISSOES } from '@/lib/cargos'
+import type { Unit, Staff, Profissao, Nivel, ShiftType } from '@/types'
 
 interface Props {
   units: Unit[]
@@ -27,14 +28,14 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
   const supabase = createClient()
   const { toasts, showToast, removeToast } = useToast()
 
-  const souChefeDeAlgumaUnidade = myStaff.some(s => s.role === 'chefe' && s.active)
+  const souChefeDeAlgumaUnidade = myStaff.some(s => s.nivel === 'chefe' && s.profissao === 'medico' && s.active)
 
   const [selectedUnitId, setSelectedUnitId] = useState<string>(() => {
     const minhaUnidade = myStaff.find(s => s.active)?.unit_id
     return minhaUnidade ?? units[0]?.id ?? ''
   })
 
-  const souChefeDaSelecionada = myStaff.some(s => s.unit_id === selectedUnitId && s.role === 'chefe' && s.active)
+  const souChefeDaSelecionada = myStaff.some(s => s.unit_id === selectedUnitId && s.nivel === 'chefe' && s.profissao === 'medico' && s.active)
   const meuStaffId = myStaff.find(s => s.unit_id === selectedUnitId && s.active)?.id ?? null
 
   // ── Staff da unidade selecionada ──────────────────────────────────────────
@@ -52,6 +53,11 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
 
   useEffect(() => { loadStaff(selectedUnitId) }, [selectedUnitId])
 
+  // A equipe da unidade inclui enfermeiros, fisios e nutricionistas, mas a
+  // ESCALA hoje é só dos médicos. Sem este recorte, eles apareceriam como
+  // opção de plantonista nos seletores de turno.
+  const medicos = useMemo(() => apenasMedicos(staffList), [staffList])
+
   // ── Tipos de turno da unidade selecionada (para exibir nomes na escala) ────
   const [shiftTypesList, setShiftTypesList] = useState<ShiftType[]>([])
 
@@ -67,7 +73,8 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
   // ── Novo membro da equipe ─────────────────────────────────────────────────
   const [novoEmail, setNovoEmail] = useState('')
   const [novoNome, setNovoNome] = useState('')
-  const [novoRole, setNovoRole] = useState<StaffRole>('plantonista')
+  const [novaProfissao, setNovaProfissao] = useState<Profissao>('medico')
+  const [novoNivel, setNovoNivel] = useState<Nivel>('plantonista')
   const [savingStaff, setSavingStaff] = useState(false)
 
   const handleAddStaff = async () => {
@@ -78,12 +85,13 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
     if (!userId) { setSavingStaff(false); showToast('Não existe conta com esse e-mail no sistema.', 'error'); return }
 
     const { error } = await supabase.from('staff').insert({
-      user_id: userId, unit_id: selectedUnitId, full_name: novoNome.trim(), role: novoRole,
+      user_id: userId, unit_id: selectedUnitId, full_name: novoNome.trim(),
+      profissao: novaProfissao, nivel: novoNivel,
     })
     setSavingStaff(false)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
     showToast('Membro adicionado!')
-    setNovoEmail(''); setNovoNome(''); setNovoRole('plantonista')
+    setNovoEmail(''); setNovoNome(''); setNovaProfissao('medico'); setNovoNivel('plantonista')
     loadStaff(selectedUnitId)
   }
 
@@ -154,7 +162,7 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
                   <li key={s.id} className="flex items-center justify-between gap-2 border border-slate-200 rounded-lg p-3">
                     <div className="min-w-0">
                       <p className={`text-sm font-medium ${s.active ? 'text-slate-800' : 'text-slate-400 line-through'}`}>{s.full_name}</p>
-                      <p className="text-xs text-slate-400">{s.role === 'chefe' ? '🎖️ Médico Intensivista (chefe)' : '🩺 Médico Plantonista'}</p>
+                      <p className="text-xs text-slate-400">{labelCargo(s)}</p>
                     </div>
                     {souChefeDaSelecionada && (
                       <div className="flex items-center gap-2 flex-shrink-0">
@@ -180,11 +188,26 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
                     placeholder="E-mail da conta" className={inputCls} />
                   <input value={novoNome} onChange={e => setNovoNome(e.target.value)}
                     placeholder="Nome completo" className={inputCls} />
-                  <select value={novoRole} onChange={e => setNovoRole(e.target.value as StaffRole)} className={inputCls}>
-                    <option value="plantonista">Médico Plantonista</option>
-                    <option value="chefe">Médico Intensivista (chefe)</option>
+                  <select value={novaProfissao} className={inputCls}
+                    onChange={e => {
+                      const p = e.target.value as Profissao
+                      setNovaProfissao(p)
+                      // Só médico tem chefe por enquanto; ver supabase/cargos.sql.
+                      if (p !== 'medico') setNovoNivel('plantonista')
+                    }}>
+                    {PROFISSOES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
                   </select>
+                  {novaProfissao === 'medico' && (
+                    <select value={novoNivel} onChange={e => setNovoNivel(e.target.value as Nivel)} className={inputCls}>
+                      <option value="plantonista">Médico Plantonista</option>
+                      <option value="chefe">Médico Intensivista (chefe)</option>
+                    </select>
+                  )}
                 </div>
+                <p className="text-xs text-slate-400">
+                  Só médicos entram na escala. Enfermeiro, fisioterapeuta e nutricionista veem
+                  o prontuário inteiro e editam apenas a própria aba.
+                </p>
                 <div className="flex justify-end">
                   <button onClick={handleAddStaff} disabled={savingStaff}
                     className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-bold px-4 py-2 rounded-lg">
@@ -197,22 +220,22 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
         )}
 
         {selectedUnitId && (
-          <MonthScheduleView unitId={selectedUnitId} staffList={staffList} shiftTypesList={shiftTypesList}
+          <MonthScheduleView unitId={selectedUnitId} staffList={medicos} shiftTypesList={shiftTypesList}
             souChefe={souChefeDaSelecionada} showToast={showToast} />
         )}
 
         {selectedUnitId && (
-          <TemplateEditor unitId={selectedUnitId} staffList={staffList} shiftTypesList={shiftTypesList}
+          <TemplateEditor unitId={selectedUnitId} staffList={medicos} shiftTypesList={shiftTypesList}
             souChefe={souChefeDaSelecionada} showToast={showToast} />
         )}
 
         {selectedUnitId && (
-          <SwapRequests unitId={selectedUnitId} staffList={staffList} shiftTypesList={shiftTypesList}
+          <SwapRequests unitId={selectedUnitId} staffList={medicos} shiftTypesList={shiftTypesList}
             meuStaffId={meuStaffId} souChefe={souChefeDaSelecionada} showToast={showToast} />
         )}
 
         {selectedUnitId && (
-          <ComparativoView unitId={selectedUnitId} staffList={staffList} shiftTypesList={shiftTypesList} showToast={showToast} />
+          <ComparativoView unitId={selectedUnitId} staffList={medicos} shiftTypesList={shiftTypesList} showToast={showToast} />
         )}
 
         {selectedUnitId && (
@@ -220,7 +243,7 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
         )}
 
         {selectedUnitId && souChefeDaSelecionada && (
-          <FinanceiroChefe unitId={selectedUnitId} staffList={staffList} shiftTypesList={shiftTypesList} showToast={showToast} />
+          <FinanceiroChefe unitId={selectedUnitId} staffList={medicos} shiftTypesList={shiftTypesList} showToast={showToast} />
         )}
 
         {selectedUnitId && (

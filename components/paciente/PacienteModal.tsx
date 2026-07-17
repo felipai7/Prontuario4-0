@@ -6,7 +6,8 @@ import { fmtData, calcAge, pad, diasDesde, fmtNum, toTitleCaseNome, ultimoPorTur
 import { ALAS, ALAS_MAP, PLANOS, type AlaId } from '@/lib/config'
 import { modulosAtivos, type PacienteContext } from '@/lib/modules'
 import { montarEvolucaoDiaria } from '@/lib/evolucaoDiaria'
-import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, ToastData } from '@/types'
+import { podeEditarModulo } from '@/lib/cargos'
+import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, ToastData, Cargo } from '@/types'
 
 const modulos = modulosAtivos()
 
@@ -58,7 +59,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
   const [intercorrencias, setIntercorrencias] = useState<Intercorrencia[]>([])
   const [pendencias,    setPendencias]    = useState<PendenciaIntensivista[]>([])
   const [registrosIntensivista, setRegistrosIntensivista] = useState<RegistroIntensivista[]>([])
-  const [souMedicoIntensivista, setSouMedicoIntensivista] = useState(false)
+  const [cargo, setCargo] = useState<Cargo | null>(null)
   const [loading,       setLoading]       = useState(true)
   const [showAlta,      setShowAlta]      = useState(false)
   const [pac,           setPac]           = useState<Paciente>(paciente)
@@ -163,15 +164,13 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     setLoading(false)
   }
 
-  // Cargo do usuário na escala (módulo Escalas) decide quem pode editar a
-  // aba do Médico Intensivista: cargo "chefe" em qualquer unidade edita
-  // tudo; sem cadastro em nenhuma unidade cai no comportamento padrão
-  // (só edita a aba do Médico Plantonista).
+  // O cargo decide o que a pessoa edita. Todo mundo vê todas as abas; só o dono
+  // da profissão escreve na sua, e o Médico Intensivista escreve em todas.
+  // Sem cadastro em `staff`, cai em Médico Plantonista (ver lib/cargos.ts).
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) return
-      supabase.from('staff').select('id').eq('user_id', data.user.id).eq('role', 'chefe').eq('active', true).limit(1)
-        .then(({ data: rows }) => setSouMedicoIntensivista((rows?.length ?? 0) > 0))
+    supabase.rpc('meu_cargo').then(({ data }) => {
+      const c = Array.isArray(data) ? data[0] : data
+      if (c) setCargo(c as Cargo)
     })
   }, [])
 
@@ -332,7 +331,8 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     paciente: pac,
     exames, periodos, sinais, examesImagem, dvas, periodosHemo, atbs, cuidados,
     neuroHistorico, ventHistorico, intercorrencias, pendencias, registrosIntensivista,
-    souMedicoIntensivista,
+    cargo,
+    podeEditar: podeEditarModulo(cargo, moduloAtivo),
     onRefresh: loadData,
     showToast,
   }
