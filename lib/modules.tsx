@@ -179,7 +179,9 @@ const nutricao: TabDef = {
   id: 'nutricao',
   label: '🥗 Nutrição',
   render: ctx => <NutricaoTab paciente={ctx.paciente} avaliacao={ctx.nutricaoAvaliacao}
-    dias={ctx.nutricaoDias} podeEditar={ctx.podeEditar}
+    dias={ctx.nutricaoDias} periodosBalanco={ctx.periodos}
+    ventHistorico={ctx.ventHistorico} cuidados={ctx.cuidados}
+    podeEditar={ctx.podeEditar}
     onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
 }
 

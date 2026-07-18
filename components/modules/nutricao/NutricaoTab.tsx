@@ -1,13 +1,22 @@
 'use client'
 import { useState, useMemo, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { fmtData } from '@/lib/utils'
-import type { Paciente, NutricaoAvaliacao, NutricaoDia, ToastData } from '@/types'
+import { fmtData, diasDesde } from '@/lib/utils'
+import type {
+  Paciente, NutricaoAvaliacao, NutricaoDia, PeriodoBalanco, SuporteVentilatorio,
+  CuidadosHorizontais, ToastData,
+} from '@/types'
 
 interface Props {
   paciente: Paciente
   avaliacao: NutricaoAvaliacao | null
   dias: NutricaoDia[]
+  /** Só para derivar constipação e diarreia — a nutrição não edita o Balanço. */
+  periodosBalanco: PeriodoBalanco[]
+  /** Só para derivar dias de VM. */
+  ventHistorico: SuporteVentilatorio[]
+  /** Só para derivar uso de opioide. */
+  cuidados: CuidadosHorizontais | null
   podeEditar: boolean
   onRefresh: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
@@ -33,6 +42,16 @@ function Pct({ label, valor, onChange, disabled, dica }: {
   )
 }
 
+function Fato({ label, valor, tom }: { label: string; valor: string; tom: 'normal' | 'atencao' }) {
+  return (
+    <div className={`rounded-lg px-2.5 py-2 border ${
+      tom === 'atencao' ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'}`}>
+      <p className="text-slate-500">{label}</p>
+      <p className={`font-semibold mt-0.5 ${tom === 'atencao' ? 'text-amber-800' : 'text-slate-700'}`}>{valor}</p>
+    </div>
+  )
+}
+
 function Check({ label, v, set, disabled, dica }: {
   label: string; v: boolean; set: (b: boolean) => void; disabled: boolean; dica?: string
 }) {
@@ -50,10 +69,43 @@ function Check({ label, v, set, disabled, dica }: {
 }
 
 export default function NutricaoTab({
-  paciente, avaliacao, dias, podeEditar, onRefresh, showToast,
+  paciente, avaliacao, dias, periodosBalanco, ventHistorico, cuidados, podeEditar, onRefresh, showToast,
 }: Props) {
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
+
+  // ── Painel "o que já sabemos" ───────────────────────────────────────────
+  // A nutrição hoje levanta esses quatro dados por fora (perguntando, olhando
+  // o prontuário de papel), mesmo já derivando deles. Se ela não vê o que o
+  // app já sabe, continua levantando do mesmo jeito e a economia de
+  // preenchimento não se paga. Nada aqui é lido do banco de novo — são os
+  // mesmos dados que a casca já carregou para Balanço e Ventilatório.
+  const emVMHoje = useMemo(
+    () => ventHistorico.some(v => v.data === hojeISO() && v.modalidade === 'ventilacao_mecanica'),
+    [ventHistorico])
+
+  const balancoOrdenado = useMemo(
+    () => [...periodosBalanco].sort((a, b) => b.inicio.localeCompare(a.inicio)), [periodosBalanco])
+
+  const ultimaEvacuacao = useMemo(
+    () => balancoOrdenado.find(p => p.evacuacao > 0) ?? null, [balancoOrdenado])
+
+  // Mesmo critério de constipação usado no indicador: 72h sem evacuar. Sem
+  // nenhum registro de evacuação ainda, conta a partir da admissão — mas só se
+  // já houver balanço lançado (sem isso, "sem evacuar" seria só falta de dado).
+  const diasSemEvacuar = ultimaEvacuacao
+    ? Math.floor((Date.now() - new Date(ultimaEvacuacao.inicio).getTime()) / (24 * 3600 * 1000))
+    : (periodosBalanco.length > 0 ? diasDesde(paciente.data_internacao) : null)
+  const constipado = diasSemEvacuar != null && diasSemEvacuar >= 3
+
+  // Diarreia recente: últimos 2 dias, qualquer um dos dois ter marcado sim —
+  // mesma regra "conta se qualquer um marcou" da agregação mensal.
+  const diarreicaRecente = useMemo(() => {
+    const limite = Date.now() - 2 * 24 * 3600 * 1000
+    return balancoOrdenado
+      .filter(p => new Date(p.inicio).getTime() >= limite)
+      .some(p => p.diarreica_medico || p.diarreica_nutricao)
+  }, [balancoOrdenado])
 
   // ── Avaliação inicial ───────────────────────────────────────────────────
   const [avData, setAvData] = useState(avaliacao?.data_avaliacao ?? hojeISO())
@@ -158,6 +210,40 @@ export default function NutricaoTab({
 
   return (
     <div className="space-y-4">
+      {/* O que já sabemos: dados derivados de outras abas, para a nutrição
+          confirmar em vez de levantar de novo por fora do app. */}
+      <section className="border border-indigo-100 bg-indigo-50/50 rounded-xl p-4">
+        <h3 className="font-semibold text-slate-700 text-sm mb-2">🔎 O que já sabemos</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+          <Fato
+            label="Ventilação mecânica"
+            valor={emVMHoje ? 'Em VM hoje' : 'Sem VM hoje'}
+            tom={emVMHoje ? 'atencao' : 'normal'} />
+          <Fato
+            label="Última evacuação"
+            valor={ultimaEvacuacao
+              ? fmtData(ultimaEvacuacao.inicio.split('T')[0])
+              : periodosBalanco.length > 0 ? 'nenhuma desde a admissão' : 'sem balanço lançado'}
+            tom="normal" />
+          <Fato
+            label="Constipação (≥72h)"
+            valor={diasSemEvacuar == null ? 'sem dado de balanço' : constipado ? `${diasSemEvacuar}d sem evacuar` : 'não'}
+            tom={constipado ? 'atencao' : 'normal'} />
+          <Fato
+            label="Diarreia (últ. 2 dias)"
+            valor={diarreicaRecente ? 'sim' : 'não'}
+            tom={diarreicaRecente ? 'atencao' : 'normal'} />
+          <Fato
+            label="Opioide em uso"
+            valor={cuidados?.opioide_em_uso ? 'sim' : 'não'}
+            tom={cuidados?.opioide_em_uso ? 'atencao' : 'normal'} />
+        </div>
+        <p className="text-[11px] text-slate-400 mt-2">
+          Vem das abas Ventilatório, Balanço Hídrico e Cuidados Horizontais — confira
+          contra o que você já sabe do paciente antes de preencher abaixo.
+        </p>
+      </section>
+
       {/* Avaliação inicial */}
       <section className="border border-slate-200 rounded-xl p-4 space-y-3">
         <div>
