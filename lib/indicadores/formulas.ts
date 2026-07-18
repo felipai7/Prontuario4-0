@@ -75,12 +75,27 @@ export function calcularIndicadores({
     pendente('densidade_iras', 'Densidade de IRAS', 'IRAS e segurança', '/1000 pac-dia', 'Intensivista'),
     pendente('taxa_infeccao', 'Taxa de infecção mensal', 'IRAS e segurança', '%', 'Intensivista'),
     pendente('pct_pacientes_iras', '% pacientes com IRAS', 'IRAS e segurança', '%', 'Intensivista'),
-    // Conta só as LPP adquiridas na UTI: as que o paciente já trouxe são de
-    // outro serviço, e puniriam esta unidade por cuidado que não foi dela.
+    // LPP em dois indicadores, por decisão do Dr. Felipe com aval do Dr. Flaubert.
+    // Não é redundância: medem coisas diferentes.
+    //
+    //   Adquirida na UTI — o indicador de QUALIDADE. É a lesão que apareceu sob
+    //   cuidado desta unidade; é sobre ela que a equipe age.
+    //
+    //   Total — inclui as que o paciente já trouxe. Mede CARGA de cuidado (uma
+    //   UTI que recebe muita lesão de fora tem mais trabalho de curativo sem ter
+    //   falhado), e é o que mantém a comparabilidade com o histórico da planilha,
+    //   que nunca separou os dois.
+    //
+    // A distância entre os dois números é informação por si só: total alto com
+    // adquirida baixa é bom cuidado recebendo caso grave de fora.
     enf
-      ? viva('densidade_lpp', 'Densidade de LPP', 'IRAS e segurança', '/1000 pac-dia',
+      ? viva('densidade_lpp', 'Densidade de LPP adquirida na UTI', 'IRAS e segurança', '/1000 pac-dia',
           enf.lpp_adquiridas_uti, c.pacientes_dia, 1000)
-      : pendente('densidade_lpp', 'Densidade de LPP', 'IRAS e segurança', '/1000 pac-dia', 'Enfermagem'),
+      : pendente('densidade_lpp', 'Densidade de LPP adquirida na UTI', 'IRAS e segurança', '/1000 pac-dia', 'Enfermagem'),
+    enf
+      ? viva('densidade_lpp_total', 'Densidade de LPP total (inclui admissão)', 'IRAS e segurança', '/1000 pac-dia',
+          enf.lpp_total, c.pacientes_dia, 1000)
+      : pendente('densidade_lpp_total', 'Densidade de LPP total (inclui admissão)', 'IRAS e segurança', '/1000 pac-dia', 'Enfermagem'),
     pendente('di_pneumonia', 'DI pneumonia nosocomial', 'IRAS e segurança', '/1000 pac-dia', 'Intensivista'),
     pendente('di_traqueite', 'DI traqueíte nosocomial', 'IRAS e segurança', '/1000 pac-dia', 'Intensivista'),
     // O denominador (CVC-dia / SVD-dia) já vem da enfermagem; o que falta é o

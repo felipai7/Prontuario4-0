@@ -263,19 +263,35 @@ describe('enfermagem', () => {
     })
 
   it.each([
-    ['densidade_lpp',   5.8823529412],   // 3 / 510 × 1000
-    ['utilizacao_cvc', 41.1764705882],   // 210 / 510 × 100
-    ['utilizacao_svd', 35.2941176471],   // 180 / 510 × 100
+    ['densidade_lpp',        5.8823529412],   // 3 adquiridas / 510 × 1000
+    ['densidade_lpp_total',  5.8823529412],   // 3 totais / 510 × 1000
+    ['utilizacao_cvc',      41.1764705882],   // 210 / 510 × 100
+    ['utilizacao_svd',      35.2941176471],   // 180 / 510 × 100
   ])('%s = %f (paridade com a planilha)', (id, esperado) => {
     expect(pegar(comEnf(), id as string).valor).toBeCloseTo(esperado as number, 6)
   })
 
-  it('densidade de LPP conta só as adquiridas na UTI', () => {
-    // 5 lesões no mês, mas 2 vieram da admissão: contar as 5 puniria esta
-    // unidade por cuidado que não foi dela.
-    const i = pegar(comEnf({ lpp_total: 5, lpp_adquiridas_uti: 3 }), 'densidade_lpp')
-    expect(i.numerador).toBe(3)
-    expect(i.valor).toBeCloseTo(3 / 510 * 1000, 6)
+  it('separa LPP adquirida na UTI de LPP total', () => {
+    // 5 lesões no mês, 2 vieram da admissão. O indicador de qualidade conta as
+    // 3 adquiridas; o de carga conta as 5 e é o que bate com o histórico da
+    // planilha, que nunca separou os dois.
+    const inds = comEnf({ lpp_total: 5, lpp_adquiridas_uti: 3 })
+
+    const adquirida = pegar(inds, 'densidade_lpp')
+    expect(adquirida.numerador).toBe(3)
+    expect(adquirida.valor).toBeCloseTo(3 / 510 * 1000, 6)
+
+    const total = pegar(inds, 'densidade_lpp_total')
+    expect(total.numerador).toBe(5)
+    expect(total.valor).toBeCloseTo(5 / 510 * 1000, 6)
+  })
+
+  it('UTI que só recebe lesão de fora tem total alto e adquirida zero', () => {
+    // O caso que justifica os dois indicadores: nenhuma falha de cuidado aqui,
+    // mas carga de curativo real.
+    const inds = comEnf({ lpp_total: 6, lpp_adquiridas_uti: 0 })
+    expect(pegar(inds, 'densidade_lpp').valor).toBe(0)
+    expect(pegar(inds, 'densidade_lpp_total').valor).toBeCloseTo(6 / 510 * 1000, 6)
   })
 
   it('mês sem registro de enfermagem deixa os 3 pendentes', () => {
@@ -298,11 +314,11 @@ describe('enfermagem', () => {
     }
   })
 
-  it('com enfermagem, 20 indicadores vivos', () => {
-    expect(comEnf().filter(i => !i.aguarda)).toHaveLength(20)
+  it('com enfermagem, 21 indicadores vivos', () => {
+    expect(comEnf().filter(i => !i.aguarda)).toHaveLength(21)
   })
 
-  it('com fisio e enfermagem juntas, 26 vivos', () => {
+  it('com fisio e enfermagem juntas, 27 vivos', () => {
     const inds = calcularIndicadores({
       contagens: EXEMPLO_PLANILHA, leitosDia: 600, leitosAtivos: 20,
       enfermagem: ENF,
@@ -313,7 +329,7 @@ describe('enfermagem', () => {
         traqueo_elegiveis: 5, dias_vm_protetora: 130,
       },
     })
-    expect(inds.filter(i => !i.aguarda)).toHaveLength(26)
+    expect(inds.filter(i => !i.aguarda)).toHaveLength(27)
   })
 })
 
