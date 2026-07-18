@@ -418,6 +418,53 @@ export interface ContagensMes {
   pacientes_disfuncao_glicemica_corticoide: number
 }
 
+// ── Fisioterapia ─────────────────────────────────────────────────────────────
+
+export type TipoEventoFisio = 'extubacao' | 'desmame_dificil' | 'vni' | 'traqueostomia'
+
+export interface FisioEvento {
+  id: string
+  paciente_id: string
+  tipo: TipoEventoFisio
+  data: string              // YYYY-MM-DD
+  /** Extubação programada (não acidental) — denominador da falha de extubação. */
+  planejada: boolean | null
+  sucesso: boolean | null
+  reintubou_48h: boolean | null
+  objetivo_evitar_iot: boolean | null
+  evitou_iot: boolean | null
+  elegivel_decanulacao: boolean | null
+  decanulado_na_uti: boolean | null
+  observacao: string | null
+  criado_em: string
+  criado_por: string | null
+}
+
+export interface FisioAvaliacaoDiaria {
+  id: string
+  paciente_id: string
+  data: string              // YYYY-MM-DD
+  vm_protetora: boolean | null
+  observacao: string | null
+  criado_em: string
+  criado_por: string | null
+}
+
+/** Contagens do mês vindas da RPC `contagens_fisio_mes`. */
+export interface ContagensFisioMes {
+  extubados_com_sucesso: number
+  tentativas_extubacao: number
+  reintubacoes_48h: number
+  extubacoes_planejadas: number
+  desmame_dificil_sucesso: number
+  pacientes_desmame_dificil: number
+  vni_evitou_iot: number
+  vni_objetivo_evitar_iot: number
+  decanulados_na_uti: number
+  traqueo_elegiveis: number
+  dias_vm_protetora: number
+}
+
 /**
  * Qualidade do dado que sustenta os indicadores do mês (RPC `qualidade_mes`).
  * Os três grupos têm naturezas diferentes e não devem ser misturados na tela —

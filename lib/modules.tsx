@@ -16,10 +16,11 @@ import HemodinamicaTab from '@/components/modules/plantonista/HemodinamicaTab'
 import NeurologicoTab  from '@/components/modules/plantonista/NeurologicoTab'
 import VentilatorioTab from '@/components/modules/plantonista/VentilatorioTab'
 import IntensivistaTab from '@/components/modules/intensivista/IntensivistaTab'
+import FisioterapiaTab from '@/components/modules/fisioterapia/FisioterapiaTab'
 import ExamesTab       from '@/components/modules/shared/ExamesTab'
 import ExamesImagemTab from '@/components/modules/shared/ExamesImagemTab'
 import { featureFlags } from '@/lib/featureFlags'
-import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, ToastData, Cargo, Profissao } from '@/types'
+import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, FisioEvento, FisioAvaliacaoDiaria, ToastData, Cargo, Profissao } from '@/types'
 
 /** Dados do paciente carregados pela casca e disponíveis a todas as abas. */
 export interface PacienteContext {
@@ -37,6 +38,8 @@ export interface PacienteContext {
   intercorrencias: Intercorrencia[]
   pendencias: PendenciaIntensivista[]
   registrosIntensivista: RegistroIntensivista[]
+  fisioEventos: FisioEvento[]
+  fisioAvaliacoes: FisioAvaliacaoDiaria[]
   /** Cargo do usuário logado. Null = sem cadastro em `staff` (cai no padrão). */
   cargo: Cargo | null
   /**
@@ -132,6 +135,14 @@ const cuidadosHorizontais: TabDef = {
     onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
 }
 
+const fisioterapia: TabDef = {
+  id: 'fisio',
+  label: '🫁 Fisioterapia Respiratória',
+  render: ctx => <FisioterapiaTab paciente={ctx.paciente} eventos={ctx.fisioEventos}
+    avaliacoes={ctx.fisioAvaliacoes} ventHistorico={ctx.ventHistorico}
+    podeEditar={ctx.podeEditar} onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
+}
+
 // ── Módulos (nova estrutura) ────────────────────────────────────────────────
 
 // Ao acrescentar um módulo (Enfermagem, Fisioterapia, Nutrição), declare a
@@ -149,6 +160,14 @@ export const MODULOS: readonly ModuloDef[] = [
     profissaoDona: 'medico',
     exigeChefe: true,
     tabs: [cuidadosHorizontais, examesLab, examesImagem],
+  },
+  {
+    id: 'fisioterapia',
+    label: '🫁 Fisioterapia',
+    profissaoDona: 'fisioterapeuta',
+    // A aba Ventilatório entra como leitura: a fisio precisa ver a modalidade
+    // do dia para decidir sobre desmame, mas quem registra é o plantonista.
+    tabs: [fisioterapia, ventilatorio, examesImagem],
   },
 ]
 

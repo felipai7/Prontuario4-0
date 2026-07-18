@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { calcularIndicadores, calcularLeitosDia } from './formulas'
-import type { ContagensMes, Indicador } from '@/types'
+import type { ContagensMes, ContagensFisioMes, Indicador } from '@/types'
 
 // A linha de exemplo da aba "Dados Mensais" da planilha do Dr. Flaubert.
 // Os valores esperados nos testes são os que a PRÓPRIA PLANILHA calcula.
@@ -172,6 +172,77 @@ describe('numerador e denominador expostos', () => {
     }), 'mortalidade_geral')
     expect(m.denominador).toBe(110)
     expect(m.valor).toBeCloseTo(16 / 110 * 100, 6)
+  })
+})
+
+describe('fisioterapia respiratória', () => {
+  const FISIO: ContagensFisioMes = {
+    extubados_com_sucesso: 27,
+    tentativas_extubacao: 30,
+    reintubacoes_48h: 3,
+    extubacoes_planejadas: 30,
+    desmame_dificil_sucesso: 5,
+    pacientes_desmame_dificil: 8,
+    vni_evitou_iot: 12,
+    vni_objetivo_evitar_iot: 15,
+    decanulados_na_uti: 3,
+    traqueo_elegiveis: 5,
+    dias_vm_protetora: 130,
+  }
+
+  const comFisio = (f: Partial<ContagensFisioMes> = {}) =>
+    calcularIndicadores({
+      contagens: { ...EXEMPLO_PLANILHA },
+      leitosDia: 600, leitosAtivos: 20,
+      fisio: { ...FISIO, ...f },
+    })
+
+  // Mesmos números do exemplo da planilha → mesmos resultados.
+  it.each([
+    ['sucesso_desmame',         90],
+    ['falha_extubacao',         10],
+    ['sucesso_desmame_dificil', 62.5],
+    ['vni_evita_iot',           80],
+    ['decanulacao_tqt',         60],
+    ['vm_protetora',            81.25],
+  ])('%s = %f (paridade com a planilha)', (id, esperado) => {
+    expect(pegar(comFisio(), id as string).valor).toBeCloseTo(esperado as number, 6)
+  })
+
+  it('% VM protetora usa ventilador-dia como denominador', () => {
+    // O denominador vem da aba Ventilatório, não do módulo de fisio.
+    const i = pegar(comFisio(), 'vm_protetora')
+    expect(i.denominador).toBe(EXEMPLO_PLANILHA.ventilador_dia)
+  })
+
+  it('falha de extubação ignora extubações não planejadas', () => {
+    // 30 tentativas, mas só 25 planejadas: uma autoextubação reintubada não
+    // pode contar como falha de julgamento da equipe.
+    const i = pegar(comFisio({ extubacoes_planejadas: 25, reintubacoes_48h: 2 }), 'falha_extubacao')
+    expect([i.numerador, i.denominador]).toEqual([2, 25])
+    expect(i.valor).toBeCloseTo(8, 6)
+  })
+
+  it('mês sem registro de fisio deixa os 6 pendentes, não zerados', () => {
+    // "Não houve fisio registrada" ≠ "houve e deu zero".
+    const inds = calcularIndicadores({
+      contagens: EXEMPLO_PLANILHA, leitosDia: 600, leitosAtivos: 20, fisio: null,
+    })
+    for (const id of ['sucesso_desmame', 'falha_extubacao', 'sucesso_desmame_dificil',
+                      'vni_evita_iot', 'decanulacao_tqt', 'vm_protetora']) {
+      const i = pegar(inds, id)
+      expect(i.aguarda).toBe('Fisioterapia')
+      expect(i.valor).toBeNull()
+    }
+  })
+
+  it('registro existente mas sem eventos do tipo devolve null, não NaN', () => {
+    const inds = comFisio({ tentativas_extubacao: 0, extubados_com_sucesso: 0 })
+    expect(pegar(inds, 'sucesso_desmame').valor).toBeNull()
+  })
+
+  it('com fisio, 23 indicadores vivos', () => {
+    expect(comFisio().filter(i => !i.aguarda)).toHaveLength(23)
   })
 })
 

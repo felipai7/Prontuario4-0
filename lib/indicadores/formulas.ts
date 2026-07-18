@@ -8,7 +8,7 @@
 // não existe. Ele aparece na tela como pendente, e a fórmula entra quando o módulo
 // chegar — não escrevemos fórmula contra campo que não existe.
 
-import type { ContagensMes, Indicador } from '@/types'
+import type { ContagensMes, ContagensFisioMes, Indicador } from '@/types'
 
 /** Divisão protegida — equivale ao IFERROR(...,"") da planilha. */
 function razao(n: number | null, d: number | null, mult = 1): number | null {
@@ -21,9 +21,11 @@ interface Entrada {
   /** Leitos × dias do mês. Vem de lib/config.ts, não do banco. */
   leitosDia: number
   leitosAtivos: number
+  /** Null enquanto não houver dado de fisioterapia no mês — os 6 ficam pendentes. */
+  fisio?: ContagensFisioMes | null
 }
 
-export function calcularIndicadores({ contagens: c, leitosDia, leitosAtivos }: Entrada): Indicador[] {
+export function calcularIndicadores({ contagens: c, leitosDia, leitosAtivos, fisio }: Entrada): Indicador[] {
   const viva = (
     id: string, nome: string, categoria: Indicador['categoria'], unidade: Indicador['unidade'],
     numerador: number, denominador: number, mult = 1,
@@ -106,13 +108,32 @@ export function calcularIndicadores({ contagens: c, leitosDia, leitosAtivos }: E
       c.pacientes_disfuncao_glicemica_corticoide, c.pacientes_disfuncao_glicemica, 100),
 
     // ── Fisioterapia respiratória ─────────────────────────────────────────
-    pendente('sucesso_desmame', 'Sucesso de desmame da VM', 'Fisioterapia respiratória', '%', 'Fisioterapia'),
-    pendente('falha_extubacao', 'Falha de extubação', 'Fisioterapia respiratória', '%', 'Fisioterapia'),
-    pendente('sucesso_desmame_dificil', 'Sucesso no desmame difícil', 'Fisioterapia respiratória', '%', 'Fisioterapia'),
-    pendente('vni_evita_iot', 'VNI sucesso p/ evitar IOT', 'Fisioterapia respiratória', '%', 'Fisioterapia'),
-    pendente('decanulacao_tqt', 'Taxa decanulação TQT na UTI', 'Fisioterapia respiratória', '%', 'Fisioterapia'),
-    // Denominador (ventilador-dia) já existe; falta o flag diário de VM protetora.
-    pendente('vm_protetora', '% VM protetora', 'Fisioterapia respiratória', '%', 'Fisioterapia'),
+    // Sem nenhum registro no mês, os 6 ficam pendentes em vez de mostrar 0/0:
+    // "não houve fisio registrada" é diferente de "houve e deu zero".
+    ...(fisio ? [
+      viva('sucesso_desmame', 'Sucesso de desmame da VM', 'Fisioterapia respiratória', '%',
+        fisio.extubados_com_sucesso, fisio.tentativas_extubacao, 100),
+      // Numerador e denominador restritos às planejadas: reintubar após
+      // autoextubação não é falha de julgamento da equipe.
+      viva('falha_extubacao', 'Falha de extubação', 'Fisioterapia respiratória', '%',
+        fisio.reintubacoes_48h, fisio.extubacoes_planejadas, 100),
+      viva('sucesso_desmame_dificil', 'Sucesso no desmame difícil', 'Fisioterapia respiratória', '%',
+        fisio.desmame_dificil_sucesso, fisio.pacientes_desmame_dificil, 100),
+      viva('vni_evita_iot', 'VNI sucesso p/ evitar IOT', 'Fisioterapia respiratória', '%',
+        fisio.vni_evitou_iot, fisio.vni_objetivo_evitar_iot, 100),
+      viva('decanulacao_tqt', 'Taxa decanulação TQT na UTI', 'Fisioterapia respiratória', '%',
+        fisio.decanulados_na_uti, fisio.traqueo_elegiveis, 100),
+      // Denominador é ventilador-dia, que vem da aba Ventilatório.
+      viva('vm_protetora', '% VM protetora', 'Fisioterapia respiratória', '%',
+        fisio.dias_vm_protetora, c.ventilador_dia, 100),
+    ] : [
+      pendente('sucesso_desmame', 'Sucesso de desmame da VM', 'Fisioterapia respiratória', '%', 'Fisioterapia'),
+      pendente('falha_extubacao', 'Falha de extubação', 'Fisioterapia respiratória', '%', 'Fisioterapia'),
+      pendente('sucesso_desmame_dificil', 'Sucesso no desmame difícil', 'Fisioterapia respiratória', '%', 'Fisioterapia'),
+      pendente('vni_evita_iot', 'VNI sucesso p/ evitar IOT', 'Fisioterapia respiratória', '%', 'Fisioterapia'),
+      pendente('decanulacao_tqt', 'Taxa decanulação TQT na UTI', 'Fisioterapia respiratória', '%', 'Fisioterapia'),
+      pendente('vm_protetora', '% VM protetora', 'Fisioterapia respiratória', '%', 'Fisioterapia'),
+    ]),
 
     // ── Nutrição ──────────────────────────────────────────────────────────
     pendente('adequacao_np', 'Adequação NP >70%', 'Nutrição', '%', 'Nutrição'),

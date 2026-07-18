@@ -7,7 +7,7 @@ import { ALAS, ALAS_MAP, PLANOS, type AlaId } from '@/lib/config'
 import { modulosAtivos, type PacienteContext } from '@/lib/modules'
 import { montarEvolucaoDiaria } from '@/lib/evolucaoDiaria'
 import { podeEditarModulo } from '@/lib/cargos'
-import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, ToastData, Cargo } from '@/types'
+import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, FisioEvento, FisioAvaliacaoDiaria, ToastData, Cargo } from '@/types'
 
 const modulos = modulosAtivos()
 
@@ -59,6 +59,8 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
   const [intercorrencias, setIntercorrencias] = useState<Intercorrencia[]>([])
   const [pendencias,    setPendencias]    = useState<PendenciaIntensivista[]>([])
   const [registrosIntensivista, setRegistrosIntensivista] = useState<RegistroIntensivista[]>([])
+  const [fisioEventos,    setFisioEventos]    = useState<FisioEvento[]>([])
+  const [fisioAvaliacoes, setFisioAvaliacoes] = useState<FisioAvaliacaoDiaria[]>([])
   const [cargo, setCargo] = useState<Cargo | null>(null)
   const [loading,       setLoading]       = useState(true)
   const [showAlta,      setShowAlta]      = useState(false)
@@ -154,12 +156,22 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     if (data) setRegistrosIntensivista(data as RegistroIntensivista[])
   }
 
+  const loadFisioEventos = async () => {
+    const { data } = await supabase.from('fisio_eventos').select('*').eq('paciente_id', pac.id).order('data')
+    if (data) setFisioEventos(data as FisioEvento[])
+  }
+  const loadFisioAvaliacoes = async () => {
+    const { data } = await supabase.from('fisio_avaliacoes_diarias').select('*').eq('paciente_id', pac.id).order('data')
+    if (data) setFisioAvaliacoes(data as FisioAvaliacaoDiaria[])
+  }
+
   const loadData = async () => {
     setLoading(true)
     await Promise.all([
       loadExames(), loadPeriodos(), loadSinais(), loadExamesImagem(), loadDvas(),
       loadPeriodosHemo(), loadAtbs(), loadCuidados(), loadNeuro(), loadVentilatorio(),
       loadIntercorrencias(), loadPendencias(), loadRegistrosIntensivista(),
+      loadFisioEventos(), loadFisioAvaliacoes(),
     ])
     setLoading(false)
   }
@@ -331,6 +343,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     paciente: pac,
     exames, periodos, sinais, examesImagem, dvas, periodosHemo, atbs, cuidados,
     neuroHistorico, ventHistorico, intercorrencias, pendencias, registrosIntensivista,
+    fisioEventos, fisioAvaliacoes,
     cargo,
     podeEditar: podeEditarModulo(cargo, moduloAtivo),
     onRefresh: loadData,

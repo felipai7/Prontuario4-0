@@ -8,7 +8,7 @@ import { gerarCsvDadosMensais, nomeArquivoCsv, baixarCsv, COLUNAS_PREENCHIDAS, C
 import PainelQualidade from './PainelQualidade'
 import { fmtNum } from '@/lib/utils'
 import { ALAS } from '@/lib/config'
-import type { ContagensMes, Indicador, QualidadeMes } from '@/types'
+import type { ContagensMes, ContagensFisioMes, Indicador, QualidadeMes } from '@/types'
 
 interface Props { souChefe: boolean; userEmail: string }
 
@@ -40,6 +40,7 @@ export default function IndicadoresHome({ souChefe, userEmail }: Props) {
   const [mes, setMes] = useState(hoje.getMonth()) // 0-11
   const [contagens, setContagens] = useState<ContagensMes | null>(null)
   const [qualidade, setQualidade] = useState<QualidadeMes | null>(null)
+  const [fisio, setFisio] = useState<ContagensFisioMes | null>(null)
   const [loading, setLoading] = useState(false)
 
   const primeiroDia = useMemo(() => new Date(ano, mes, 1), [ano, mes])
@@ -48,9 +49,10 @@ export default function IndicadoresHome({ souChefe, userEmail }: Props) {
     if (!souChefe) return
     setLoading(true)
     const pMes = `${ano}-${String(mes + 1).padStart(2, '0')}-01`
-    const [contRes, qualRes] = await Promise.all([
-      supabase.rpc('contagens_mes',  { p_mes: pMes }),
-      supabase.rpc('qualidade_mes',  { p_mes: pMes }),
+    const [contRes, qualRes, fisioRes] = await Promise.all([
+      supabase.rpc('contagens_mes',       { p_mes: pMes }),
+      supabase.rpc('qualidade_mes',       { p_mes: pMes }),
+      supabase.rpc('contagens_fisio_mes', { p_mes: pMes }),
     ])
     setLoading(false)
     if (contRes.error) { showToast('Erro ao carregar indicadores: ' + contRes.error.message, 'error'); return }
@@ -59,6 +61,11 @@ export default function IndicadoresHome({ souChefe, userEmail }: Props) {
     setContagens(uma<ContagensMes>(contRes.data))
     // A qualidade é acessório: se falhar, os indicadores ainda valem a visita.
     setQualidade(qualRes.error ? null : uma<QualidadeMes>(qualRes.data))
+    // Sem nenhum registro de fisio no mês, os 6 indicadores ficam pendentes em
+    // vez de mostrar 0/0 — "não houve fisio" ≠ "houve e deu zero".
+    const f = fisioRes.error ? null : uma<ContagensFisioMes>(fisioRes.data)
+    const houveRegistro = f != null && Object.values(f).some(v => Number(v) > 0)
+    setFisio(houveRegistro ? f : null)
   }, [ano, mes, souChefe, supabase, showToast])
 
   useEffect(() => { carregar() }, [carregar])
@@ -69,8 +76,9 @@ export default function IndicadoresHome({ souChefe, userEmail }: Props) {
       contagens,
       leitosDia: calcularLeitosDia(primeiroDia, LEITOS_ATIVOS),
       leitosAtivos: LEITOS_ATIVOS,
+      fisio,
     })
-  }, [contagens, primeiroDia])
+  }, [contagens, primeiroDia, fisio])
 
   const vivos = indicadores.filter(i => !i.aguarda).length
 
