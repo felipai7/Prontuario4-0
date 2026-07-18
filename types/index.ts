@@ -63,6 +63,13 @@ export interface PeriodoBalanco {
   sne_sng: number
   ostomia: number
   perdas_insensiveis: number
+  /**
+   * Checagem dupla da diarreia: médico e nutrição marcam de forma independente.
+   * Null = não respondeu (ou não houve evacuação). Divergência entre os dois
+   * vira pendência no painel de qualidade.
+   */
+  diarreica_medico: boolean | null
+  diarreica_nutricao: boolean | null
   created_at: string
   updated_at: string
 }
@@ -507,6 +514,87 @@ export interface ContagensEnfermagemMes {
   lpp_total: number
   /** Dispositivos sem retirada em paciente já saído — retirada esquecida. */
   dispositivos_abertos: number
+}
+
+// ── Nutrição ─────────────────────────────────────────────────────────────────
+
+export interface NutricaoAvaliacao {
+  id: string
+  paciente_id: string
+  data_avaliacao: string          // YYYY-MM-DD
+  hora_avaliacao: string | null
+  risco_nutricional: boolean
+  deficit: boolean
+  observacao: string | null
+  criado_em: string
+  criado_por: string | null
+}
+
+/**
+ * Registro diário. As vias são três porcentagens em vez de um campo "via":
+ * o paciente pode estar em NE e VO no mesmo dia. Null = não recebeu por ali.
+ */
+export interface NutricaoDia {
+  id: string
+  paciente_id: string
+  data: string                    // YYYY-MM-DD
+  elegivel_tn: boolean
+  elegivel_ne: boolean
+  jejum: boolean
+  np_pct_meta: number | null
+  ne_pct_meta: number | null
+  vo_pct_aceitacao: number | null
+  proteica_pct: number | null
+  intolerancia_gi_grave: boolean
+  interrupcao_nao_justificada: boolean
+  discutido_round: boolean
+  hipoglicemia_relacionada_tn: boolean
+  observacao: string | null
+  criado_em: string
+  criado_por: string | null
+}
+
+/** Contagens do mês vindas da RPC `contagens_nutricao_mes`. */
+export interface ContagensNutricaoMes {
+  avaliados: number
+  avaliados_ate_24h: number
+  admissoes_elegiveis_24h: number
+  deficit_risco: number
+  elegiveis_ne: number
+  elegiveis_tn: number
+  elegiveis_tn_receberam: number
+  dias_np: number
+  dias_ne: number
+  dias_vo: number
+  dias_np_adequado: number
+  dias_ne_adequado: number
+  dias_vo_adequado: number
+  dias_elegiveis_tn: number
+  dias_proteica_adequada: number
+  pacientes_proteica_media_ok: number
+  pacientes_proteica_avaliados: number
+  dias_vm_com_nutricao: number
+  dias_vm_nutricao_adequada: number
+  jejum_maior_24h: number
+  ne_iniciada_ate_48h: number
+  elegiveis_inicio_ne: number
+  pacientes_ne: number
+  pacientes_vo: number
+  pacientes_diarreia_ne: number
+  pacientes_diarreia_vo: number
+  episodios_diarreia_ne: number
+  dias_diarreia_ne: number
+  constipados: number
+  avaliados_constipacao: number
+  constipados_opioide: number
+  pacientes_opioide: number
+  constipacao_vm: number
+  intolerancia_gi: number
+  interrupcao_tn: number
+  hipoglicemia_tn: number
+  dias_discutidos_round: number
+  /** Médico e nutrição discordaram sobre a evacuação ser diarreica. */
+  divergencias_diarreia: number
 }
 
 /**

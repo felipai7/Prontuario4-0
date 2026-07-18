@@ -5,7 +5,7 @@ import { calcularLeitosDia } from '@/lib/indicadores/formulas'
 import { ehIntensivista } from '@/lib/cargos'
 import { ALAS } from '@/lib/config'
 import type {
-  Staff, ContagensMes, QualidadeMes, ContagensFisioMes, ContagensEnfermagemMes,
+  Staff, ContagensMes, QualidadeMes, ContagensFisioMes, ContagensEnfermagemMes, ContagensNutricaoMes,
 } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -65,7 +65,7 @@ export default async function IndicadoresPage(
   if (!souChefe) {
     return <IndicadoresHome souChefe={false} userEmail={user.email ?? ''}
       ano={ano} mes={mes} anoAtual={hoje.ano} mesCorrente={false}
-      contagens={null} qualidade={null} fisio={null} enfermagem={null}
+      contagens={null} qualidade={null} fisio={null} enfermagem={null} nutricao={null}
       leitosDia={0} leitosAtivos={LEITOS_ATIVOS} erro={null} />
   }
 
@@ -74,11 +74,12 @@ export default async function IndicadoresPage(
   // de duas, e — o que motivou a mudança — servidor e cliente renderizam a mesma
   // coisa, sem o React descartar o HTML por divergência na hidratação.
   const pMes = `${ano}-${String(mes).padStart(2, '0')}-01`
-  const [contRes, qualRes, fisioRes, enfRes] = await Promise.all([
+  const [contRes, qualRes, fisioRes, enfRes, nutRes] = await Promise.all([
     supabase.rpc('contagens_mes',            { p_mes: pMes }),
     supabase.rpc('qualidade_mes',            { p_mes: pMes }),
     supabase.rpc('contagens_fisio_mes',      { p_mes: pMes }),
     supabase.rpc('contagens_enfermagem_mes', { p_mes: pMes }),
+    supabase.rpc('contagens_nutricao_mes',   { p_mes: pMes }),
   ])
 
   const mesCorrente = ano === hoje.ano && mes === hoje.mes
@@ -97,6 +98,7 @@ export default async function IndicadoresPage(
       qualidade={qualRes.error ? null : uma<QualidadeMes>(qualRes.data)}
       fisio={fisioRes.error ? null : houveRegistro(uma<ContagensFisioMes>(fisioRes.data))}
       enfermagem={enfRes.error ? null : houveRegistro(uma<ContagensEnfermagemMes>(enfRes.data))}
+      nutricao={nutRes.error ? null : houveRegistro(uma<ContagensNutricaoMes>(nutRes.data))}
       leitosDia={calcularLeitosDia(
         new Date(ano, mes - 1, 1), LEITOS_ATIVOS, new Date(hoje.ano, hoje.mes - 1, hoje.dia))}
       leitosAtivos={LEITOS_ATIVOS}

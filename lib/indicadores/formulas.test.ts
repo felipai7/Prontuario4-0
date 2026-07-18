@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { calcularIndicadores, calcularLeitosDia } from './formulas'
-import type { ContagensMes, ContagensFisioMes, ContagensEnfermagemMes, Indicador } from '@/types'
+import type { ContagensMes, ContagensFisioMes, ContagensEnfermagemMes, ContagensNutricaoMes, Indicador } from '@/types'
 
 // A linha de exemplo da aba "Dados Mensais" da planilha do Dr. Flaubert.
 // Os valores esperados nos testes são os que a PRÓPRIA PLANILHA calcula.
@@ -330,6 +330,104 @@ describe('enfermagem', () => {
       },
     })
     expect(inds.filter(i => !i.aguarda)).toHaveLength(27)
+  })
+})
+
+describe('nutrição', () => {
+  // Números do exemplo da planilha, já com as redefinições do Dr. Flaubert.
+  const NUT: ContagensNutricaoMes = {
+    avaliados: 100, avaliados_ate_24h: 90, admissoes_elegiveis_24h: 100,
+    deficit_risco: 22, elegiveis_ne: 45, elegiveis_tn: 95, elegiveis_tn_receberam: 76,
+    dias_np: 5, dias_ne: 38, dias_vo: 52,
+    dias_np_adequado: 4, dias_ne_adequado: 30, dias_vo_adequado: 40,
+    dias_elegiveis_tn: 200, dias_proteica_adequada: 160,
+    pacientes_proteica_media_ok: 25, pacientes_proteica_avaliados: 95,
+    dias_vm_com_nutricao: 28, dias_vm_nutricao_adequada: 20,
+    jejum_maior_24h: 6, ne_iniciada_ate_48h: 32, elegiveis_inicio_ne: 45,
+    pacientes_ne: 38, pacientes_vo: 52,
+    pacientes_diarreia_ne: 4, pacientes_diarreia_vo: 3,
+    episodios_diarreia_ne: 5, dias_diarreia_ne: 9,
+    constipados: 14, avaliados_constipacao: 100,
+    constipados_opioide: 8, pacientes_opioide: 30, constipacao_vm: 5,
+    intolerancia_gi: 2, interrupcao_tn: 3, hipoglicemia_tn: 4,
+    dias_discutidos_round: 90, divergencias_diarreia: 0,
+  }
+
+  const comNut = (n: Partial<ContagensNutricaoMes> = {}) =>
+    calcularIndicadores({
+      contagens: { ...EXEMPLO_PLANILHA },
+      leitosDia: 600, leitosAtivos: 20,
+      nutricao: { ...NUT, ...n },
+    })
+
+  it.each([
+    ['adequacao_np',              80],              // 4/5
+    ['adequacao_ne',              78.9473684211],   // 30/38
+    ['aceitacao_vo',              76.9230769231],   // 40/52
+    ['prev_deficit_nutricional',  22],              // 22/100
+    ['avaliacao_24h',             90],              // 90/100
+    ['uso_ne',                     7.4509803922],   // 38/510
+    ['uso_vo',                    10.1960784314],   // 52/510
+    ['adequacao_nutricional_vm',  71.4285714286],   // 20/28
+    ['adequacao_global',          77.8947368421],   // (4+30+40)/(5+38+52)
+    ['discussao_round',           17.6470588235],   // 90/510
+  ])('%s = %f (paridade com a planilha)', (id, esperado) => {
+    expect(pegar(comNut(), id as string).valor).toBeCloseTo(esperado as number, 6)
+  })
+
+  it('cobertura de TN divide por elegíveis, não por pacientes-dia', () => {
+    // Erro da planilha que o próprio Flaubert reconheceu: ela fazia 95/510.
+    const i = pegar(comNut(), 'cobertura_tn')
+    expect([i.numerador, i.denominador]).toEqual([76, 95])
+    expect(i.valor).toBeCloseTo(80, 6)
+  })
+
+  it('elegibilidade para NE divide por avaliados, não por pacientes-dia', () => {
+    const i = pegar(comNut(), 'elegibilidade_ne')
+    expect([i.numerador, i.denominador]).toEqual([45, 100])
+  })
+
+  it('início de NE <48h divide por elegíveis para início', () => {
+    // FLAUBERT redefiniu: a planilha dividia pelo total recebendo NE.
+    const i = pegar(comNut(), 'inicio_ne_48h')
+    expect([i.numerador, i.denominador]).toEqual([32, 45])
+  })
+
+  it('diarreia em NE vira três indicadores distintos', () => {
+    const inc = pegar(comNut(), 'incidencia_diarreia_ne')
+    const den = pegar(comNut(), 'densidade_diarreia_ne')
+    const dia = pegar(comNut(), 'dias_diarreia_ne')
+    // Incidência conta PACIENTES; densidade conta EPISÓDIOS; dias conta DIAS.
+    expect(inc.numerador).toBe(4)
+    expect(den.numerador).toBe(5)
+    expect(dia.numerador).toBe(9)
+    expect(den.valor).toBeCloseTo(5 / 38 * 1000, 6)
+  })
+
+  it('adequação proteica tem versão diária e por paciente', () => {
+    expect(pegar(comNut(), 'adequacao_proteica_diaria').valor).toBeCloseTo(160 / 200 * 100, 6)
+    // Por paciente é média ≥80%, definição do Flaubert.
+    expect(pegar(comNut(), 'adequacao_proteica_paciente').valor).toBeCloseTo(25 / 95 * 100, 6)
+  })
+
+  it('mês sem registro de nutrição deixa os 26 pendentes', () => {
+    const inds = calcularIndicadores({
+      contagens: EXEMPLO_PLANILHA, leitosDia: 600, leitosAtivos: 20, nutricao: null,
+    })
+    const nutri = inds.filter(i => i.categoria === 'Nutrição')
+    expect(nutri).toHaveLength(26)
+    for (const i of nutri) {
+      expect(i.aguarda).toBe('Nutrição')
+      expect(i.valor).toBeNull()
+    }
+  })
+
+  it('sem via registrada, os indicadores de via não quebram', () => {
+    const inds = comNut({ dias_np: 0, dias_ne: 0, dias_vo: 0,
+      dias_np_adequado: 0, dias_ne_adequado: 0, dias_vo_adequado: 0 })
+    for (const id of ['adequacao_np', 'adequacao_ne', 'aceitacao_vo', 'adequacao_global']) {
+      expect(pegar(inds, id).valor).toBeNull()
+    }
   })
 })
 

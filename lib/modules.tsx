@@ -18,10 +18,11 @@ import VentilatorioTab from '@/components/modules/plantonista/VentilatorioTab'
 import IntensivistaTab from '@/components/modules/intensivista/IntensivistaTab'
 import FisioterapiaTab from '@/components/modules/fisioterapia/FisioterapiaTab'
 import EnfermagemTab from '@/components/modules/enfermagem/EnfermagemTab'
+import NutricaoTab from '@/components/modules/nutricao/NutricaoTab'
 import ExamesTab       from '@/components/modules/shared/ExamesTab'
 import ExamesImagemTab from '@/components/modules/shared/ExamesImagemTab'
 import { featureFlags } from '@/lib/featureFlags'
-import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, FisioEvento, FisioAvaliacaoDiaria, Dispositivo, LppEvento, ToastData, Cargo, Profissao } from '@/types'
+import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, FisioEvento, FisioAvaliacaoDiaria, Dispositivo, LppEvento, NutricaoAvaliacao, NutricaoDia, ToastData, Cargo, Profissao } from '@/types'
 
 /** Dados do paciente carregados pela casca e disponíveis a todas as abas. */
 export interface PacienteContext {
@@ -43,6 +44,8 @@ export interface PacienteContext {
   fisioAvaliacoes: FisioAvaliacaoDiaria[]
   dispositivos: Dispositivo[]
   lpps: LppEvento[]
+  nutricaoAvaliacao: NutricaoAvaliacao | null
+  nutricaoDias: NutricaoDia[]
   /** Cargo do usuário logado. Null = sem cadastro em `staff` (cai no padrão). */
   cargo: Cargo | null
   /**
@@ -172,6 +175,14 @@ const enfermagem: TabDef = {
     onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
 }
 
+const nutricao: TabDef = {
+  id: 'nutricao',
+  label: '🥗 Nutrição',
+  render: ctx => <NutricaoTab paciente={ctx.paciente} avaliacao={ctx.nutricaoAvaliacao}
+    dias={ctx.nutricaoDias} podeEditar={ctx.podeEditar}
+    onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
+}
+
 // ── Módulos (nova estrutura) ────────────────────────────────────────────────
 
 // Ao acrescentar um módulo (Enfermagem, Fisioterapia, Nutrição), declare a
@@ -204,6 +215,14 @@ export const MODULOS: readonly ModuloDef[] = [
     // na prática; o dono deles continua sendo o módulo médico, então aqui
     // aparecem em leitura até decidirmos mover o registro.
     tabs: [enfermagem, balanco, sinais],
+  },
+  {
+    id: 'nutricao',
+    label: '🥗 Nutrição',
+    profissaoDona: 'nutricionista',
+    // Balanço entra porque a diarreia é marcada lá: a nutrição precisa ver as
+    // evacuações do dia para avaliar tolerância. O dono continua sendo o médico.
+    tabs: [nutricao, balanco],
   },
 ]
 

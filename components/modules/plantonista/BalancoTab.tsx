@@ -113,6 +113,8 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
   const [editingPeriodo, setEditingPeriodo] = useState<PeriodoBalanco | null>(null)
   const [form,           setForm]           = useState<FormState>(emptyForm())
   const [saving,         setSaving]         = useState(false)
+  /** Marcação do médico sobre a evacuação do turno — checagem dupla com a nutrição. */
+  const [diarreica,      setDiarreica]      = useState(false)
   const [formDate,       setFormDate]       = useState(todayStr)
   const [formTurno,      setFormTurno]      = useState<'diurno' | 'noturno'>(() => getTurno(new Date()))
 
@@ -191,6 +193,9 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
       dreno: evalMath(form.dreno), vomitos: evalMath(form.vomitos),
       sne_sng: evalMath(form.sne_sng), ostomia: evalMath(form.ostomia),
       perdas_insensiveis: perdIns,
+      // Null quando não houve evacuação: "não se aplica" é diferente de "não foi
+      // diarreica", e só a segunda deve contar como avaliada.
+      diarreica_medico: evalMath(form.evacuacao) > 0 ? diarreica : null,
     })
     setSaving(false)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
@@ -200,6 +205,7 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
   // ── Edit existing ──
   const startEdit = (p: PeriodoBalanco) => {
     setEditingPeriodo(p)
+    setDiarreica(p.diarreica_medico ?? false)
     setForm({
       venoso: String(p.venoso), oral_enteral: String(p.oral_enteral),
       diurese: String(p.diurese), dialise: String(p.dialise),
@@ -221,13 +227,16 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
       dreno: evalMath(form.dreno), vomitos: evalMath(form.vomitos),
       sne_sng: evalMath(form.sne_sng), ostomia: evalMath(form.ostomia),
       perdas_insensiveis: perdIns,
+      diarreica_medico: evalMath(form.evacuacao) > 0 ? diarreica : null,
     }).eq('id', editingPeriodo.id)
     setSaving(false)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
     cancelForm(); onRefresh(); showToast('Balanço atualizado!')
   }
 
-  const cancelForm = () => { setFormMode(null); setEditingPeriodo(null); setForm(emptyForm()) }
+  const cancelForm = () => {
+    setFormMode(null); setEditingPeriodo(null); setForm(emptyForm()); setDiarreica(false)
+  }
 
   const acTotal = calcAcumuladoTotal(periodos)
   const acMovel = calcAcumuladoMovel(periodos)
@@ -394,6 +403,30 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
               </div>
             </div>
           </div>
+
+          {/* Só aparece quando houve evacuação: perguntar sobre algo que não
+              aconteceu é ruído. Alimenta os indicadores de diarreia da Nutrição. */}
+          {evalMath(form.evacuacao) > 0 && (
+            <div className="border border-amber-200 bg-amber-50 rounded-lg px-3 py-2.5">
+              <p className="text-sm font-medium text-amber-900 mb-1.5">A evacuação foi diarreica?</p>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setDiarreica(true)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                    diarreica ? 'border-amber-500 bg-amber-100 text-amber-800' : 'border-slate-300 bg-white text-slate-600'}`}>
+                  Sim
+                </button>
+                <button type="button" onClick={() => setDiarreica(false)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                    !diarreica ? 'border-slate-500 bg-slate-100 text-slate-800' : 'border-slate-300 bg-white text-slate-600'}`}>
+                  Não
+                </button>
+              </div>
+              <p className="text-[11px] text-amber-700 mt-1.5">
+                Fezes líquidas (Bristol 6–7). A nutrição também pode marcar; se vocês
+                divergirem, aparece um pedido de confirmação para os dois.
+              </p>
+            </div>
+          )}
 
           <button onClick={formMode === 'add' ? handleSave : handleUpdate}
             disabled={saving || (formMode === 'add' && !!periodoDuplicado)}

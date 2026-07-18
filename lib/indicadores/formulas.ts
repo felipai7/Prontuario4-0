@@ -8,7 +8,7 @@
 // não existe. Ele aparece na tela como pendente, e a fórmula entra quando o módulo
 // chegar — não escrevemos fórmula contra campo que não existe.
 
-import type { ContagensMes, ContagensFisioMes, ContagensEnfermagemMes, Indicador } from '@/types'
+import type { ContagensMes, ContagensFisioMes, ContagensEnfermagemMes, ContagensNutricaoMes, Indicador } from '@/types'
 
 /** Divisão protegida — equivale ao IFERROR(...,"") da planilha. */
 function razao(n: number | null, d: number | null, mult = 1): number | null {
@@ -25,10 +25,12 @@ interface Entrada {
   fisio?: ContagensFisioMes | null
   /** Null enquanto não houver dado de enfermagem no mês. */
   enfermagem?: ContagensEnfermagemMes | null
+  /** Null enquanto não houver dado de nutrição no mês. */
+  nutricao?: ContagensNutricaoMes | null
 }
 
 export function calcularIndicadores({
-  contagens: c, leitosDia, leitosAtivos, fisio, enfermagem: enf,
+  contagens: c, leitosDia, leitosAtivos, fisio, enfermagem: enf, nutricao: nut,
 }: Entrada): Indicador[] {
   const viva = (
     id: string, nome: string, categoria: Indicador['categoria'], unidade: Indicador['unidade'],
@@ -169,37 +171,101 @@ export function calcularIndicadores({
     ]),
 
     // ── Nutrição ──────────────────────────────────────────────────────────
-    pendente('adequacao_np', 'Adequação NP >70%', 'Nutrição', '%', 'Nutrição'),
-    pendente('adequacao_ne', 'Adequação NE >70%', 'Nutrição', '%', 'Nutrição'),
-    pendente('aceitacao_vo', 'Aceitação VO >60%', 'Nutrição', '%', 'Nutrição'),
-    pendente('prev_deficit_nutricional', 'Prevalência déficit/risco nutricional', 'Nutrição', '%', 'Nutrição'),
-    pendente('avaliacao_24h', 'Avaliação nutricional ≤24h', 'Nutrição', '%', 'Nutrição'),
-    pendente('jejum_24h', 'Jejum >24h antes TN', 'Nutrição', '%', 'Nutrição'),
-    // FLAUBERT redefiniu diarreia em três indicadores no lugar de um.
-    pendente('incidencia_diarreia_ne', 'Incidência de diarreia em NE', 'Nutrição', '%', 'Nutrição'),
-    pendente('densidade_diarreia_ne', 'Densidade de diarreia em NE', 'Nutrição', '/1000 pac-dia', 'Nutrição'),
-    pendente('dias_diarreia_ne', 'Dias com diarreia em NE', 'Nutrição', '%', 'Nutrição'),
-    pendente('incidencia_diarreia_vo', 'Incidência de diarreia em VO', 'Nutrição', '%', 'Nutrição'),
-    pendente('prev_constipacao', 'Prevalência de constipação', 'Nutrição', '%', 'Nutrição'),
-    pendente('constipacao_opioide', 'Constipação relac. a opioides', 'Nutrição', '%', 'Nutrição'),
-    pendente('uso_ne', 'Uso de NE', 'Nutrição', '%', 'Nutrição'),
-    pendente('uso_vo', 'Uso de VO', 'Nutrição', '%', 'Nutrição'),
-    pendente('hipoglicemia_tn', 'Hipoglicemia relacionada a TN', 'Nutrição', '%', 'Nutrição'),
-    pendente('adequacao_nutricional_vm', 'Adequação nutricional em VM', 'Nutrição', '%', 'Nutrição'),
-    // FLAUBERT: denominador é "pacientes avaliados", não pacientes-dia (erro da planilha).
-    pendente('elegibilidade_ne', 'Elegibilidade para NE', 'Nutrição', '%', 'Nutrição'),
-    // FLAUBERT: denominador é "pacientes elegíveis para início de NE".
-    pendente('inicio_ne_48h', 'Início de NE em <48h', 'Nutrição', '%', 'Nutrição'),
-    // FLAUBERT: denominador é "pacientes elegíveis para TN", não pacientes-dia (erro da planilha).
-    pendente('cobertura_tn', 'Cobertura de terapia nutricional', 'Nutrição', '%', 'Nutrição'),
-    // FLAUBERT dividiu adequação proteica em diária e por paciente (média ≥80%).
-    pendente('adequacao_proteica_diaria', 'Adequação proteica diária ≥80%', 'Nutrição', '%', 'Nutrição'),
-    pendente('adequacao_proteica_paciente', 'Adequação proteica por paciente', 'Nutrição', '%', 'Nutrição'),
-    pendente('interrupcao_tn', 'Interrupção não justif. de TN', 'Nutrição', '%', 'Nutrição'),
-    pendente('intolerancia_gi', 'Intolerância GI grave', 'Nutrição', '%', 'Nutrição'),
-    pendente('constipacao_vm', 'Constipação >72h em VM', 'Nutrição', '%', 'Nutrição'),
-    pendente('discussao_round', 'Discussão nutricional em round', 'Nutrição', '%', 'Nutrição'),
-    pendente('adequacao_global', 'Adequação nutricional global', 'Nutrição', '%', 'Nutrição'),
+    // Onde diverge da planilha, o motivo está marcado FLAUBERT: são as
+    // redefinições que ele mandou, incluindo dois erros de denominador que ele
+    // mesmo reconheceu (cobertura de TN e elegibilidade para NE).
+    ...(nut ? [
+      viva('adequacao_np', 'Adequação NP >70%', 'Nutrição', '%',
+        nut.dias_np_adequado, nut.dias_np, 100),
+      viva('adequacao_ne', 'Adequação NE >70%', 'Nutrição', '%',
+        nut.dias_ne_adequado, nut.dias_ne, 100),
+      viva('aceitacao_vo', 'Aceitação VO >60%', 'Nutrição', '%',
+        nut.dias_vo_adequado, nut.dias_vo, 100),
+      viva('prev_deficit_nutricional', 'Prevalência déficit/risco nutricional', 'Nutrição', '%',
+        nut.deficit_risco, nut.avaliados, 100),
+      // FLAUBERT: o denominador exclui óbito, alta e transferência precoces —
+      // quem saiu antes de 24h nunca teve chance de ser avaliado.
+      viva('avaliacao_24h', 'Avaliação nutricional ≤24h', 'Nutrição', '%',
+        nut.avaliados_ate_24h, nut.admissoes_elegiveis_24h, 100),
+      viva('jejum_24h', 'Jejum >24h antes TN', 'Nutrição', '%',
+        nut.jejum_maior_24h, nut.elegiveis_tn, 100),
+      // FLAUBERT desdobrou diarreia em três indicadores no lugar de um.
+      // "Episódio" segue a regra das 48h: um quadro que não resolve por 48h
+      // continua sendo o mesmo episódio, por mais dias que dure.
+      viva('incidencia_diarreia_ne', 'Incidência de diarreia em NE', 'Nutrição', '%',
+        nut.pacientes_diarreia_ne, nut.pacientes_ne, 100),
+      viva('densidade_diarreia_ne', 'Densidade de diarreia em NE', 'Nutrição', '/1000 pac-dia',
+        nut.episodios_diarreia_ne, nut.dias_ne, 1000),
+      viva('dias_diarreia_ne', 'Dias com diarreia em NE', 'Nutrição', '%',
+        nut.dias_diarreia_ne, nut.dias_ne, 100),
+      viva('incidencia_diarreia_vo', 'Incidência de diarreia em VO', 'Nutrição', '%',
+        nut.pacientes_diarreia_vo, nut.pacientes_vo, 100),
+      // Constipação é derivada do Balanço Hídrico (72h sem evacuar), não digitada.
+      viva('prev_constipacao', 'Prevalência de constipação', 'Nutrição', '%',
+        nut.constipados, nut.avaliados_constipacao, 100),
+      viva('constipacao_opioide', 'Constipação relac. a opioides', 'Nutrição', '%',
+        nut.constipados_opioide, nut.pacientes_opioide, 100),
+      // FLAUBERT: "Total recebendo NE" é contador de pacientes-dia.
+      viva('uso_ne', 'Uso de NE', 'Nutrição', '%', nut.dias_ne, c.pacientes_dia, 100),
+      viva('uso_vo', 'Uso de VO', 'Nutrição', '%', nut.dias_vo, c.pacientes_dia, 100),
+      viva('hipoglicemia_tn', 'Hipoglicemia relacionada a TN', 'Nutrição', '%',
+        nut.hipoglicemia_tn, nut.elegiveis_tn, 100),
+      viva('adequacao_nutricional_vm', 'Adequação nutricional em VM', 'Nutrição', '%',
+        nut.dias_vm_nutricao_adequada, nut.dias_vm_com_nutricao, 100),
+      // FLAUBERT: denominador é "pacientes avaliados", não pacientes-dia (erro da planilha).
+      viva('elegibilidade_ne', 'Elegibilidade para NE', 'Nutrição', '%',
+        nut.elegiveis_ne, nut.avaliados, 100),
+      // FLAUBERT: denominador é "pacientes elegíveis para início de NE".
+      viva('inicio_ne_48h', 'Início de NE em <48h', 'Nutrição', '%',
+        nut.ne_iniciada_ate_48h, nut.elegiveis_inicio_ne, 100),
+      // FLAUBERT: denominador é "pacientes elegíveis para TN", não pacientes-dia (erro da planilha).
+      viva('cobertura_tn', 'Cobertura de terapia nutricional', 'Nutrição', '%',
+        nut.elegiveis_tn_receberam, nut.elegiveis_tn, 100),
+      // FLAUBERT dividiu adequação proteica em diária e por paciente (média ≥80%).
+      viva('adequacao_proteica_diaria', 'Adequação proteica diária ≥80%', 'Nutrição', '%',
+        nut.dias_proteica_adequada, nut.dias_elegiveis_tn, 100),
+      viva('adequacao_proteica_paciente', 'Adequação proteica por paciente', 'Nutrição', '%',
+        nut.pacientes_proteica_media_ok, nut.pacientes_proteica_avaliados, 100),
+      viva('interrupcao_tn', 'Interrupção não justif. de TN', 'Nutrição', '%',
+        nut.interrupcao_tn, nut.elegiveis_tn, 100),
+      viva('intolerancia_gi', 'Intolerância GI grave', 'Nutrição', '%',
+        nut.intolerancia_gi, nut.elegiveis_tn, 100),
+      viva('constipacao_vm', 'Constipação >72h em VM', 'Nutrição', '%',
+        nut.constipacao_vm, nut.dias_vm_com_nutricao, 100),
+      viva('discussao_round', 'Discussão nutricional em round', 'Nutrição', '%',
+        nut.dias_discutidos_round, c.pacientes_dia, 100),
+      // Soma as três vias: mede a adequação da nutrição como um todo.
+      viva('adequacao_global', 'Adequação nutricional global', 'Nutrição', '%',
+        nut.dias_np_adequado + nut.dias_ne_adequado + nut.dias_vo_adequado,
+        nut.dias_np + nut.dias_ne + nut.dias_vo, 100),
+    ] : [
+      pendente('adequacao_np', 'Adequação NP >70%', 'Nutrição', '%', 'Nutrição'),
+      pendente('adequacao_ne', 'Adequação NE >70%', 'Nutrição', '%', 'Nutrição'),
+      pendente('aceitacao_vo', 'Aceitação VO >60%', 'Nutrição', '%', 'Nutrição'),
+      pendente('prev_deficit_nutricional', 'Prevalência déficit/risco nutricional', 'Nutrição', '%', 'Nutrição'),
+      pendente('avaliacao_24h', 'Avaliação nutricional ≤24h', 'Nutrição', '%', 'Nutrição'),
+      pendente('jejum_24h', 'Jejum >24h antes TN', 'Nutrição', '%', 'Nutrição'),
+      pendente('incidencia_diarreia_ne', 'Incidência de diarreia em NE', 'Nutrição', '%', 'Nutrição'),
+      pendente('densidade_diarreia_ne', 'Densidade de diarreia em NE', 'Nutrição', '/1000 pac-dia', 'Nutrição'),
+      pendente('dias_diarreia_ne', 'Dias com diarreia em NE', 'Nutrição', '%', 'Nutrição'),
+      pendente('incidencia_diarreia_vo', 'Incidência de diarreia em VO', 'Nutrição', '%', 'Nutrição'),
+      pendente('prev_constipacao', 'Prevalência de constipação', 'Nutrição', '%', 'Nutrição'),
+      pendente('constipacao_opioide', 'Constipação relac. a opioides', 'Nutrição', '%', 'Nutrição'),
+      pendente('uso_ne', 'Uso de NE', 'Nutrição', '%', 'Nutrição'),
+      pendente('uso_vo', 'Uso de VO', 'Nutrição', '%', 'Nutrição'),
+      pendente('hipoglicemia_tn', 'Hipoglicemia relacionada a TN', 'Nutrição', '%', 'Nutrição'),
+      pendente('adequacao_nutricional_vm', 'Adequação nutricional em VM', 'Nutrição', '%', 'Nutrição'),
+      pendente('elegibilidade_ne', 'Elegibilidade para NE', 'Nutrição', '%', 'Nutrição'),
+      pendente('inicio_ne_48h', 'Início de NE em <48h', 'Nutrição', '%', 'Nutrição'),
+      pendente('cobertura_tn', 'Cobertura de terapia nutricional', 'Nutrição', '%', 'Nutrição'),
+      pendente('adequacao_proteica_diaria', 'Adequação proteica diária ≥80%', 'Nutrição', '%', 'Nutrição'),
+      pendente('adequacao_proteica_paciente', 'Adequação proteica por paciente', 'Nutrição', '%', 'Nutrição'),
+      pendente('interrupcao_tn', 'Interrupção não justif. de TN', 'Nutrição', '%', 'Nutrição'),
+      pendente('intolerancia_gi', 'Intolerância GI grave', 'Nutrição', '%', 'Nutrição'),
+      pendente('constipacao_vm', 'Constipação >72h em VM', 'Nutrição', '%', 'Nutrição'),
+      pendente('discussao_round', 'Discussão nutricional em round', 'Nutrição', '%', 'Nutrição'),
+      pendente('adequacao_global', 'Adequação nutricional global', 'Nutrição', '%', 'Nutrição'),
+    ]),
   ]
 }
 
