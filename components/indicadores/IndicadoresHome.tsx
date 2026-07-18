@@ -1,18 +1,36 @@
 'use client'
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useMemo, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import ToastContainer, { useToast } from '@/components/ui/Toast'
-import { calcularIndicadores, CATEGORIAS, calcularLeitosDia } from '@/lib/indicadores/formulas'
+import { calcularIndicadores, CATEGORIAS } from '@/lib/indicadores/formulas'
 import { gerarCsvDadosMensais, nomeArquivoCsv, baixarCsv, contarPreenchidos, COLUNAS_TOTAIS } from '@/lib/indicadores/exportar'
 import PainelQualidade from './PainelQualidade'
 import { fmtNum } from '@/lib/utils'
-import { ALAS } from '@/lib/config'
 import type { ContagensMes, ContagensFisioMes, ContagensEnfermagemMes, Indicador, QualidadeMes } from '@/types'
 
-interface Props { souChefe: boolean; userEmail: string }
-
-const LEITOS_ATIVOS = ALAS.reduce((n, a) => n + a.leitos.length, 0)
+/**
+ * Tela só de apresentação: todo dado vem pronto do servidor (app/indicadores/page.tsx).
+ *
+ * Nada aqui pode depender de `new Date()` nem de busca no navegador. Foi essa
+ * dependência que fazia servidor e cliente renderizarem coisas diferentes e o
+ * React descartar o HTML do servidor na hidratação.
+ */
+interface Props {
+  souChefe: boolean
+  userEmail: string
+  /** Mês em exibição: `mes` é 1-12 (como na URL), não 0-11. */
+  ano: number
+  mes: number
+  anoAtual: number
+  mesCorrente: boolean
+  contagens: ContagensMes | null
+  qualidade: QualidadeMes | null
+  fisio: ContagensFisioMes | null
+  enfermagem: ContagensEnfermagemMes | null
+  leitosDia: number
+  leitosAtivos: number
+  erro: string | null
+}
 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
@@ -30,79 +48,41 @@ function casasDenominador(ind: Indicador): number {
   return ind.id === 'smr' ? 2 : 0
 }
 
-export default function IndicadoresHome({ souChefe, userEmail }: Props) {
+export default function IndicadoresHome({
+  souChefe, userEmail, ano, mes, anoAtual, mesCorrente,
+  contagens, qualidade, fisio, enfermagem, leitosDia, leitosAtivos, erro,
+}: Props) {
   const router = useRouter()
-  const supabase = createClient()
   const { toasts, showToast, removeToast } = useToast()
+  // O mês vive na URL: trocar recarrega a página no servidor. `isPending` dá o
+  // aviso de carregando sem congelar a tela — o mês anterior fica visível,
+  // esmaecido, até o novo chegar.
+  const [carregando, iniciarTroca] = useTransition()
 
-  const hoje = new Date()
-  const [ano, setAno] = useState(hoje.getFullYear())
-  const [mes, setMes] = useState(hoje.getMonth()) // 0-11
-  const [contagens, setContagens] = useState<ContagensMes | null>(null)
-  const [qualidade, setQualidade] = useState<QualidadeMes | null>(null)
-  const [fisio, setFisio] = useState<ContagensFisioMes | null>(null)
-  const [enfermagem, setEnfermagem] = useState<ContagensEnfermagemMes | null>(null)
-  /**
-   * Começa em `true` de propósito: todo dado desta tela chega por RPC depois da
-   * montagem, então "carregando" é o estado real do primeiro render. Com `false`,
-   * o servidor renderizava conteúdo já resolvido e o cliente outro — o React
-   * acusava divergência e descartava o HTML do servidor.
-   */
-  const [loading, setLoading] = useState(true)
-
-  const primeiroDia = useMemo(() => new Date(ano, mes, 1), [ano, mes])
-
-  const carregar = useCallback(async () => {
-    if (!souChefe) return
-    setLoading(true)
-    const pMes = `${ano}-${String(mes + 1).padStart(2, '0')}-01`
-    const [contRes, qualRes, fisioRes, enfRes] = await Promise.all([
-      supabase.rpc('contagens_mes',            { p_mes: pMes }),
-      supabase.rpc('qualidade_mes',            { p_mes: pMes }),
-      supabase.rpc('contagens_fisio_mes',      { p_mes: pMes }),
-      supabase.rpc('contagens_enfermagem_mes', { p_mes: pMes }),
-    ])
-    setLoading(false)
-    if (contRes.error) { showToast('Erro ao carregar indicadores: ' + contRes.error.message, 'error'); return }
-    // As funções devolvem uma linha só.
-    const uma = <T,>(d: unknown) => (Array.isArray(d) ? d[0] : d) as T ?? null
-    setContagens(uma<ContagensMes>(contRes.data))
-    // A qualidade é acessório: se falhar, os indicadores ainda valem a visita.
-    setQualidade(qualRes.error ? null : uma<QualidadeMes>(qualRes.data))
-    // Sem nenhum registro de fisio no mês, os 6 indicadores ficam pendentes em
-    // vez de mostrar 0/0 — "não houve fisio" ≠ "houve e deu zero".
-    const houve = (o: object | null) => o != null && Object.values(o).some(v => Number(v) > 0)
-    const f = fisioRes.error ? null : uma<ContagensFisioMes>(fisioRes.data)
-    setFisio(houve(f) ? f : null)
-    const e = enfRes.error ? null : uma<ContagensEnfermagemMes>(enfRes.data)
-    setEnfermagem(houve(e) ? e : null)
-  }, [ano, mes, souChefe, supabase, showToast])
-
-  useEffect(() => { carregar() }, [carregar])
+  const irParaMes = (novoAno: number, novoMes: number) => {
+    iniciarTroca(() => {
+      router.push(`/indicadores?mes=${novoAno}-${String(novoMes).padStart(2, '0')}`)
+    })
+  }
 
   const indicadores = useMemo(() => {
     if (!contagens) return []
-    return calcularIndicadores({
-      contagens,
-      leitosDia: calcularLeitosDia(primeiroDia, LEITOS_ATIVOS),
-      leitosAtivos: LEITOS_ATIVOS,
-      fisio,
-      enfermagem,
-    })
-  }, [contagens, primeiroDia, fisio, enfermagem])
+    return calcularIndicadores({ contagens, leitosDia, leitosAtivos, fisio, enfermagem })
+  }, [contagens, leitosDia, leitosAtivos, fisio, enfermagem])
 
   const vivos = indicadores.filter(i => !i.aguarda).length
 
   const linhaExport = useMemo(() => contagens && ({
     ...contagens,
-    leitos_dia: calcularLeitosDia(primeiroDia, LEITOS_ATIVOS),
-    leitos_ativos: LEITOS_ATIVOS,
+    leitos_dia: leitosDia,
+    leitos_ativos: leitosAtivos,
     fisio,
     enfermagem,
-  }), [contagens, primeiroDia, fisio, enfermagem])
+  }), [contagens, leitosDia, leitosAtivos, fisio, enfermagem])
 
   const handleExportar = () => {
     if (!linhaExport) return
+    const primeiroDia = new Date(ano, mes - 1, 1)
     baixarCsv(nomeArquivoCsv(primeiroDia), gerarCsvDadosMensais(primeiroDia, linhaExport))
     showToast('CSV baixado — cole a linha na aba "Dados Mensais".')
   }
@@ -142,27 +122,24 @@ export default function IndicadoresHome({ souChefe, userEmail }: Props) {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto p-6 space-y-5">
+      <main className={`max-w-6xl mx-auto p-6 space-y-5 transition-opacity ${carregando ? 'opacity-50' : ''}`}>
         <section className="bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-3 flex-wrap">
-          <select value={mes} onChange={e => setMes(Number(e.target.value))}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-            {MESES.map((m, i) => <option key={m} value={i}>{m}</option>)}
+          <select value={mes} onChange={e => irParaMes(ano, Number(e.target.value))}
+            disabled={carregando}
+            className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white disabled:opacity-60">
+            {MESES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
           </select>
-          <select value={ano} onChange={e => setAno(Number(e.target.value))}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
-            {Array.from({ length: 5 }, (_, i) => hoje.getFullYear() - i).map(a =>
+          <select value={ano} onChange={e => irParaMes(Number(e.target.value), mes)}
+            disabled={carregando}
+            className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white disabled:opacity-60">
+            {Array.from({ length: 5 }, (_, i) => anoAtual - i).map(a =>
               <option key={a} value={a}>{a}</option>)}
           </select>
           <p className="text-xs text-slate-400 ml-auto">
-            {!loading && (
-              `${vivos} de ${indicadores.length} indicadores com dado disponível` +
-              ` · exporta ${linhaExport ? contarPreenchidos(linhaExport) : 0} de ${COLUNAS_TOTAIS} campos`
-            )}
+            {vivos} de {indicadores.length} indicadores com dado disponível
+            {' · '}exporta {linhaExport ? contarPreenchidos(linhaExport) : 0} de {COLUNAS_TOTAIS} campos
           </p>
-          {/* O título é estático de propósito: dado carregado depois da
-              hidratação num ATRIBUTO gera divergência entre servidor e cliente.
-              A contagem fica no texto acima, que já muda depois do carregamento. */}
-          <button onClick={handleExportar} disabled={!linhaExport}
+          <button onClick={handleExportar} disabled={!linhaExport || carregando}
             title='Baixa a linha do mês no formato da aba "Dados Mensais"'
             className="text-xs font-medium border border-slate-300 text-slate-600 hover:bg-slate-50
                        disabled:opacity-40 rounded-lg px-3 py-2">
@@ -170,14 +147,15 @@ export default function IndicadoresHome({ souChefe, userEmail }: Props) {
           </button>
         </section>
 
-        {!loading && qualidade && (
-          <PainelQualidade q={qualidade}
-            mesCorrente={ano === hoje.getFullYear() && mes === hoje.getMonth()} />
+        {erro && (
+          <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            Erro ao carregar indicadores: {erro}
+          </p>
         )}
 
-        {loading ? (
-          <p className="text-sm text-slate-400 text-center py-12">Carregando...</p>
-        ) : !contagens ? (
+        {qualidade && <PainelQualidade q={qualidade} mesCorrente={mesCorrente} />}
+
+        {!contagens ? (
           <p className="text-sm text-slate-400 text-center py-12">Nenhum dado para este mês.</p>
         ) : (
           CATEGORIAS.map(cat => {
