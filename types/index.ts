@@ -426,7 +426,10 @@ export interface FisioEvento {
   id: string
   paciente_id: string
   tipo: TipoEventoFisio
+  /** Início do episódio. Para VNI, o 1º dia do conjunto de sessões — não uma sessão isolada. */
   data: string              // YYYY-MM-DD
+  /** Fim do episódio (VNI). Null = em curso. */
+  data_fim: string | null
   /** Extubação programada (não acidental) — denominador da falha de extubação. */
   planejada: boolean | null
   sucesso: boolean | null

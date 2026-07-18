@@ -20,7 +20,7 @@ interface Props {
 const TIPOS: { id: TipoEventoFisio; label: string; emoji: string }[] = [
   { id: 'extubacao',       label: 'Extubação',       emoji: '🫁' },
   { id: 'desmame_dificil', label: 'Desmame difícil', emoji: '⏳' },
-  { id: 'vni',             label: 'VNI',             emoji: '😷' },
+  { id: 'vni',             label: 'Episódio de VNI', emoji: '😷' },
   { id: 'traqueostomia',   label: 'Traqueostomia',   emoji: '🔧' },
 ]
 
@@ -38,8 +38,10 @@ function descrever(e: FisioEvento): string {
     return `Desmame difícil — ${e.sucesso ? 'desmamou' : 'ainda em curso / sem sucesso'}`
   }
   if (e.tipo === 'vni') {
-    if (!e.objetivo_evitar_iot) return 'VNI (outro objetivo)'
-    return `VNI para evitar IOT — ${e.evitou_iot ? 'evitou' : 'não evitou'}`
+    const alvo = e.objetivo_evitar_iot
+      ? `para evitar IOT — ${e.evitou_iot ? 'evitou' : 'não evitou'}`
+      : '(outro objetivo)'
+    return `Episódio de VNI ${alvo}`
   }
   const partes: string[] = []
   if (e.elegivel_decanulacao) partes.push('elegível a decanulação')
@@ -54,6 +56,8 @@ export default function FisioterapiaTab({
 
   const [tipo, setTipo] = useState<TipoEventoFisio | ''>('')
   const [data, setData] = useState(hojeISO)
+  // Só para episódios que se estendem (VNI): nulo = ainda em curso.
+  const [dataFim, setDataFim] = useState('')
   const [planejada, setPlanejada] = useState(true)
   const [sucesso, setSucesso] = useState(false)
   const [reintubou, setReintubou] = useState(false)
@@ -79,7 +83,7 @@ export default function FisioterapiaTab({
     [avaliacoes])
 
   const limpar = () => {
-    setTipo(''); setData(hojeISO()); setPlanejada(true); setSucesso(false)
+    setTipo(''); setData(hojeISO()); setDataFim(''); setPlanejada(true); setSucesso(false)
     setReintubou(false); setObjetivoEvitarIot(true); setEvitouIot(false)
     setElegivel(false); setDecanulado(false); setObservacao('')
   }
@@ -91,6 +95,7 @@ export default function FisioterapiaTab({
     const { error } = await supabase.from('fisio_eventos').insert({
       paciente_id: paciente.id,
       tipo, data,
+      data_fim: tipo === 'vni' ? (dataFim || null) : null,
       planejada:            tipo === 'extubacao' ? planejada : null,
       sucesso:              tipo === 'extubacao' || tipo === 'desmame_dificil' ? sucesso : null,
       reintubou_48h:        tipo === 'extubacao' ? reintubou : null,
@@ -182,7 +187,9 @@ export default function FisioterapiaTab({
           {tipo && (
             <>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Data</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  {tipo === 'vni' ? 'Início do episódio' : 'Data'}
+                </label>
                 <input type="date" value={data} max={hojeISO()} onChange={e => setData(e.target.value)}
                   className="w-full sm:w-48 px-3 py-2 border border-slate-300 rounded-lg text-sm" />
               </div>
@@ -201,7 +208,21 @@ export default function FisioterapiaTab({
               )}
 
               {tipo === 'vni' && (
-                <div className="space-y-1.5">
+                <div className="space-y-2">
+                  <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2">
+                    ⚠️ VNI é <strong>intermitente</strong>. Registre o <strong>episódio</strong> —
+                    o conjunto de sessões com o mesmo objetivo clínico — e não cada sessão.
+                    Um paciente com 12 sessões para evitar uma intubação é <strong>um</strong> episódio:
+                    lançar sessão por sessão diluiria o indicador.
+                  </p>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Fim do episódio — deixe vazio se ainda está em curso
+                    </label>
+                    <input type="date" value={dataFim} min={data} max={hojeISO()}
+                      onChange={e => setDataFim(e.target.value)}
+                      className="w-full sm:w-48 px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                  </div>
                   <Check label="Objetivo era evitar intubação" v={objetivoEvitarIot} set={setObjetivoEvitarIot} />
                   <Check label="Evitou a intubação" v={evitouIot} set={setEvitouIot} />
                 </div>
@@ -245,7 +266,9 @@ export default function FisioterapiaTab({
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-slate-700">{descrever(e)}</p>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    {fmtData(e.data)}{e.observacao ? ` · ${e.observacao}` : ''}
+                    {fmtData(e.data)}
+                    {e.tipo === 'vni' && (e.data_fim ? ` a ${fmtData(e.data_fim)}` : ' · em curso')}
+                    {e.observacao ? ` · ${e.observacao}` : ''}
                   </p>
                 </div>
                 {podeEditar && (

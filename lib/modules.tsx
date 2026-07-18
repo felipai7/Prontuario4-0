@@ -54,7 +54,20 @@ export interface PacienteContext {
 export interface TabDef {
   id: string
   label: string
+  /**
+   * Dono da aba, quando ele difere do dono do módulo. Existe porque uma aba
+   * pode aparecer em mais de um módulo com papéis diferentes: Ventilatório é
+   * registrada pela fisio, mas o plantonista precisa vê-la no módulo dele.
+   * Sem isso, a permissão seguiria o módulo e o plantonista poderia editar.
+   */
+  dona?: DonoModulo
   render: (ctx: PacienteContext) => React.ReactNode
+}
+
+/** Quem edita: profissão e, opcionalmente, só o chefe dela. */
+export interface DonoModulo {
+  profissaoDona: Profissao
+  exigeChefe?: boolean
 }
 
 export interface ModuloDef {
@@ -108,10 +121,15 @@ const neurologico: TabDef = {
   render: ctx => <NeurologicoTab paciente={ctx.paciente} historico={ctx.neuroHistorico} onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
 }
 
+// Registrada pela fisioterapia em qualquer módulo onde apareça — inclusive no
+// do plantonista, que a vê mas não edita. O ventilador-dia sai daqui, então
+// ter um dono só evita dois registros divergindo sobre o mesmo dia.
 const ventilatorio: TabDef = {
   id: 'ventilatorio',
   label: '🫁 Ventilatório',
-  render: ctx => <VentilatorioTab paciente={ctx.paciente} historico={ctx.ventHistorico} onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
+  dona: { profissaoDona: 'fisioterapeuta' },
+  render: ctx => <VentilatorioTab paciente={ctx.paciente} historico={ctx.ventHistorico}
+    podeEditar={ctx.podeEditar} onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
 }
 
 const examesLab: TabDef = {
@@ -165,8 +183,6 @@ export const MODULOS: readonly ModuloDef[] = [
     id: 'fisioterapia',
     label: '🫁 Fisioterapia',
     profissaoDona: 'fisioterapeuta',
-    // A aba Ventilatório entra como leitura: a fisio precisa ver a modalidade
-    // do dia para decidir sobre desmame, mas quem registra é o plantonista.
     tabs: [fisioterapia, ventilatorio, examesImagem],
   },
 ]

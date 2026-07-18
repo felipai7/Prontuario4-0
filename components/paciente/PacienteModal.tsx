@@ -350,6 +350,20 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     showToast,
   }
 
+  /**
+   * Uma aba pode ter dono próprio, diferente do módulo em que aparece
+   * (Ventilatório é da fisio, mas o plantonista a vê no módulo dele). Nesse
+   * caso a permissão vem do dono da aba, não do módulo.
+   */
+  const renderAbaAtiva = () => {
+    const aba = moduloAtivo.tabs.find(t => t.id === tab)
+    if (!aba) return null
+    const ctx = aba.dona
+      ? { ...moduleCtx, podeEditar: podeEditarModulo(cargo, aba.dona) }
+      : moduleCtx
+    return aba.render(ctx)
+  }
+
   return (
     <>
       <div className="fixed inset-0 bg-black/60 z-40 flex items-start justify-center p-4 overflow-y-auto"
@@ -643,7 +657,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
                 <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
               </div>
             ) : (
-              moduloAtivo.tabs.find(t => t.id === tab)?.render(moduleCtx)
+              renderAbaAtiva()
             )}
           </div>
         </div>

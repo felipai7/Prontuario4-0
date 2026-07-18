@@ -7,6 +7,8 @@ import type { Paciente, SuporteVentilatorio, ModalidadeVentilatoria, Dispositivo
 interface Props {
   paciente: Paciente
   historico: SuporteVentilatorio[]
+  /** Registro é da fisioterapia; os demais veem em modo leitura. */
+  podeEditar: boolean
   onRefresh: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
 }
@@ -62,7 +64,7 @@ function resumoLinha(v: SuporteVentilatorio): string {
   return `Ventilação mecânica${v.vm_via ? ` via ${v.vm_via}` : ''}`
 }
 
-export default function VentilatorioTab({ paciente, historico, onRefresh, showToast }: Props) {
+export default function VentilatorioTab({ paciente, historico, podeEditar, onRefresh, showToast }: Props) {
   const supabase = createClient()
   const hoje = new Date().toISOString().split('T')[0]
 
@@ -145,7 +147,7 @@ export default function VentilatorioTab({ paciente, historico, onRefresh, showTo
               {historyOpen ? '▲' : '▼'} Histórico ({sorted.length - 1})
             </button>
           )}
-          {formMode === null ? (
+          {!podeEditar ? null : formMode === null ? (
             <button onClick={openAdd}
               className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors">
               + Novo Registro
@@ -170,11 +172,19 @@ export default function VentilatorioTab({ paciente, historico, onRefresh, showTo
               )}
             </p>
           </div>
-          <button onClick={() => startEdit(ultimo)}
-            className="text-xs text-indigo-500 hover:text-indigo-700 border border-indigo-200 hover:border-indigo-400 px-2.5 py-1.5 rounded-lg transition-colors flex-shrink-0">
-            ✏️ Editar
-          </button>
+          {podeEditar && (
+            <button onClick={() => startEdit(ultimo)}
+              className="text-xs text-indigo-500 hover:text-indigo-700 border border-indigo-200 hover:border-indigo-400 px-2.5 py-1.5 rounded-lg transition-colors flex-shrink-0">
+              ✏️ Editar
+            </button>
+          )}
         </div>
+      )}
+
+      {!podeEditar && (
+        <p className="text-xs text-slate-400">
+          Registrado pela fisioterapia. Você vê o histórico, mas não edita.
+        </p>
       )}
 
       {!ultimo && formMode === null && (
@@ -229,6 +239,13 @@ export default function VentilatorioTab({ paciente, historico, onRefresh, showTo
                     <Chip key={d} selected={form.dispositivo === d} onClick={() => setField('dispositivo', form.dispositivo === d ? null : d)}>{d}</Chip>
                   ))}
                 </div>
+                {form.dispositivo === 'VNI' && (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 mt-2">
+                    ⚠️ VNI é <strong>intermitente</strong>: marcar aqui significa que o paciente
+                    fez sessões neste turno, não que ficou em VNI o turno inteiro. O episódio
+                    (com objetivo e desfecho) é registrado na aba Fisioterapia Respiratória.
+                  </p>
+                )}
               </div>
               <div>
                 <label className={labelCls}>Fluxo (L/min) — opcional</label>
@@ -276,10 +293,12 @@ export default function VentilatorioTab({ paciente, historico, onRefresh, showTo
                 <p className="text-xs font-bold text-slate-600">{fmtTurno(v.turno, v.data + 'T12:00:00')}</p>
                 <p className="text-xs text-slate-500 mt-0.5">{resumoLinha(v)}</p>
               </div>
-              <button onClick={() => startEdit(v)}
-                className="text-xs text-indigo-400 hover:text-indigo-700 border border-indigo-100 hover:border-indigo-300 px-2 py-1.5 rounded-lg transition-colors flex-shrink-0">
-                ✏️ Editar
-              </button>
+              {podeEditar && (
+                <button onClick={() => startEdit(v)}
+                  className="text-xs text-indigo-400 hover:text-indigo-700 border border-indigo-100 hover:border-indigo-300 px-2 py-1.5 rounded-lg transition-colors flex-shrink-0">
+                  ✏️ Editar
+                </button>
+              )}
             </div>
           ))}
         </div>
