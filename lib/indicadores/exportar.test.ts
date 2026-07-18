@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { gerarCsvDadosMensais, nomeArquivoCsv, COLUNAS_PREENCHIDAS, COLUNAS_TOTAIS, type LinhaExport } from './exportar'
+import { gerarCsvDadosMensais, nomeArquivoCsv, contarPreenchidos, COLUNAS_TOTAIS, type LinhaExport } from './exportar'
+import type { ContagensFisioMes, ContagensEnfermagemMes } from '@/types'
 
 const LINHA: LinhaExport = {
   leitos_dia: 600,
@@ -83,11 +84,71 @@ describe('vazio não é zero', () => {
     expect(celulas(csv, 1)[9]).toBe('0')
   })
 
-  it('preenche 24 dos 75 campos', () => {
+  it('sem fisio nem enfermagem, preenche 24 dos 75 campos', () => {
     // A planilha tem 77 colunas (A..BY), mas duas não são dado: `mes` e o
     // rótulo livre da coluna B. Sobram 75 campos.
-    expect(COLUNAS_PREENCHIDAS).toBe(24)
+    expect(contarPreenchidos(LINHA)).toBe(24)
     expect(COLUNAS_TOTAIS).toBe(75)
+  })
+})
+
+describe('colunas de fisioterapia e enfermagem', () => {
+  const FISIO: ContagensFisioMes = {
+    extubados_com_sucesso: 27, tentativas_extubacao: 30, reintubacoes_48h: 3,
+    extubacoes_planejadas: 30, desmame_dificil_sucesso: 5, pacientes_desmame_dificil: 8,
+    vni_evitou_iot: 12, vni_objetivo_evitar_iot: 15, decanulados_na_uti: 3,
+    traqueo_elegiveis: 5, dias_vm_protetora: 130,
+  }
+  const ENF: ContagensEnfermagemMes = {
+    cvc_dia: 210, svd_dia: 180, lpp_adquiridas_uti: 2, lpp_total: 3, dispositivos_abertos: 0,
+  }
+
+  const completa: LinhaExport = { ...LINHA, fisio: FISIO, enfermagem: ENF }
+  const v = celulas(gerarCsvDadosMensais(new Date(2026, 6, 1), completa), 1)
+
+  it('preenche as 3 colunas de enfermagem nas posições certas', () => {
+    expect(v[21]).toBe('3')    // V  = Total de LPP
+    expect(v[28]).toBe('210')  // AC = CVC-dia
+    expect(v[29]).toBe('180')  // AD = SVD-dia
+  })
+
+  it('leva o TOTAL de LPP, não só as adquiridas', () => {
+    // A planilha nunca separou os dois; mandar só as adquiridas quebraria a
+    // comparabilidade com a série histórica dele.
+    expect(v[21]).toBe('3')
+    expect(v[21]).not.toBe('2')
+  })
+
+  it('preenche as 11 colunas de fisioterapia (BD..BN)', () => {
+    expect(v[55]).toBe('27')   // BD = Extubados com sucesso
+    expect(v[56]).toBe('30')   // BE = Tentativas de extubação
+    expect(v[57]).toBe('3')    // BF = Reintubações <48h
+    expect(v[65]).toBe('130')  // BN = Dias em VM protetora
+  })
+
+  it('mês completo preenche 38 dos 75 campos', () => {
+    expect(contarPreenchidos(completa)).toBe(38)
+  })
+
+  it('mês sem fisio deixa as colunas dela VAZIAS, não zeradas', () => {
+    // Zerar afirmaria "nenhuma extubação no mês"; vazio diz "não sei" e
+    // preserva o que ele lançou à mão.
+    const semFisio = celulas(gerarCsvDadosMensais(new Date(2026, 6, 1), { ...LINHA, enfermagem: ENF }), 1)
+    expect(semFisio[55]).toBe('')
+    expect(semFisio[65]).toBe('')
+    expect(semFisio[28]).toBe('210')   // enfermagem continua preenchida
+  })
+
+  it('mês sem enfermagem deixa as colunas dela vazias', () => {
+    const semEnf = celulas(gerarCsvDadosMensais(new Date(2026, 6, 1), { ...LINHA, fisio: FISIO }), 1)
+    expect(semEnf[21]).toBe('')
+    expect(semEnf[28]).toBe('')
+    expect(semEnf[55]).toBe('27')      // fisio continua preenchida
+  })
+
+  it('cabeçalho e valores seguem alinhados com todas as fontes', () => {
+    const linhas_ = gerarCsvDadosMensais(new Date(2026, 6, 1), completa).split('\r\n')
+    expect(linhas_[1].split(';')).toHaveLength(linhas_[0].split(';').length)
   })
 })
 

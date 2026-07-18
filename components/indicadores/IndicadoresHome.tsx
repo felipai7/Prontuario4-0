@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import ToastContainer, { useToast } from '@/components/ui/Toast'
 import { calcularIndicadores, CATEGORIAS, calcularLeitosDia } from '@/lib/indicadores/formulas'
-import { gerarCsvDadosMensais, nomeArquivoCsv, baixarCsv, COLUNAS_PREENCHIDAS, COLUNAS_TOTAIS } from '@/lib/indicadores/exportar'
+import { gerarCsvDadosMensais, nomeArquivoCsv, baixarCsv, contarPreenchidos, COLUNAS_TOTAIS } from '@/lib/indicadores/exportar'
 import PainelQualidade from './PainelQualidade'
 import { fmtNum } from '@/lib/utils'
 import { ALAS } from '@/lib/config'
@@ -42,7 +42,13 @@ export default function IndicadoresHome({ souChefe, userEmail }: Props) {
   const [qualidade, setQualidade] = useState<QualidadeMes | null>(null)
   const [fisio, setFisio] = useState<ContagensFisioMes | null>(null)
   const [enfermagem, setEnfermagem] = useState<ContagensEnfermagemMes | null>(null)
-  const [loading, setLoading] = useState(false)
+  /**
+   * Começa em `true` de propósito: todo dado desta tela chega por RPC depois da
+   * montagem, então "carregando" é o estado real do primeiro render. Com `false`,
+   * o servidor renderizava conteúdo já resolvido e o cliente outro — o React
+   * acusava divergência e descartava o HTML do servidor.
+   */
+  const [loading, setLoading] = useState(true)
 
   const primeiroDia = useMemo(() => new Date(ano, mes, 1), [ano, mes])
 
@@ -87,13 +93,17 @@ export default function IndicadoresHome({ souChefe, userEmail }: Props) {
 
   const vivos = indicadores.filter(i => !i.aguarda).length
 
+  const linhaExport = useMemo(() => contagens && ({
+    ...contagens,
+    leitos_dia: calcularLeitosDia(primeiroDia, LEITOS_ATIVOS),
+    leitos_ativos: LEITOS_ATIVOS,
+    fisio,
+    enfermagem,
+  }), [contagens, primeiroDia, fisio, enfermagem])
+
   const handleExportar = () => {
-    if (!contagens) return
-    const leitosDia = calcularLeitosDia(primeiroDia, LEITOS_ATIVOS)
-    baixarCsv(
-      nomeArquivoCsv(primeiroDia),
-      gerarCsvDadosMensais(primeiroDia, { ...contagens, leitos_dia: leitosDia, leitos_ativos: LEITOS_ATIVOS }),
-    )
+    if (!linhaExport) return
+    baixarCsv(nomeArquivoCsv(primeiroDia), gerarCsvDadosMensais(primeiroDia, linhaExport))
     showToast('CSV baixado — cole a linha na aba "Dados Mensais".')
   }
 
@@ -144,10 +154,16 @@ export default function IndicadoresHome({ souChefe, userEmail }: Props) {
               <option key={a} value={a}>{a}</option>)}
           </select>
           <p className="text-xs text-slate-400 ml-auto">
-            {vivos} de {indicadores.length} indicadores com dado disponível
+            {!loading && (
+              `${vivos} de ${indicadores.length} indicadores com dado disponível` +
+              ` · exporta ${linhaExport ? contarPreenchidos(linhaExport) : 0} de ${COLUNAS_TOTAIS} campos`
+            )}
           </p>
-          <button onClick={handleExportar} disabled={!contagens}
-            title={`Baixa a linha do mês no formato da aba "Dados Mensais" — ${COLUNAS_PREENCHIDAS} dos ${COLUNAS_TOTAIS} campos preenchidos`}
+          {/* O título é estático de propósito: dado carregado depois da
+              hidratação num ATRIBUTO gera divergência entre servidor e cliente.
+              A contagem fica no texto acima, que já muda depois do carregamento. */}
+          <button onClick={handleExportar} disabled={!linhaExport}
+            title='Baixa a linha do mês no formato da aba "Dados Mensais"'
             className="text-xs font-medium border border-slate-300 text-slate-600 hover:bg-slate-50
                        disabled:opacity-40 rounded-lg px-3 py-2">
             ⬇️ Exportar para a planilha

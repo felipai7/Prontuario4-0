@@ -3,12 +3,16 @@
 // a linha na planilha dele e a aba "Indicadores" recalcule sozinha: enquanto o
 // app não faz tudo, ele confere um contra o outro em vez de escolher um dos dois.
 
-import type { ContagensMes } from '@/types'
+import type { ContagensMes, ContagensFisioMes, ContagensEnfermagemMes } from '@/types'
 
 /** Contagens do mês + os campos que vêm de lib/config.ts, não do banco. */
 export interface LinhaExport extends ContagensMes {
   leitos_dia: number
   leitos_ativos: number
+  /** Null = mês sem registro de fisioterapia; as colunas dela saem vazias. */
+  fisio?: ContagensFisioMes | null
+  /** Null = mês sem registro de enfermagem; as colunas dela saem vazias. */
+  enfermagem?: ContagensEnfermagemMes | null
 }
 
 /**
@@ -20,7 +24,12 @@ export interface LinhaExport extends ContagensMes {
  */
 interface Coluna {
   label: string
-  campo?: keyof LinhaExport
+  /** Campo das contagens gerais (ou dos leitos, que vêm de lib/config.ts). */
+  campo?: keyof ContagensMes | 'leitos_dia' | 'leitos_ativos'
+  /** Campo das contagens de fisioterapia — vazio se o mês não tiver registro. */
+  fisio?: keyof ContagensFisioMes
+  /** Campo das contagens de enfermagem — vazio se o mês não tiver registro. */
+  enf?: keyof ContagensEnfermagemMes
 }
 
 const COLUNAS: Coluna[] = [
@@ -45,15 +54,17 @@ const COLUNAS: Coluna[] = [
   { label: 'Total de IRAS (eventos) no mes' },
   { label: 'Pacientes com pelo menos uma IRAS' },
   { label: 'Total de pacientes internados no mes',                    campo: 'pacientes_internados_mes' },
-  { label: 'Total de LPP (eventos) no mes' },
+  // A planilha nunca separou LPP adquirida de LPP de admissão, então esta
+  // coluna leva o TOTAL — é o que mantém a série histórica dele comparável.
+  { label: 'Total de LPP (eventos) no mes',                            enf: 'lpp_total' },
   { label: 'Pneumonia nosocomial (mes)' },
   { label: 'Traqueite nosocomial (mes)' },
   { label: 'IPCS laboratorial (hemocultura +)' },
   { label: 'IPCS clinica (sem confirmacao laboratorial)' },
   { label: 'ITU associada a SVD' },
   { label: 'PAV (mes)' },
-  { label: 'CVC-dia (soma do mes)' },
-  { label: 'SVD-dia (soma do mes)' },
+  { label: 'CVC-dia (soma do mes)',                                   enf: 'cvc_dia' },
+  { label: 'SVD-dia (soma do mes)',                                   enf: 'svd_dia' },
   { label: 'Ventilador-dia (soma do mes)',                            campo: 'ventilador_dia' },
   { label: 'Pacientes que realizaram hemodialise/TRS',                campo: 'pacientes_hemodialise' },
   { label: 'NP >70% da meta (n)' },
@@ -79,17 +90,17 @@ const COLUNAS: Coluna[] = [
   { label: 'Pacientes monitorados (d)',                               campo: 'pacientes_monitorados_glicemia' },
   { label: 'Pacientes c/ qualquer disfuncao, dedup. (n)',             campo: 'pacientes_disfuncao_glicemica' },
   { label: 'Disfuncao glicemica em uso de corticoide (n)',            campo: 'pacientes_disfuncao_glicemica_corticoide' },
-  { label: 'Extubados com sucesso (n)' },
-  { label: 'Tentativas de extubacao (d)' },
-  { label: 'Reintubacoes em ate 48h (n)' },
-  { label: 'Extubacoes planejadas (d)' },
-  { label: 'Desmame dificil com sucesso (n)' },
-  { label: 'Pacientes com desmame dificil (d)' },
-  { label: 'VNI que evitou IOT (n)' },
-  { label: 'VNI com objetivo de evitar IOT (d)' },
-  { label: 'Decanulados na UTI (n)' },
-  { label: 'Traqueostomizados elegiveis a decanulacao (d)' },
-  { label: 'Dias em VM protetora (n)' },
+  { label: 'Extubados com sucesso (n)',                     fisio: 'extubados_com_sucesso' },
+  { label: 'Tentativas de extubacao (d)',                   fisio: 'tentativas_extubacao' },
+  { label: 'Reintubacoes em ate 48h (n)',                   fisio: 'reintubacoes_48h' },
+  { label: 'Extubacoes planejadas (d)',                     fisio: 'extubacoes_planejadas' },
+  { label: 'Desmame dificil com sucesso (n)',               fisio: 'desmame_dificil_sucesso' },
+  { label: 'Pacientes com desmame dificil (d)',             fisio: 'pacientes_desmame_dificil' },
+  { label: 'VNI que evitou IOT (n)',                        fisio: 'vni_evitou_iot' },
+  { label: 'VNI com objetivo de evitar IOT (d)',            fisio: 'vni_objetivo_evitar_iot' },
+  { label: 'Decanulados na UTI (n)',                        fisio: 'decanulados_na_uti' },
+  { label: 'Traqueostomizados elegiveis a decanulacao (d)', fisio: 'traqueo_elegiveis' },
+  { label: 'Dias em VM protetora (n)',                      fisio: 'dias_vm_protetora' },
   { label: 'Hipoglicemia relacionada a TN (n)' },
   { label: 'Adequacao nutricional em VM (n)' },
   { label: 'Pacientes em VM recebendo nutricao (d)' },
@@ -103,9 +114,22 @@ const COLUNAS: Coluna[] = [
   { label: 'Discussao nutricional em round (n)' },
 ]
 
-/** Quantas colunas da planilha o app já preenche — o resto sai vazio. */
-export const COLUNAS_PREENCHIDAS = COLUNAS.filter(c => c.campo).length
 export const COLUNAS_TOTAIS = COLUNAS.length - 2 // fora `mes` e o rótulo livre
+
+/**
+ * Quantas colunas saem preenchidas PARA ESTE MÊS.
+ *
+ * Não é constante: um mês sem registro de fisioterapia ou enfermagem preenche
+ * menos colunas. Mostrar um número fixo faria o Flaubert esperar dados que o
+ * arquivo não traz.
+ */
+export function contarPreenchidos(linha: LinhaExport): number {
+  return COLUNAS.filter(c =>
+    (c.campo != null) ||
+    (c.fisio != null && linha.fisio != null) ||
+    (c.enf   != null && linha.enfermagem != null)
+  ).length
+}
 
 /**
  * Número no padrão brasileiro: vírgula decimal. Inteiro sai sem casas — só a
@@ -132,8 +156,12 @@ export function gerarCsvDadosMensais(mes: Date, linha: LinhaExport): string {
   const valores = COLUNAS.map((c, i) => {
     if (i === 0) return rotuloMes
     if (i === 1) return ''
-    if (!c.campo) return ''
-    const v = linha[c.campo]
+    // `?.` proposital: mês sem fisio/enfermagem deixa a célula VAZIA, não zero —
+    // zerar apagaria o lançamento manual dele ao colar na planilha.
+    const v = c.campo ? linha[c.campo]
+            : c.fisio ? linha.fisio?.[c.fisio]
+            : c.enf   ? linha.enfermagem?.[c.enf]
+            : undefined
     return typeof v === 'number' ? numeroBR(v) : ''
   })
 
