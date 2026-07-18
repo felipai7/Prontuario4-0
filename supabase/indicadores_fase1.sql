@@ -117,32 +117,16 @@ security invoker
 as $$
 with
   bounds as (
-    select p_mes as ini,
-           (p_mes + interval '1 month')::date as fim_excl,
-           least((p_mes + interval '1 month' - interval '1 day')::date, current_date) as ultimo_dia
+    select p_mes as ini, (p_mes + interval '1 month')::date as fim_excl
   ),
-  dias as (
-    select generate_series(b.ini, b.ultimo_dia, '1 day')::date as dia
-      from bounds b
-     where b.ini <= b.ultimo_dia
-  ),
-  -- Uma linha de `pacientes` = uma internação (a reinternação cria paciente novo).
-  estadias as (
-    select p.id,
-           p.data_internacao as entrada,
-           (select (r.data_alta at time zone 'America/Sao_Paulo')::date
-              from public.resumos_alta r
-             where r.paciente_id = p.id and r.tipo_saida is not null
-             order by r.data_alta desc
-             limit 1) as saida
-      from public.pacientes p
-  ),
+  -- Censo vem da view compartilhada (supabase/qualidade.sql): contagens_mes e
+  -- qualidade_mes PRECISAM concordar sobre o que é pacientes-dia, senão as
+  -- porcentagens de cobertura do painel viram ficção. Concordar por construção,
+  -- e não por a lógica estar escrita igual em dois lugares.
   censo as (
-    select d.dia, e.id
-      from dias d
-      join estadias e
-        on d.dia >= e.entrada
-       and (e.saida is null or d.dia < e.saida)
+    select c.paciente_id as id, c.dia
+      from public.censo_diario c, bounds b
+     where c.dia >= b.ini and c.dia < b.fim_excl
   ),
   -- Saídas do mês, com o instante exato da admissão para o corte de <24h.
   saidas_mes as (

@@ -5,9 +5,10 @@ import { createClient } from '@/lib/supabase/client'
 import ToastContainer, { useToast } from '@/components/ui/Toast'
 import { calcularIndicadores, CATEGORIAS, calcularLeitosDia } from '@/lib/indicadores/formulas'
 import { gerarCsvDadosMensais, nomeArquivoCsv, baixarCsv, COLUNAS_PREENCHIDAS, COLUNAS_TOTAIS } from '@/lib/indicadores/exportar'
+import PainelQualidade from './PainelQualidade'
 import { fmtNum } from '@/lib/utils'
 import { ALAS } from '@/lib/config'
-import type { ContagensMes, Indicador } from '@/types'
+import type { ContagensMes, Indicador, QualidadeMes } from '@/types'
 
 interface Props { souChefe: boolean; userEmail: string }
 
@@ -38,6 +39,7 @@ export default function IndicadoresHome({ souChefe, userEmail }: Props) {
   const [ano, setAno] = useState(hoje.getFullYear())
   const [mes, setMes] = useState(hoje.getMonth()) // 0-11
   const [contagens, setContagens] = useState<ContagensMes | null>(null)
+  const [qualidade, setQualidade] = useState<QualidadeMes | null>(null)
   const [loading, setLoading] = useState(false)
 
   const primeiroDia = useMemo(() => new Date(ano, mes, 1), [ano, mes])
@@ -46,11 +48,17 @@ export default function IndicadoresHome({ souChefe, userEmail }: Props) {
     if (!souChefe) return
     setLoading(true)
     const pMes = `${ano}-${String(mes + 1).padStart(2, '0')}-01`
-    const { data, error } = await supabase.rpc('contagens_mes', { p_mes: pMes })
+    const [contRes, qualRes] = await Promise.all([
+      supabase.rpc('contagens_mes',  { p_mes: pMes }),
+      supabase.rpc('qualidade_mes',  { p_mes: pMes }),
+    ])
     setLoading(false)
-    if (error) { showToast('Erro ao carregar indicadores: ' + error.message, 'error'); return }
-    // A função devolve uma linha só.
-    setContagens((Array.isArray(data) ? data[0] : data) as ContagensMes ?? null)
+    if (contRes.error) { showToast('Erro ao carregar indicadores: ' + contRes.error.message, 'error'); return }
+    // As funções devolvem uma linha só.
+    const uma = <T,>(d: unknown) => (Array.isArray(d) ? d[0] : d) as T ?? null
+    setContagens(uma<ContagensMes>(contRes.data))
+    // A qualidade é acessório: se falhar, os indicadores ainda valem a visita.
+    setQualidade(qualRes.error ? null : uma<QualidadeMes>(qualRes.data))
   }, [ano, mes, souChefe, supabase, showToast])
 
   useEffect(() => { carregar() }, [carregar])
@@ -133,6 +141,11 @@ export default function IndicadoresHome({ souChefe, userEmail }: Props) {
           </button>
         </section>
 
+        {!loading && qualidade && (
+          <PainelQualidade q={qualidade}
+            mesCorrente={ano === hoje.getFullYear() && mes === hoje.getMonth()} />
+        )}
+
         {loading ? (
           <p className="text-sm text-slate-400 text-center py-12">Carregando...</p>
         ) : !contagens ? (
@@ -153,27 +166,11 @@ export default function IndicadoresHome({ souChefe, userEmail }: Props) {
         )}
 
         {contagens && (
-          <div className="border border-slate-200 bg-white rounded-xl p-3 space-y-1">
-            <p className="text-xs text-slate-500">
-              <span className="font-semibold">SAPS 3:</span>{' '}
-              {contagens.saidas === 0
-                ? 'nenhuma saída no período.'
-                : <>
-                    {contagens.saidas_com_saps3} de {contagens.saidas} saídas pontuadas
-                    {' '}({fmtNum(contagens.saidas_com_saps3 / contagens.saidas * 100, 0)}%).
-                    {contagens.saidas_com_saps3 < contagens.saidas && (
-                      <span className="text-amber-700">
-                        {' '}O SMR considera apenas as pontuadas — quanto menor a cobertura,
-                        menos representativo ele é.
-                      </span>
-                    )}
-                  </>}
-            </p>
-            <p className="text-xs text-slate-400">
-              O SMR usa a equação SAPS 3 para América Central e do Sul e ainda não foi validado
-              contra casos reais — trate o valor como provisório.
-            </p>
-          </div>
+          <p className="text-xs text-slate-400 pt-1">
+            O SMR usa a equação SAPS 3 para América Central e do Sul e ainda não foi validado
+            contra casos reais — trate o valor como provisório. Ele considera apenas as saídas
+            pontuadas; a cobertura está no painel de qualidade acima.
+          </p>
         )}
       </main>
     </div>

@@ -418,6 +418,27 @@ export interface ContagensMes {
   pacientes_disfuncao_glicemica_corticoide: number
 }
 
+/**
+ * Qualidade do dado que sustenta os indicadores do mês (RPC `qualidade_mes`).
+ * Os três grupos têm naturezas diferentes e não devem ser misturados na tela —
+ * ver o comentário em supabase/qualidade.sql.
+ */
+export interface QualidadeMes {
+  // Pendências: obrigatório sem exceção clínica.
+  pacientes_ativos_sem_saps3: number
+  saidas_sem_saps3: number
+  saidas_sem_tipo: number
+  // Contradições: o app sabe que o dado deveria existir.
+  corticoide_sem_hgt: number
+  // Cobertura: fato, sem juízo.
+  saps3_ate_24h: number
+  saps3_pontuados: number
+  pacientes_com_hgt: number
+  pacientes_internados: number
+  pacientes_dia_com_balanco: number
+  pacientes_dia: number
+}
+
 export type CategoriaIndicador =
   | 'Operacional' | 'Mortalidade' | 'IRAS e segurança' | 'Dispositivos'
   | 'Nutrição' | 'Metabólico' | 'Fisioterapia respiratória'
