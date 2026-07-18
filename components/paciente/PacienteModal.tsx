@@ -7,7 +7,7 @@ import { ALAS, ALAS_MAP, PLANOS, type AlaId } from '@/lib/config'
 import { modulosAtivos, type PacienteContext } from '@/lib/modules'
 import { montarEvolucaoDiaria } from '@/lib/evolucaoDiaria'
 import { podeEditarModulo } from '@/lib/cargos'
-import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, FisioEvento, FisioAvaliacaoDiaria, ToastData, Cargo } from '@/types'
+import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, FisioEvento, FisioAvaliacaoDiaria, Dispositivo, LppEvento, ToastData, Cargo } from '@/types'
 
 const modulos = modulosAtivos()
 
@@ -61,6 +61,8 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
   const [registrosIntensivista, setRegistrosIntensivista] = useState<RegistroIntensivista[]>([])
   const [fisioEventos,    setFisioEventos]    = useState<FisioEvento[]>([])
   const [fisioAvaliacoes, setFisioAvaliacoes] = useState<FisioAvaliacaoDiaria[]>([])
+  const [dispositivos,    setDispositivos]    = useState<Dispositivo[]>([])
+  const [lpps,            setLpps]            = useState<LppEvento[]>([])
   const [cargo, setCargo] = useState<Cargo | null>(null)
   const [loading,       setLoading]       = useState(true)
   const [showAlta,      setShowAlta]      = useState(false)
@@ -165,13 +167,22 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     if (data) setFisioAvaliacoes(data as FisioAvaliacaoDiaria[])
   }
 
+  const loadDispositivos = async () => {
+    const { data } = await supabase.from('dispositivos').select('*').eq('paciente_id', pac.id).order('data_insercao')
+    if (data) setDispositivos(data as Dispositivo[])
+  }
+  const loadLpps = async () => {
+    const { data } = await supabase.from('lpp_eventos').select('*').eq('paciente_id', pac.id).order('data')
+    if (data) setLpps(data as LppEvento[])
+  }
+
   const loadData = async () => {
     setLoading(true)
     await Promise.all([
       loadExames(), loadPeriodos(), loadSinais(), loadExamesImagem(), loadDvas(),
       loadPeriodosHemo(), loadAtbs(), loadCuidados(), loadNeuro(), loadVentilatorio(),
       loadIntercorrencias(), loadPendencias(), loadRegistrosIntensivista(),
-      loadFisioEventos(), loadFisioAvaliacoes(),
+      loadFisioEventos(), loadFisioAvaliacoes(), loadDispositivos(), loadLpps(),
     ])
     setLoading(false)
   }
@@ -343,7 +354,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     paciente: pac,
     exames, periodos, sinais, examesImagem, dvas, periodosHemo, atbs, cuidados,
     neuroHistorico, ventHistorico, intercorrencias, pendencias, registrosIntensivista,
-    fisioEventos, fisioAvaliacoes,
+    fisioEventos, fisioAvaliacoes, dispositivos, lpps,
     cargo,
     podeEditar: podeEditarModulo(cargo, moduloAtivo),
     onRefresh: loadData,

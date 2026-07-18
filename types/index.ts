@@ -468,6 +468,47 @@ export interface ContagensFisioMes {
   dias_vm_protetora: number
 }
 
+// ── Enfermagem ───────────────────────────────────────────────────────────────
+
+export type TipoDispositivo = 'CVC' | 'SVD'
+
+export interface Dispositivo {
+  id: string
+  paciente_id: string
+  tipo: TipoDispositivo
+  data_insercao: string          // YYYY-MM-DD
+  /** Null = ainda instalado. O dia da retirada não conta como dia-dispositivo. */
+  data_remocao: string | null
+  observacao: string | null
+  criado_em: string
+  criado_por: string | null
+}
+
+export type EstagioLPP = '1' | '2' | '3' | '4' | 'Não classificável' | 'Tissular profunda'
+
+export interface LppEvento {
+  id: string
+  paciente_id: string
+  data: string                   // YYYY-MM-DD
+  estagio: EstagioLPP
+  local: string | null
+  /** A densidade de LPP conta só as adquiridas: as de admissão são de outro serviço. */
+  adquirida_na_uti: boolean
+  observacao: string | null
+  criado_em: string
+  criado_por: string | null
+}
+
+/** Contagens do mês vindas da RPC `contagens_enfermagem_mes`. */
+export interface ContagensEnfermagemMes {
+  cvc_dia: number
+  svd_dia: number
+  lpp_adquiridas_uti: number
+  lpp_total: number
+  /** Dispositivos sem retirada em paciente já saído — retirada esquecida. */
+  dispositivos_abertos: number
+}
+
 /**
  * Qualidade do dado que sustenta os indicadores do mês (RPC `qualidade_mes`).
  * Os três grupos têm naturezas diferentes e não devem ser misturados na tela —

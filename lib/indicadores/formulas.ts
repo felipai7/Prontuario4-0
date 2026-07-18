@@ -8,7 +8,7 @@
 // não existe. Ele aparece na tela como pendente, e a fórmula entra quando o módulo
 // chegar — não escrevemos fórmula contra campo que não existe.
 
-import type { ContagensMes, ContagensFisioMes, Indicador } from '@/types'
+import type { ContagensMes, ContagensFisioMes, ContagensEnfermagemMes, Indicador } from '@/types'
 
 /** Divisão protegida — equivale ao IFERROR(...,"") da planilha. */
 function razao(n: number | null, d: number | null, mult = 1): number | null {
@@ -23,9 +23,13 @@ interface Entrada {
   leitosAtivos: number
   /** Null enquanto não houver dado de fisioterapia no mês — os 6 ficam pendentes. */
   fisio?: ContagensFisioMes | null
+  /** Null enquanto não houver dado de enfermagem no mês. */
+  enfermagem?: ContagensEnfermagemMes | null
 }
 
-export function calcularIndicadores({ contagens: c, leitosDia, leitosAtivos, fisio }: Entrada): Indicador[] {
+export function calcularIndicadores({
+  contagens: c, leitosDia, leitosAtivos, fisio, enfermagem: enf,
+}: Entrada): Indicador[] {
   const viva = (
     id: string, nome: string, categoria: Indicador['categoria'], unidade: Indicador['unidade'],
     numerador: number, denominador: number, mult = 1,
@@ -71,20 +75,34 @@ export function calcularIndicadores({ contagens: c, leitosDia, leitosAtivos, fis
     pendente('densidade_iras', 'Densidade de IRAS', 'IRAS e segurança', '/1000 pac-dia', 'Intensivista'),
     pendente('taxa_infeccao', 'Taxa de infecção mensal', 'IRAS e segurança', '%', 'Intensivista'),
     pendente('pct_pacientes_iras', '% pacientes com IRAS', 'IRAS e segurança', '%', 'Intensivista'),
-    pendente('densidade_lpp', 'Densidade de LPP', 'IRAS e segurança', '/1000 pac-dia', 'Enfermagem'),
+    // Conta só as LPP adquiridas na UTI: as que o paciente já trouxe são de
+    // outro serviço, e puniriam esta unidade por cuidado que não foi dela.
+    enf
+      ? viva('densidade_lpp', 'Densidade de LPP', 'IRAS e segurança', '/1000 pac-dia',
+          enf.lpp_adquiridas_uti, c.pacientes_dia, 1000)
+      : pendente('densidade_lpp', 'Densidade de LPP', 'IRAS e segurança', '/1000 pac-dia', 'Enfermagem'),
     pendente('di_pneumonia', 'DI pneumonia nosocomial', 'IRAS e segurança', '/1000 pac-dia', 'Intensivista'),
     pendente('di_traqueite', 'DI traqueíte nosocomial', 'IRAS e segurança', '/1000 pac-dia', 'Intensivista'),
-    pendente('di_ipcs_total', 'DI IPCS total', 'IRAS e segurança', '/1000 CVC-dia', 'Enfermagem'),
-    pendente('di_ipcs_lab', 'DI IPCS laboratorial', 'IRAS e segurança', '/1000 CVC-dia', 'Enfermagem'),
-    pendente('di_ipcs_clinica', 'DI IPCS clínica', 'IRAS e segurança', '/1000 CVC-dia', 'Enfermagem'),
-    pendente('di_itu_svd', 'DI ITU-SVD', 'IRAS e segurança', '/1000 SVD-dia', 'Enfermagem'),
+    // O denominador (CVC-dia / SVD-dia) já vem da enfermagem; o que falta é o
+    // numerador — diagnóstico de infecção, que é médico. Por isso aguardam o
+    // módulo do Intensivista, não o da Enfermagem.
+    pendente('di_ipcs_total', 'DI IPCS total', 'IRAS e segurança', '/1000 CVC-dia', 'Intensivista'),
+    pendente('di_ipcs_lab', 'DI IPCS laboratorial', 'IRAS e segurança', '/1000 CVC-dia', 'Intensivista'),
+    pendente('di_ipcs_clinica', 'DI IPCS clínica', 'IRAS e segurança', '/1000 CVC-dia', 'Intensivista'),
+    pendente('di_itu_svd', 'DI ITU-SVD', 'IRAS e segurança', '/1000 SVD-dia', 'Intensivista'),
     // Denominador (ventilador-dia) já existe; falta o numerador (eventos de PAV).
     pendente('di_pav', 'DI PAV', 'IRAS e segurança', '/1000 ventilador-dia', 'Intensivista'),
     pendente('taxa_sepse_choque', 'Taxa de sepse/choque', 'IRAS e segurança', '%', 'Intensivista'),
 
     // ── Dispositivos ──────────────────────────────────────────────────────
-    pendente('utilizacao_cvc', 'Taxa de utilização CVC', 'Dispositivos', '%', 'Enfermagem'),
-    pendente('utilizacao_svd', 'Taxa de utilização SVD', 'Dispositivos', '%', 'Enfermagem'),
+    enf
+      ? viva('utilizacao_cvc', 'Taxa de utilização CVC', 'Dispositivos', '%',
+          enf.cvc_dia, c.pacientes_dia, 100)
+      : pendente('utilizacao_cvc', 'Taxa de utilização CVC', 'Dispositivos', '%', 'Enfermagem'),
+    enf
+      ? viva('utilizacao_svd', 'Taxa de utilização SVD', 'Dispositivos', '%',
+          enf.svd_dia, c.pacientes_dia, 100)
+      : pendente('utilizacao_svd', 'Taxa de utilização SVD', 'Dispositivos', '%', 'Enfermagem'),
     viva('utilizacao_vm', 'Taxa de utilização VM', 'Dispositivos', '%', c.ventilador_dia, c.pacientes_dia, 100),
     viva('hemodialise_100adm', 'Hemodiálise/100 admissões', 'Dispositivos', '/100 adm',
       c.pacientes_hemodialise, c.admissoes, 100),

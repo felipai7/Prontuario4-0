@@ -17,10 +17,11 @@ import NeurologicoTab  from '@/components/modules/plantonista/NeurologicoTab'
 import VentilatorioTab from '@/components/modules/plantonista/VentilatorioTab'
 import IntensivistaTab from '@/components/modules/intensivista/IntensivistaTab'
 import FisioterapiaTab from '@/components/modules/fisioterapia/FisioterapiaTab'
+import EnfermagemTab from '@/components/modules/enfermagem/EnfermagemTab'
 import ExamesTab       from '@/components/modules/shared/ExamesTab'
 import ExamesImagemTab from '@/components/modules/shared/ExamesImagemTab'
 import { featureFlags } from '@/lib/featureFlags'
-import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, FisioEvento, FisioAvaliacaoDiaria, ToastData, Cargo, Profissao } from '@/types'
+import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, FisioEvento, FisioAvaliacaoDiaria, Dispositivo, LppEvento, ToastData, Cargo, Profissao } from '@/types'
 
 /** Dados do paciente carregados pela casca e disponíveis a todas as abas. */
 export interface PacienteContext {
@@ -40,6 +41,8 @@ export interface PacienteContext {
   registrosIntensivista: RegistroIntensivista[]
   fisioEventos: FisioEvento[]
   fisioAvaliacoes: FisioAvaliacaoDiaria[]
+  dispositivos: Dispositivo[]
+  lpps: LppEvento[]
   /** Cargo do usuário logado. Null = sem cadastro em `staff` (cai no padrão). */
   cargo: Cargo | null
   /**
@@ -161,6 +164,14 @@ const fisioterapia: TabDef = {
     podeEditar={ctx.podeEditar} onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
 }
 
+const enfermagem: TabDef = {
+  id: 'enfermagem',
+  label: '💉 Dispositivos e LPP',
+  render: ctx => <EnfermagemTab paciente={ctx.paciente} dispositivos={ctx.dispositivos}
+    lpps={ctx.lpps} podeEditar={ctx.podeEditar}
+    onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
+}
+
 // ── Módulos (nova estrutura) ────────────────────────────────────────────────
 
 // Ao acrescentar um módulo (Enfermagem, Fisioterapia, Nutrição), declare a
@@ -184,6 +195,15 @@ export const MODULOS: readonly ModuloDef[] = [
     label: '🫁 Fisioterapia',
     profissaoDona: 'fisioterapeuta',
     tabs: [fisioterapia, ventilatorio, examesImagem],
+  },
+  {
+    id: 'enfermagem',
+    label: '💉 Enfermagem',
+    profissaoDona: 'enfermeiro',
+    // Balanço e Sinais Vitais entram porque já são preenchidos pela enfermagem
+    // na prática; o dono deles continua sendo o módulo médico, então aqui
+    // aparecem em leitura até decidirmos mover o registro.
+    tabs: [enfermagem, balanco, sinais],
   },
 ]
 

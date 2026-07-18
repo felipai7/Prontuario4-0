@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { calcularIndicadores, calcularLeitosDia } from './formulas'
-import type { ContagensMes, ContagensFisioMes, Indicador } from '@/types'
+import type { ContagensMes, ContagensFisioMes, ContagensEnfermagemMes, Indicador } from '@/types'
 
 // A linha de exemplo da aba "Dados Mensais" da planilha do Dr. Flaubert.
 // Os valores esperados nos testes são os que a PRÓPRIA PLANILHA calcula.
@@ -243,6 +243,77 @@ describe('fisioterapia respiratória', () => {
 
   it('com fisio, 23 indicadores vivos', () => {
     expect(comFisio().filter(i => !i.aguarda)).toHaveLength(23)
+  })
+})
+
+describe('enfermagem', () => {
+  const ENF: ContagensEnfermagemMes = {
+    cvc_dia: 210,
+    svd_dia: 180,
+    lpp_adquiridas_uti: 3,
+    lpp_total: 3,
+    dispositivos_abertos: 0,
+  }
+
+  const comEnf = (e: Partial<ContagensEnfermagemMes> = {}) =>
+    calcularIndicadores({
+      contagens: { ...EXEMPLO_PLANILHA },
+      leitosDia: 600, leitosAtivos: 20,
+      enfermagem: { ...ENF, ...e },
+    })
+
+  it.each([
+    ['densidade_lpp',   5.8823529412],   // 3 / 510 × 1000
+    ['utilizacao_cvc', 41.1764705882],   // 210 / 510 × 100
+    ['utilizacao_svd', 35.2941176471],   // 180 / 510 × 100
+  ])('%s = %f (paridade com a planilha)', (id, esperado) => {
+    expect(pegar(comEnf(), id as string).valor).toBeCloseTo(esperado as number, 6)
+  })
+
+  it('densidade de LPP conta só as adquiridas na UTI', () => {
+    // 5 lesões no mês, mas 2 vieram da admissão: contar as 5 puniria esta
+    // unidade por cuidado que não foi dela.
+    const i = pegar(comEnf({ lpp_total: 5, lpp_adquiridas_uti: 3 }), 'densidade_lpp')
+    expect(i.numerador).toBe(3)
+    expect(i.valor).toBeCloseTo(3 / 510 * 1000, 6)
+  })
+
+  it('mês sem registro de enfermagem deixa os 3 pendentes', () => {
+    const inds = calcularIndicadores({
+      contagens: EXEMPLO_PLANILHA, leitosDia: 600, leitosAtivos: 20, enfermagem: null,
+    })
+    for (const id of ['densidade_lpp', 'utilizacao_cvc', 'utilizacao_svd']) {
+      expect(pegar(inds, id).aguarda).toBe('Enfermagem')
+      expect(pegar(inds, id).valor).toBeNull()
+    }
+  })
+
+  it('IPCS e ITU aguardam o Intensivista, não a Enfermagem', () => {
+    // A enfermagem entrega o denominador (CVC-dia / SVD-dia); o numerador é
+    // diagnóstico de infecção, que é médico. Com enfermagem lançada, eles
+    // continuam pendentes — e apontando para o módulo certo.
+    const inds = comEnf()
+    for (const id of ['di_ipcs_total', 'di_ipcs_lab', 'di_ipcs_clinica', 'di_itu_svd']) {
+      expect(pegar(inds, id).aguarda).toBe('Intensivista')
+    }
+  })
+
+  it('com enfermagem, 20 indicadores vivos', () => {
+    expect(comEnf().filter(i => !i.aguarda)).toHaveLength(20)
+  })
+
+  it('com fisio e enfermagem juntas, 26 vivos', () => {
+    const inds = calcularIndicadores({
+      contagens: EXEMPLO_PLANILHA, leitosDia: 600, leitosAtivos: 20,
+      enfermagem: ENF,
+      fisio: {
+        extubados_com_sucesso: 27, tentativas_extubacao: 30, reintubacoes_48h: 3,
+        extubacoes_planejadas: 30, desmame_dificil_sucesso: 5, pacientes_desmame_dificil: 8,
+        vni_evitou_iot: 12, vni_objetivo_evitar_iot: 15, decanulados_na_uti: 3,
+        traqueo_elegiveis: 5, dias_vm_protetora: 130,
+      },
+    })
+    expect(inds.filter(i => !i.aguarda)).toHaveLength(26)
   })
 })
 
