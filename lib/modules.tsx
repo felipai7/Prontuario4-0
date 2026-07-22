@@ -18,11 +18,12 @@ import VentilatorioTab from '@/components/modules/plantonista/VentilatorioTab'
 import IntensivistaTab from '@/components/modules/intensivista/IntensivistaTab'
 import FisioterapiaTab from '@/components/modules/fisioterapia/FisioterapiaTab'
 import EnfermagemTab from '@/components/modules/enfermagem/EnfermagemTab'
+import IrasTab from '@/components/modules/intensivista/IrasTab'
 import NutricaoTab from '@/components/modules/nutricao/NutricaoTab'
 import ExamesTab       from '@/components/modules/shared/ExamesTab'
 import ExamesImagemTab from '@/components/modules/shared/ExamesImagemTab'
 import { featureFlags } from '@/lib/featureFlags'
-import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, FisioEvento, FisioAvaliacaoDiaria, Dispositivo, LppEvento, NutricaoAvaliacao, NutricaoDia, AuditoriaIntensivista, ToastData, Cargo, Profissao } from '@/types'
+import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, FisioEvento, FisioAvaliacaoDiaria, Dispositivo, LppEvento, NutricaoAvaliacao, NutricaoDia, AuditoriaIntensivista, IrasEvento, IrasSepseChoque, ToastData, Cargo, Profissao } from '@/types'
 
 /** Dados do paciente carregados pela casca e disponíveis a todas as abas. */
 export interface PacienteContext {
@@ -47,6 +48,8 @@ export interface PacienteContext {
   nutricaoAvaliacao: NutricaoAvaliacao | null
   nutricaoDias: NutricaoDia[]
   auditoria: AuditoriaIntensivista[]
+  irasEventos: IrasEvento[]
+  irasSepse: IrasSepseChoque | null
   /** Cargo do usuário logado. Null = sem cadastro em `staff` (cai no padrão). */
   cargo: Cargo | null
   /**
@@ -160,6 +163,14 @@ const cuidadosHorizontais: TabDef = {
     onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
 }
 
+const iras: TabDef = {
+  id: 'iras',
+  label: '🦠 IRAS e Vigilância',
+  render: ctx => <IrasTab paciente={ctx.paciente} eventos={ctx.irasEventos} sepse={ctx.irasSepse}
+    ventHistorico={ctx.ventHistorico} dispositivos={ctx.dispositivos}
+    podeEditar={ctx.podeEditar} onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
+}
+
 const fisioterapia: TabDef = {
   id: 'fisio',
   label: '🫁 Fisioterapia Respiratória',
@@ -202,7 +213,7 @@ export const MODULOS: readonly ModuloDef[] = [
     label: '📋 Médico Intensivista',
     profissaoDona: 'medico',
     exigeChefe: true,
-    tabs: [cuidadosHorizontais, examesLab, examesImagem],
+    tabs: [cuidadosHorizontais, iras, examesLab, examesImagem],
   },
   {
     id: 'fisioterapia',

@@ -6,7 +6,7 @@ import { calcularIndicadores, CATEGORIAS } from '@/lib/indicadores/formulas'
 import { gerarCsvDadosMensais, nomeArquivoCsv, baixarCsv, contarPreenchidos, COLUNAS_TOTAIS } from '@/lib/indicadores/exportar'
 import PainelQualidade from './PainelQualidade'
 import { fmtNum } from '@/lib/utils'
-import type { ContagensMes, ContagensFisioMes, ContagensEnfermagemMes, ContagensNutricaoMes, Indicador, QualidadeMes } from '@/types'
+import type { ContagensMes, ContagensFisioMes, ContagensEnfermagemMes, ContagensNutricaoMes, ContagensIrasMes, Indicador, QualidadeMes } from '@/types'
 
 /**
  * Tela só de apresentação: todo dado vem pronto do servidor (app/indicadores/page.tsx).
@@ -28,6 +28,7 @@ interface Props {
   fisio: ContagensFisioMes | null
   enfermagem: ContagensEnfermagemMes | null
   nutricao: ContagensNutricaoMes | null
+  iras: ContagensIrasMes | null
   leitosDia: number
   leitosAtivos: number
   erro: string | null
@@ -51,7 +52,7 @@ function casasDenominador(ind: Indicador): number {
 
 export default function IndicadoresHome({
   souChefe, userEmail, ano, mes, anoAtual, mesCorrente,
-  contagens, qualidade, fisio, enfermagem, nutricao, leitosDia, leitosAtivos, erro,
+  contagens, qualidade, fisio, enfermagem, nutricao, iras, leitosDia, leitosAtivos, erro,
 }: Props) {
   const router = useRouter()
   const { toasts, showToast, removeToast } = useToast()
@@ -68,8 +69,8 @@ export default function IndicadoresHome({
 
   const indicadores = useMemo(() => {
     if (!contagens) return []
-    return calcularIndicadores({ contagens, leitosDia, leitosAtivos, fisio, enfermagem, nutricao })
-  }, [contagens, leitosDia, leitosAtivos, fisio, enfermagem, nutricao])
+    return calcularIndicadores({ contagens, leitosDia, leitosAtivos, fisio, enfermagem, nutricao, iras })
+  }, [contagens, leitosDia, leitosAtivos, fisio, enfermagem, nutricao, iras])
 
   const vivos = indicadores.filter(i => !i.aguarda).length
 

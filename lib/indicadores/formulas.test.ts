@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { calcularIndicadores, calcularLeitosDia } from './formulas'
-import type { ContagensMes, ContagensFisioMes, ContagensEnfermagemMes, ContagensNutricaoMes, Indicador } from '@/types'
+import type { ContagensMes, ContagensFisioMes, ContagensEnfermagemMes, ContagensNutricaoMes, ContagensIrasMes, Indicador } from '@/types'
 
 // A linha de exemplo da aba "Dados Mensais" da planilha do Dr. Flaubert.
 // Os valores esperados nos testes são os que a PRÓPRIA PLANILHA calcula.
@@ -428,6 +428,101 @@ describe('nutrição', () => {
     for (const id of ['adequacao_np', 'adequacao_ne', 'aceitacao_vo', 'adequacao_global']) {
       expect(pegar(inds, id).valor).toBeNull()
     }
+  })
+})
+
+describe('IRAS e vigilância', () => {
+  const IRAS: ContagensIrasMes = {
+    total_iras: 5, pacientes_com_iras: 4,
+    pav: 2, itu_svd: 1, ipcs_lab: 1, ipcs_clinica: 1, pneumonia: 1, traqueite: 0, outra: 0,
+    sepse_choque: 18,
+  }
+  const ENF: ContagensEnfermagemMes = {
+    cvc_dia: 210, svd_dia: 180, lpp_adquiridas_uti: 3, lpp_total: 3, dispositivos_abertos: 0,
+  }
+
+  const comIras = (i: Partial<ContagensIrasMes> = {}, enf: ContagensEnfermagemMes | null = ENF) =>
+    calcularIndicadores({
+      contagens: { ...EXEMPLO_PLANILHA }, leitosDia: 600, leitosAtivos: 20,
+      iras: { ...IRAS, ...i }, enfermagem: enf,
+    })
+
+  it.each([
+    ['densidade_iras',    5 / 510 * 1000],      // total / pacientes-dia
+    ['taxa_infeccao',     5 / 112 * 100],       // total / admissões
+    ['pct_pacientes_iras', 4 / 118 * 100],      // pacientes / internados
+    ['di_pneumonia',      1 / 510 * 1000],
+    ['di_ipcs_total',     2 / 210 * 1000],      // (lab+clínica) / CVC-dia
+    ['di_ipcs_lab',       1 / 210 * 1000],
+    ['di_itu_svd',        1 / 180 * 1000],
+    ['di_pav',            2 / 160 * 1000],      // PAV / ventilador-dia (do EXEMPLO)
+    ['taxa_sepse_choque', 18 / 112 * 100],      // sepse / admissões
+  ])('%s = %f', (id, esperado) => {
+    expect(pegar(comIras(), id as string).valor).toBeCloseTo(esperado as number, 6)
+  })
+
+  it('total de IRAS inclui "outra" — o denominador de dispositivo não', () => {
+    // A densidade geral usa o total (com outra); as densidades específicas não.
+    const inds = comIras({ total_iras: 6, outra: 1 })
+    expect(pegar(inds, 'densidade_iras').numerador).toBe(6)
+    expect(pegar(inds, 'di_pav').numerador).toBe(2)  // segue só os PAV
+  })
+
+  it('IPCS total é a soma de laboratorial e clínica', () => {
+    const inds = comIras({ ipcs_lab: 3, ipcs_clinica: 2 })
+    expect(pegar(inds, 'di_ipcs_total').numerador).toBe(5)
+  })
+
+  it('sem enfermagem, DI de dispositivo fica sem denominador (não pendente)', () => {
+    // O numerador (IRAS) existe; o denominador (CVC-dia) viria da enfermagem.
+    // Sem ela, o valor é null mas o indicador está VIVO — não aguardando módulo.
+    const inds = comIras({}, null)
+    const ipcs = pegar(inds, 'di_ipcs_total')
+    expect(ipcs.aguarda).toBeUndefined()
+    expect(ipcs.valor).toBeNull()
+    // PAV usa ventilador-dia (de contagens_mes), então continua calculando.
+    expect(pegar(inds, 'di_pav').valor).not.toBeNull()
+  })
+
+  it('mês sem IRAS deixa os 11 pendentes no Intensivista', () => {
+    const inds = calcularIndicadores({
+      contagens: EXEMPLO_PLANILHA, leitosDia: 600, leitosAtivos: 20, iras: null, enfermagem: ENF,
+    })
+    for (const id of ['densidade_iras', 'taxa_infeccao', 'pct_pacientes_iras',
+                      'di_pneumonia', 'di_traqueite', 'di_ipcs_total', 'di_ipcs_lab',
+                      'di_ipcs_clinica', 'di_itu_svd', 'di_pav', 'taxa_sepse_choque']) {
+      expect(pegar(inds, id).aguarda).toBe('Intensivista')
+      expect(pegar(inds, id).valor).toBeNull()
+    }
+  })
+
+  it('com IRAS + enfermagem + fisio + nutrição, os 64 estão vivos', () => {
+    const inds = calcularIndicadores({
+      contagens: EXEMPLO_PLANILHA, leitosDia: 600, leitosAtivos: 20,
+      iras: IRAS, enfermagem: ENF,
+      fisio: {
+        extubados_com_sucesso: 27, tentativas_extubacao: 30, reintubacoes_48h: 3,
+        extubacoes_planejadas: 30, desmame_dificil_sucesso: 5, pacientes_desmame_dificil: 8,
+        vni_evitou_iot: 12, vni_objetivo_evitar_iot: 15, decanulados_na_uti: 3,
+        traqueo_elegiveis: 5, dias_vm_protetora: 130,
+      },
+      nutricao: {
+        avaliados: 100, avaliados_ate_24h: 90, admissoes_elegiveis_24h: 100,
+        deficit_risco: 22, elegiveis_ne: 45, elegiveis_tn: 95, elegiveis_tn_receberam: 76,
+        dias_np: 5, dias_ne: 38, dias_vo: 52, dias_np_adequado: 4, dias_ne_adequado: 30,
+        dias_vo_adequado: 40, dias_elegiveis_tn: 200, dias_proteica_adequada: 160,
+        pacientes_proteica_media_ok: 25, pacientes_proteica_avaliados: 95,
+        dias_vm_com_nutricao: 28, dias_vm_nutricao_adequada: 20, jejum_maior_24h: 6,
+        ne_iniciada_ate_48h: 32, elegiveis_inicio_ne: 45, pacientes_ne: 38, pacientes_vo: 52,
+        pacientes_diarreia_ne: 4, pacientes_diarreia_vo: 3, episodios_diarreia_ne: 5,
+        dias_diarreia_ne: 9, constipados: 14, avaliados_constipacao: 100,
+        constipados_opioide: 8, pacientes_opioide: 30, constipacao_vm: 5,
+        intolerancia_gi: 2, interrupcao_tn: 3, hipoglicemia_tn: 4,
+        dias_discutidos_round: 90, divergencias_diarreia: 0,
+      },
+    })
+    // Nenhum indicador aguardando módulo: todos têm fórmula.
+    expect(inds.filter(i => i.aguarda)).toHaveLength(0)
   })
 })
 

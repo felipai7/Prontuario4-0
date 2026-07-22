@@ -597,6 +597,44 @@ export interface ContagensNutricaoMes {
   divergencias_diarreia: number
 }
 
+// ── IRAS e vigilância ────────────────────────────────────────────────────────
+
+export type TipoIras =
+  | 'pav' | 'itu_svd' | 'ipcs_lab' | 'ipcs_clinica' | 'pneumonia' | 'traqueite' | 'outra'
+
+export interface IrasEvento {
+  id: string
+  paciente_id: string
+  tipo: TipoIras
+  data: string                   // YYYY-MM-DD
+  observacao: string | null
+  criado_em: string
+  criado_por: string | null
+}
+
+export interface IrasSepseChoque {
+  id: string
+  paciente_id: string
+  data: string                   // YYYY-MM-DD
+  observacao: string | null
+  criado_em: string
+  criado_por: string | null
+}
+
+/** Contagens do mês vindas da RPC `contagens_iras_mes`. */
+export interface ContagensIrasMes {
+  total_iras: number
+  pacientes_com_iras: number
+  pav: number
+  itu_svd: number
+  ipcs_lab: number
+  ipcs_clinica: number
+  pneumonia: number
+  traqueite: number
+  outra: number
+  sepse_choque: number
+}
+
 /**
  * Qualidade do dado que sustenta os indicadores do mês (RPC `qualidade_mes`).
  * Os três grupos têm naturezas diferentes e não devem ser misturados na tela —

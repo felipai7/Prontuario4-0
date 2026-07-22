@@ -7,7 +7,7 @@ import { ALAS, ALAS_MAP, PLANOS, type AlaId } from '@/lib/config'
 import { modulosAtivos, type PacienteContext } from '@/lib/modules'
 import { montarEvolucaoDiaria } from '@/lib/evolucaoDiaria'
 import { podeEditarModulo } from '@/lib/cargos'
-import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, FisioEvento, FisioAvaliacaoDiaria, Dispositivo, LppEvento, NutricaoAvaliacao, NutricaoDia, AuditoriaIntensivista, ToastData, Cargo } from '@/types'
+import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, FisioEvento, FisioAvaliacaoDiaria, Dispositivo, LppEvento, NutricaoAvaliacao, NutricaoDia, AuditoriaIntensivista, IrasEvento, IrasSepseChoque, ToastData, Cargo } from '@/types'
 
 const modulos = modulosAtivos()
 
@@ -66,6 +66,8 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
   const [nutricaoAvaliacao, setNutricaoAvaliacao] = useState<NutricaoAvaliacao | null>(null)
   const [nutricaoDias,      setNutricaoDias]      = useState<NutricaoDia[]>([])
   const [auditoria,         setAuditoria]         = useState<AuditoriaIntensivista[]>([])
+  const [irasEventos,       setIrasEventos]       = useState<IrasEvento[]>([])
+  const [irasSepse,         setIrasSepse]         = useState<IrasSepseChoque | null>(null)
   const [cargo, setCargo] = useState<Cargo | null>(null)
   const [loading,       setLoading]       = useState(true)
   const [showAlta,      setShowAlta]      = useState(false)
@@ -195,6 +197,15 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     if (data) setAuditoria(data as AuditoriaIntensivista[])
   }
 
+  const loadIrasEventos = async () => {
+    const { data } = await supabase.from('iras_eventos').select('*').eq('paciente_id', pac.id).order('data')
+    if (data) setIrasEventos(data as IrasEvento[])
+  }
+  const loadIrasSepse = async () => {
+    const { data } = await supabase.from('iras_sepse_choque').select('*').eq('paciente_id', pac.id).maybeSingle()
+    setIrasSepse((data as IrasSepseChoque) ?? null)
+  }
+
   const loadData = async () => {
     setLoading(true)
     await Promise.all([
@@ -203,6 +214,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
       loadIntercorrencias(), loadPendencias(), loadRegistrosIntensivista(),
       loadFisioEventos(), loadFisioAvaliacoes(), loadDispositivos(), loadLpps(),
       loadNutricaoAvaliacao(), loadNutricaoDias(), loadAuditoria(),
+      loadIrasEventos(), loadIrasSepse(),
     ])
     setLoading(false)
   }
@@ -375,6 +387,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     exames, periodos, sinais, examesImagem, dvas, periodosHemo, atbs, cuidados,
     neuroHistorico, ventHistorico, intercorrencias, pendencias, registrosIntensivista,
     fisioEventos, fisioAvaliacoes, dispositivos, lpps, nutricaoAvaliacao, nutricaoDias, auditoria,
+    irasEventos, irasSepse,
     cargo,
     podeEditar: podeEditarModulo(cargo, moduloAtivo),
     onRefresh: loadData,

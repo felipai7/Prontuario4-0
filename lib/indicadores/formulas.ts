@@ -8,7 +8,7 @@
 // não existe. Ele aparece na tela como pendente, e a fórmula entra quando o módulo
 // chegar — não escrevemos fórmula contra campo que não existe.
 
-import type { ContagensMes, ContagensFisioMes, ContagensEnfermagemMes, ContagensNutricaoMes, Indicador } from '@/types'
+import type { ContagensMes, ContagensFisioMes, ContagensEnfermagemMes, ContagensNutricaoMes, ContagensIrasMes, Indicador } from '@/types'
 
 /** Divisão protegida — equivale ao IFERROR(...,"") da planilha. */
 function razao(n: number | null, d: number | null, mult = 1): number | null {
@@ -27,10 +27,12 @@ interface Entrada {
   enfermagem?: ContagensEnfermagemMes | null
   /** Null enquanto não houver dado de nutrição no mês. */
   nutricao?: ContagensNutricaoMes | null
+  /** Null enquanto não houver dado de IRAS no mês. */
+  iras?: ContagensIrasMes | null
 }
 
 export function calcularIndicadores({
-  contagens: c, leitosDia, leitosAtivos, fisio, enfermagem: enf, nutricao: nut,
+  contagens: c, leitosDia, leitosAtivos, fisio, enfermagem: enf, nutricao: nut, iras,
 }: Entrada): Indicador[] {
   const viva = (
     id: string, nome: string, categoria: Indicador['categoria'], unidade: Indicador['unidade'],
@@ -74,9 +76,20 @@ export function calcularIndicadores({
     viva('reinternacao_30d', 'Reinternação <30 dias', 'Mortalidade', '%', c.reinternacoes_30d, c.saidas, 100),
 
     // ── IRAS e segurança ──────────────────────────────────────────────────
-    pendente('densidade_iras', 'Densidade de IRAS', 'IRAS e segurança', '/1000 pac-dia', 'Intensivista'),
-    pendente('taxa_infeccao', 'Taxa de infecção mensal', 'IRAS e segurança', '%', 'Intensivista'),
-    pendente('pct_pacientes_iras', '% pacientes com IRAS', 'IRAS e segurança', '%', 'Intensivista'),
+    // Total de IRAS e "pacientes com IRAS" saem por soma/dedup dos eventos
+    // classificados — inclui "outra", para o total não sair subestimado.
+    ...(iras ? [
+      viva('densidade_iras', 'Densidade de IRAS', 'IRAS e segurança', '/1000 pac-dia',
+        iras.total_iras, c.pacientes_dia, 1000),
+      viva('taxa_infeccao', 'Taxa de infecção mensal', 'IRAS e segurança', '%',
+        iras.total_iras, c.admissoes, 100),
+      viva('pct_pacientes_iras', '% pacientes com IRAS', 'IRAS e segurança', '%',
+        iras.pacientes_com_iras, c.pacientes_internados_mes, 100),
+    ] : [
+      pendente('densidade_iras', 'Densidade de IRAS', 'IRAS e segurança', '/1000 pac-dia', 'Intensivista'),
+      pendente('taxa_infeccao', 'Taxa de infecção mensal', 'IRAS e segurança', '%', 'Intensivista'),
+      pendente('pct_pacientes_iras', '% pacientes com IRAS', 'IRAS e segurança', '%', 'Intensivista'),
+    ]),
     // LPP em dois indicadores, por decisão do Dr. Felipe com aval do Dr. Flaubert.
     // Não é redundância: medem coisas diferentes.
     //
@@ -98,18 +111,37 @@ export function calcularIndicadores({
       ? viva('densidade_lpp_total', 'Densidade de LPP total (inclui admissão)', 'IRAS e segurança', '/1000 pac-dia',
           enf.lpp_total, c.pacientes_dia, 1000)
       : pendente('densidade_lpp_total', 'Densidade de LPP total (inclui admissão)', 'IRAS e segurança', '/1000 pac-dia', 'Enfermagem'),
-    pendente('di_pneumonia', 'DI pneumonia nosocomial', 'IRAS e segurança', '/1000 pac-dia', 'Intensivista'),
-    pendente('di_traqueite', 'DI traqueíte nosocomial', 'IRAS e segurança', '/1000 pac-dia', 'Intensivista'),
-    // O denominador (CVC-dia / SVD-dia) já vem da enfermagem; o que falta é o
-    // numerador — diagnóstico de infecção, que é médico. Por isso aguardam o
-    // módulo do Intensivista, não o da Enfermagem.
-    pendente('di_ipcs_total', 'DI IPCS total', 'IRAS e segurança', '/1000 CVC-dia', 'Intensivista'),
-    pendente('di_ipcs_lab', 'DI IPCS laboratorial', 'IRAS e segurança', '/1000 CVC-dia', 'Intensivista'),
-    pendente('di_ipcs_clinica', 'DI IPCS clínica', 'IRAS e segurança', '/1000 CVC-dia', 'Intensivista'),
-    pendente('di_itu_svd', 'DI ITU-SVD', 'IRAS e segurança', '/1000 SVD-dia', 'Intensivista'),
-    // Denominador (ventilador-dia) já existe; falta o numerador (eventos de PAV).
-    pendente('di_pav', 'DI PAV', 'IRAS e segurança', '/1000 ventilador-dia', 'Intensivista'),
-    pendente('taxa_sepse_choque', 'Taxa de sepse/choque', 'IRAS e segurança', '%', 'Intensivista'),
+    ...(iras ? [
+      viva('di_pneumonia', 'DI pneumonia nosocomial', 'IRAS e segurança', '/1000 pac-dia',
+        iras.pneumonia, c.pacientes_dia, 1000),
+      viva('di_traqueite', 'DI traqueíte nosocomial', 'IRAS e segurança', '/1000 pac-dia',
+        iras.traqueite, c.pacientes_dia, 1000),
+      // Denominadores de dispositivo vêm da ENFERMAGEM (CVC-dia / SVD-dia). Se a
+      // enfermagem não lançou dispositivos no mês, o denominador é 0 e razao()
+      // devolve null: "sem denominador no período", honesto — não é pendência,
+      // o numerador existe.
+      viva('di_ipcs_total', 'DI IPCS total', 'IRAS e segurança', '/1000 CVC-dia',
+        iras.ipcs_lab + iras.ipcs_clinica, enf?.cvc_dia ?? 0, 1000),
+      viva('di_ipcs_lab', 'DI IPCS laboratorial', 'IRAS e segurança', '/1000 CVC-dia',
+        iras.ipcs_lab, enf?.cvc_dia ?? 0, 1000),
+      viva('di_ipcs_clinica', 'DI IPCS clínica', 'IRAS e segurança', '/1000 CVC-dia',
+        iras.ipcs_clinica, enf?.cvc_dia ?? 0, 1000),
+      viva('di_itu_svd', 'DI ITU-SVD', 'IRAS e segurança', '/1000 SVD-dia',
+        iras.itu_svd, enf?.svd_dia ?? 0, 1000),
+      viva('di_pav', 'DI PAV', 'IRAS e segurança', '/1000 ventilador-dia',
+        iras.pav, c.ventilador_dia, 1000),
+      viva('taxa_sepse_choque', 'Taxa de sepse/choque', 'IRAS e segurança', '%',
+        iras.sepse_choque, c.admissoes, 100),
+    ] : [
+      pendente('di_pneumonia', 'DI pneumonia nosocomial', 'IRAS e segurança', '/1000 pac-dia', 'Intensivista'),
+      pendente('di_traqueite', 'DI traqueíte nosocomial', 'IRAS e segurança', '/1000 pac-dia', 'Intensivista'),
+      pendente('di_ipcs_total', 'DI IPCS total', 'IRAS e segurança', '/1000 CVC-dia', 'Intensivista'),
+      pendente('di_ipcs_lab', 'DI IPCS laboratorial', 'IRAS e segurança', '/1000 CVC-dia', 'Intensivista'),
+      pendente('di_ipcs_clinica', 'DI IPCS clínica', 'IRAS e segurança', '/1000 CVC-dia', 'Intensivista'),
+      pendente('di_itu_svd', 'DI ITU-SVD', 'IRAS e segurança', '/1000 SVD-dia', 'Intensivista'),
+      pendente('di_pav', 'DI PAV', 'IRAS e segurança', '/1000 ventilador-dia', 'Intensivista'),
+      pendente('taxa_sepse_choque', 'Taxa de sepse/choque', 'IRAS e segurança', '%', 'Intensivista'),
+    ]),
 
     // ── Dispositivos ──────────────────────────────────────────────────────
     enf
