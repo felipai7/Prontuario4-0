@@ -7,7 +7,7 @@ import { ALAS, ALAS_MAP, PLANOS, type AlaId } from '@/lib/config'
 import { modulosAtivos, type PacienteContext } from '@/lib/modules'
 import { montarEvolucaoDiaria } from '@/lib/evolucaoDiaria'
 import { podeEditarModulo } from '@/lib/cargos'
-import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, FisioEvento, FisioAvaliacaoDiaria, Dispositivo, LppEvento, NutricaoAvaliacao, NutricaoDia, ToastData, Cargo } from '@/types'
+import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, FisioEvento, FisioAvaliacaoDiaria, Dispositivo, LppEvento, NutricaoAvaliacao, NutricaoDia, AuditoriaIntensivista, ToastData, Cargo } from '@/types'
 
 const modulos = modulosAtivos()
 
@@ -65,6 +65,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
   const [lpps,            setLpps]            = useState<LppEvento[]>([])
   const [nutricaoAvaliacao, setNutricaoAvaliacao] = useState<NutricaoAvaliacao | null>(null)
   const [nutricaoDias,      setNutricaoDias]      = useState<NutricaoDia[]>([])
+  const [auditoria,         setAuditoria]         = useState<AuditoriaIntensivista[]>([])
   const [cargo, setCargo] = useState<Cargo | null>(null)
   const [loading,       setLoading]       = useState(true)
   const [showAlta,      setShowAlta]      = useState(false)
@@ -186,6 +187,13 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     const { data } = await supabase.from('nutricao_dia').select('*').eq('paciente_id', pac.id).order('data')
     if (data) setNutricaoDias(data as NutricaoDia[])
   }
+  // Só as entradas de cuidados_horizontais: é o que a Nutrição usa para datar o
+  // opioide. Filtra no banco para não trazer a auditoria inteira.
+  const loadAuditoria = async () => {
+    const { data } = await supabase.from('auditoria_intensivista').select('*')
+      .eq('paciente_id', pac.id).eq('tabela', 'cuidados_horizontais').order('changed_at')
+    if (data) setAuditoria(data as AuditoriaIntensivista[])
+  }
 
   const loadData = async () => {
     setLoading(true)
@@ -194,7 +202,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
       loadPeriodosHemo(), loadAtbs(), loadCuidados(), loadNeuro(), loadVentilatorio(),
       loadIntercorrencias(), loadPendencias(), loadRegistrosIntensivista(),
       loadFisioEventos(), loadFisioAvaliacoes(), loadDispositivos(), loadLpps(),
-      loadNutricaoAvaliacao(), loadNutricaoDias(),
+      loadNutricaoAvaliacao(), loadNutricaoDias(), loadAuditoria(),
     ])
     setLoading(false)
   }
@@ -366,7 +374,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     paciente: pac,
     exames, periodos, sinais, examesImagem, dvas, periodosHemo, atbs, cuidados,
     neuroHistorico, ventHistorico, intercorrencias, pendencias, registrosIntensivista,
-    fisioEventos, fisioAvaliacoes, dispositivos, lpps, nutricaoAvaliacao, nutricaoDias,
+    fisioEventos, fisioAvaliacoes, dispositivos, lpps, nutricaoAvaliacao, nutricaoDias, auditoria,
     cargo,
     podeEditar: podeEditarModulo(cargo, moduloAtivo),
     onRefresh: loadData,

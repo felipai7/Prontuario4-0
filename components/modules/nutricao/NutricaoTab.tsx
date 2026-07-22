@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import { fmtData, diasDesde } from '@/lib/utils'
 import type {
   Paciente, NutricaoAvaliacao, NutricaoDia, PeriodoBalanco, SuporteVentilatorio,
-  CuidadosHorizontais, ToastData,
+  CuidadosHorizontais, AuditoriaIntensivista, ToastData,
 } from '@/types'
 
 interface Props {
@@ -15,11 +15,46 @@ interface Props {
   periodosBalanco: PeriodoBalanco[]
   /** Só para derivar dias de VM. */
   ventHistorico: SuporteVentilatorio[]
-  /** Só para derivar uso de opioide. */
+  /** Só para derivar uso de opioide (estado atual). */
   cuidados: CuidadosHorizontais | null
+  /** Auditoria dos Cuidados Horizontais: dá a data em que o opioide foi marcado/desmarcado. */
+  auditoria: AuditoriaIntensivista[]
   podeEditar: boolean
   onRefresh: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
+}
+
+/**
+ * Última mudança do campo de opioide, com o sentido honesto do dado: o banco
+ * guarda quando ALGUÉM MEXEU na caixinha (via auditoria), não quando a droga foi
+ * administrada ou suspensa. Por isso "marcado até", não "último uso".
+ */
+function opioideInfo(cuidados: CuidadosHorizontais | null, auditoria: AuditoriaIntensivista[]): string | null {
+  const emUso = cuidados?.opioide_em_uso ?? false
+
+  // Auditoria de cuidados_horizontais em ordem cronológica.
+  const audit = auditoria
+    .filter(a => a.tabela === 'cuidados_horizontais')
+    .sort((a, b) => a.changed_at.localeCompare(b.changed_at))
+
+  // Data da última TRANSIÇÃO do campo (de/para o valor atual).
+  let ultimaMudanca: string | null = null
+  let anterior: boolean | null = null
+  for (const a of audit) {
+    const v = (a.dados_novos?.opioide_em_uso ?? null) as boolean | null
+    if (v == null) continue
+    if (v !== anterior) ultimaMudanca = a.changed_at
+    anterior = v
+  }
+
+  if (emUso) {
+    return ultimaMudanca ? `em uso desde ${fmtData(ultimaMudanca.split('T')[0])}` : 'em uso'
+  }
+  // Não está em uso: só interessa se houve uso antes, e há quantos dias parou —
+  // a constipação por opioide persiste dias depois de suspender.
+  if (!ultimaMudanca || anterior !== false) return null
+  const dias = Math.floor((Date.now() - new Date(ultimaMudanca).getTime()) / (24 * 3600 * 1000))
+  return `marcado até ${fmtData(ultimaMudanca.split('T')[0])} (há ${dias}d)`
 }
 
 const hojeISO = () => new Date().toISOString().split('T')[0]
@@ -69,7 +104,8 @@ function Check({ label, v, set, disabled, dica }: {
 }
 
 export default function NutricaoTab({
-  paciente, avaliacao, dias, periodosBalanco, ventHistorico, cuidados, podeEditar, onRefresh, showToast,
+  paciente, avaliacao, dias, periodosBalanco, ventHistorico, cuidados, auditoria,
+  podeEditar, onRefresh, showToast,
 }: Props) {
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
@@ -106,6 +142,8 @@ export default function NutricaoTab({
       .filter(p => new Date(p.inicio).getTime() >= limite)
       .some(p => p.diarreica_medico || p.diarreica_nutricao)
   }, [balancoOrdenado])
+
+  const opioide = useMemo(() => opioideInfo(cuidados, auditoria), [cuidados, auditoria])
 
   // ── Avaliação inicial ───────────────────────────────────────────────────
   const [avData, setAvData] = useState(avaliacao?.data_avaliacao ?? hojeISO())
@@ -234,13 +272,25 @@ export default function NutricaoTab({
             valor={diarreicaRecente ? 'sim' : 'não'}
             tom={diarreicaRecente ? 'atencao' : 'normal'} />
           <Fato
-            label="Opioide em uso"
-            valor={cuidados?.opioide_em_uso ? 'sim' : 'não'}
-            tom={cuidados?.opioide_em_uso ? 'atencao' : 'normal'} />
+            label="Opioide"
+            valor={opioide ?? 'sem registro'}
+            tom={opioide ? 'atencao' : 'normal'} />
         </div>
+
+        {/* Cruzamento que o indicador "constipação relacionada a opioides" faz:
+            a constipação por opioide persiste dias depois de suspender, então a
+            data importa mesmo com o opioide já parado. */}
+        {constipado && opioide && (
+          <p className="text-xs text-amber-800 bg-amber-100 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+            ⚠️ Constipação com opioide ({opioide}). A obstipação por opioide costuma
+            persistir dias após a suspensão — considere ao avaliar.
+          </p>
+        )}
+
         <p className="text-[11px] text-slate-400 mt-2">
-          Vem das abas Ventilatório, Balanço Hídrico e Cuidados Horizontais — confira
-          contra o que você já sabe do paciente antes de preencher abaixo.
+          Vem das abas Ventilatório, Balanço Hídrico e Cuidados Horizontais. A data do
+          opioide é a de <strong>marcação</strong> nos Cuidados Horizontais, não a da
+          administração — confira antes de concluir.
         </p>
       </section>
 

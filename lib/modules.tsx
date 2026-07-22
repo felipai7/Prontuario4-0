@@ -22,7 +22,7 @@ import NutricaoTab from '@/components/modules/nutricao/NutricaoTab'
 import ExamesTab       from '@/components/modules/shared/ExamesTab'
 import ExamesImagemTab from '@/components/modules/shared/ExamesImagemTab'
 import { featureFlags } from '@/lib/featureFlags'
-import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, FisioEvento, FisioAvaliacaoDiaria, Dispositivo, LppEvento, NutricaoAvaliacao, NutricaoDia, ToastData, Cargo, Profissao } from '@/types'
+import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, FisioEvento, FisioAvaliacaoDiaria, Dispositivo, LppEvento, NutricaoAvaliacao, NutricaoDia, AuditoriaIntensivista, ToastData, Cargo, Profissao } from '@/types'
 
 /** Dados do paciente carregados pela casca e disponíveis a todas as abas. */
 export interface PacienteContext {
@@ -46,6 +46,7 @@ export interface PacienteContext {
   lpps: LppEvento[]
   nutricaoAvaliacao: NutricaoAvaliacao | null
   nutricaoDias: NutricaoDia[]
+  auditoria: AuditoriaIntensivista[]
   /** Cargo do usuário logado. Null = sem cadastro em `staff` (cai no padrão). */
   cargo: Cargo | null
   /**
@@ -180,7 +181,7 @@ const nutricao: TabDef = {
   label: '🥗 Nutrição',
   render: ctx => <NutricaoTab paciente={ctx.paciente} avaliacao={ctx.nutricaoAvaliacao}
     dias={ctx.nutricaoDias} periodosBalanco={ctx.periodos}
-    ventHistorico={ctx.ventHistorico} cuidados={ctx.cuidados}
+    ventHistorico={ctx.ventHistorico} cuidados={ctx.cuidados} auditoria={ctx.auditoria}
     podeEditar={ctx.podeEditar}
     onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
 }
