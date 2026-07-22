@@ -80,7 +80,9 @@ export default function IndicadoresHome({
     leitos_ativos: leitosAtivos,
     fisio,
     enfermagem,
-  }), [contagens, leitosDia, leitosAtivos, fisio, enfermagem])
+    nutricao,
+    iras,
+  }), [contagens, leitosDia, leitosAtivos, fisio, enfermagem, nutricao, iras])
 
   const handleExportar = () => {
     if (!linhaExport) return
