@@ -600,7 +600,8 @@ export interface ContagensNutricaoMes {
 // ── IRAS e vigilância ────────────────────────────────────────────────────────
 
 export type TipoIras =
-  | 'pav' | 'itu_svd' | 'ipcs_lab' | 'ipcs_clinica' | 'pneumonia' | 'traqueite' | 'outra'
+  | 'pav' | 'itu_svd' | 'ipcs_lab' | 'ipcs_clinica' | 'pneumonia' | 'traqueite'
+  | 'flebite' | 'colite_pseudomembranosa' | 'isc' | 'outra'
 
 export interface IrasEvento {
   id: string

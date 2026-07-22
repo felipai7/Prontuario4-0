@@ -24,9 +24,13 @@
 create table if not exists public.iras_eventos (
   id          uuid primary key default uuid_generate_v4(),
   paciente_id uuid not null references public.pacientes(id) on delete cascade,
+  -- Tipos com indicador individual: pav, itu_svd, ipcs_lab, ipcs_clinica,
+  -- pneumonia, traqueite. Os demais entram só no Total de IRAS e em "pacientes
+  -- com IRAS" (viram indicador individual quando definirmos o denominador).
   tipo        text not null check (tipo in (
                 'pav', 'itu_svd', 'ipcs_lab', 'ipcs_clinica',
-                'pneumonia', 'traqueite', 'outra')),
+                'pneumonia', 'traqueite',
+                'flebite', 'colite_pseudomembranosa', 'isc', 'outra')),
   data        date not null,
   observacao  text,
   criado_em   timestamptz not null default now(),

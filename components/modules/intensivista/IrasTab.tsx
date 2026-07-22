@@ -26,6 +26,9 @@ const TIPOS: { id: TipoIras; label: string }[] = [
   { id: 'ipcs_clinica', label: 'IPCS clínica (sem confirmação)' },
   { id: 'pneumonia',    label: 'Pneumonia nosocomial (não-VM)' },
   { id: 'traqueite',    label: 'Traqueíte nosocomial' },
+  { id: 'flebite',      label: 'Flebite' },
+  { id: 'colite_pseudomembranosa', label: 'Colite pseudomembranosa (C. difficile)' },
+  { id: 'isc',          label: 'Infecção de sítio cirúrgico' },
   { id: 'outra',        label: 'Outra IRAS' },
 ]
 const LABEL: Record<TipoIras, string> = Object.fromEntries(TIPOS.map(t => [t.id, t.label])) as Record<TipoIras, string>
