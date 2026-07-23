@@ -3,14 +3,12 @@ import { createClient } from '@/lib/supabase/server'
 import IndicadoresHome from '@/components/indicadores/IndicadoresHome'
 import { calcularLeitosDia } from '@/lib/indicadores/formulas'
 import { ehIntensivista } from '@/lib/cargos'
-import { ALAS } from '@/lib/config'
+import { carregarUnidade } from '@/lib/unidade'
 import type {
   Staff, ContagensMes, QualidadeMes, ContagensFisioMes, ContagensEnfermagemMes, ContagensNutricaoMes, ContagensIrasMes,
 } from '@/types'
 
 export const dynamic = 'force-dynamic'
-
-const LEITOS_ATIVOS = ALAS.reduce((n, a) => n + a.leitos.length, 0)
 
 /**
  * Hoje no fuso de Brasília, e não no do servidor.
@@ -62,11 +60,14 @@ export default async function IndicadoresPage(
   const hoje = hojeEmBrasilia()
   const { ano, mes } = mesDaUrl(searchParams.mes, hoje)
 
+  const unidade = await carregarUnidade(supabase, user.id)
+  const leitosAtivos = unidade?.leitosAtivos ?? 0
+
   if (!souChefe) {
     return <IndicadoresHome souChefe={false} userEmail={user.email ?? ''}
       ano={ano} mes={mes} anoAtual={hoje.ano} mesCorrente={false}
       contagens={null} qualidade={null} fisio={null} enfermagem={null} nutricao={null} iras={null}
-      leitosDia={0} leitosAtivos={LEITOS_ATIVOS} erro={null} />
+      leitosDia={0} leitosAtivos={leitosAtivos} erro={null} />
   }
 
   // Os números são buscados AQUI, no servidor, e não no navegador. Assim a
@@ -74,13 +75,19 @@ export default async function IndicadoresPage(
   // de duas, e — o que motivou a mudança — servidor e cliente renderizam a mesma
   // coisa, sem o React descartar o HTML por divergência na hidratação.
   const pMes = `${ano}-${String(mes).padStart(2, '0')}-01`
-  const [contRes, qualRes, fisioRes, enfRes, nutRes, irasRes] = await Promise.all([
+  const [contRes, qualRes, fisioRes, enfRes, nutRes, irasRes, leitosRes] = await Promise.all([
     supabase.rpc('contagens_mes',            { p_mes: pMes }),
     supabase.rpc('qualidade_mes',            { p_mes: pMes }),
     supabase.rpc('contagens_fisio_mes',      { p_mes: pMes }),
     supabase.rpc('contagens_enfermagem_mes', { p_mes: pMes }),
     supabase.rpc('contagens_nutricao_mes',   { p_mes: pMes }),
     supabase.rpc('contagens_iras_mes',       { p_mes: pMes }),
+    // Leitos-dia vêm do banco porque cada leito tem vigência: uma UTI que passa
+    // de 19 para 25 leitos em março não pode ter janeiro recalculado com 25.
+    // A conta em TypeScript (calcularLeitosDia) fica só como rede de segurança.
+    unidade
+      ? supabase.rpc('leitos_dia_mes', { p_unit_id: unidade.unitId, p_mes: pMes })
+      : Promise.resolve({ data: null, error: null }),
   ])
 
   const mesCorrente = ano === hoje.ano && mes === hoje.mes
@@ -101,9 +108,13 @@ export default async function IndicadoresPage(
       enfermagem={enfRes.error ? null : houveRegistro(uma<ContagensEnfermagemMes>(enfRes.data))}
       nutricao={nutRes.error ? null : houveRegistro(uma<ContagensNutricaoMes>(nutRes.data))}
       iras={irasRes.error ? null : houveRegistro(uma<ContagensIrasMes>(irasRes.data))}
-      leitosDia={calcularLeitosDia(
-        new Date(ano, mes - 1, 1), LEITOS_ATIVOS, new Date(hoje.ano, hoje.mes - 1, hoje.dia))}
-      leitosAtivos={LEITOS_ATIVOS}
+      leitosDia={
+        typeof leitosRes.data === 'number'
+          ? leitosRes.data
+          : calcularLeitosDia(
+              new Date(ano, mes - 1, 1), leitosAtivos, new Date(hoje.ano, hoje.mes - 1, hoje.dia))
+      }
+      leitosAtivos={leitosAtivos}
       erro={contRes.error?.message ?? null}
     />
   )

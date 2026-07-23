@@ -7,6 +7,9 @@ import type { ToastData } from '@/types'
 
 interface Props {
   alaId: string
+  /** Nome de exibição da ala, vindo do banco (antes era um if 'uti-01' ? ... : ...). */
+  alaNome: string
+  unitId: string
   numeroLeito: number
   onClose: () => void
   onSaved: () => void
@@ -27,7 +30,7 @@ function descreverIntervalo(horas: number): string {
   return `${Math.round(horas / 24)} dias`
 }
 
-export default function CadastroForm({ alaId, numeroLeito, onClose, onSaved, showToast }: Props) {
+export default function CadastroForm({ alaId, alaNome, unitId, numeroLeito, onClose, onSaved, showToast }: Props) {
   const supabase = createClient()
   const hoje     = new Date().toISOString().split('T')[0]
   const agoraH   = new Date().toTimeString().slice(0, 5)
@@ -113,6 +116,7 @@ export default function CadastroForm({ alaId, numeroLeito, onClose, onSaved, sho
       peso_kg:         pesoKg ? parseFloat(pesoKg) : null,
       hipoteses:       hipoteses.trim() || null,
       ala_id:          alaId,
+      unit_id:         unitId,
       numero_leito:    numeroLeito,
       oncologico,
       readmissao_de:   confirmouReint && altaAnterior ? altaAnterior.id : null,
@@ -131,7 +135,7 @@ export default function CadastroForm({ alaId, numeroLeito, onClose, onSaved, sho
         <div className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white px-6 py-4 rounded-t-2xl flex justify-between items-center">
           <div>
             <h2 className="text-lg font-bold">Novo Paciente</h2>
-            <p className="text-indigo-200 text-xs">{alaId === 'uti-01' ? 'UTI 01' : 'UTI 02'} — Leito {String(numeroLeito).padStart(2,'0')}</p>
+            <p className="text-indigo-200 text-xs">{alaNome} — Leito {String(numeroLeito).padStart(2,'0')}</p>
           </div>
           <button onClick={onClose} className="text-white/70 hover:text-white text-xl w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/20">✕</button>
         </div>

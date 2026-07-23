@@ -3,7 +3,8 @@ import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import AltaModal        from './AltaModal'
 import { fmtData, calcAge, pad, diasDesde, fmtNum, toTitleCaseNome, ultimoPorTurno, horasDesdeAdmissao } from '@/lib/utils'
-import { ALAS, ALAS_MAP, PLANOS, type AlaId } from '@/lib/config'
+import { PLANOS } from '@/lib/config'
+import { nomeDaAla, type Unidade } from '@/lib/unidade'
 import { modulosAtivos, type PacienteContext } from '@/lib/modules'
 import { montarEvolucaoDiaria } from '@/lib/evolucaoDiaria'
 import { podeEditarModulo } from '@/lib/cargos'
@@ -13,6 +14,8 @@ const modulos = modulosAtivos()
 
 interface Props {
   paciente: Paciente
+  /** Planta da unidade (alas e leitos), lida do banco. */
+  unidade: Unidade | null
   onClose: () => void
   onAltaConcedida: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
@@ -36,13 +39,14 @@ function fmtHipoteses(hipoteses: string): string {
 type EditForm = {
   nome: string; data_nascimento: string
   plano: string; planoOu: string
-  peso_kg: string; ala_id: AlaId; numero_leito: string
+  peso_kg: string; ala_id: string; numero_leito: string
   hipoteses: string
   saps3: string; paliativo: boolean; oncologico: boolean
 }
 
-export default function PacienteModal({ paciente, onClose, onAltaConcedida, showToast }: Props) {
+export default function PacienteModal({ paciente, unidade, onClose, onAltaConcedida, showToast }: Props) {
   const supabase   = createClient()
+  const alas       = unidade?.alas ?? []
   const [moduloId, setModuloId] = useState(modulos[0].id)
   const [tab,      setTab]      = useState(modulos[0].tabs[0].id)
   const moduloAtivo = modulos.find(m => m.id === moduloId) ?? modulos[0]
@@ -334,7 +338,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
     if (!editForm.plano) errs.plano = 'Selecione um plano'
     if (editForm.plano === 'Outros' && !editForm.planoOu.trim()) errs.planoOu = 'Informe o plano'
     const novoLeito = parseInt(editForm.numero_leito, 10)
-    const alaInfo = ALAS.find(a => a.id === editForm.ala_id)
+    const alaInfo = alas.find(a => a.id === editForm.ala_id)
     if (!alaInfo || !alaInfo.leitos.includes(novoLeito)) {
       errs.numero_leito = `Leito inválido para ${alaInfo?.nome ?? 'UTI selecionada'}`
     }
@@ -439,7 +443,7 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
                 <p className="text-indigo-200 text-sm mt-1">
                   📅 {fmtData(pac.data_nascimento)} ({calcAge(pac.data_nascimento)}) &nbsp;·&nbsp;
                   🏥 {pac.plano_saude} &nbsp;·&nbsp;
-                  🛏️ {ALAS_MAP[pac.ala_id]} — Leito {pad(pac.numero_leito)}
+                  🛏️ {nomeDaAla(unidade, pac.ala_id)} — Leito {pad(pac.numero_leito)}
                 </p>
                 <p className="text-indigo-200 text-xs mt-0.5">
                   🗓️ Internado em {fmtDataCurta(pac.data_internacao)}, às {pac.hora_internacao.substring(0, 5)}
@@ -510,15 +514,15 @@ export default function PacienteModal({ paciente, onClose, onAltaConcedida, show
                   </EF>
                   <EF label="UTI">
                     <ESelect value={editForm.ala_id}
-                      onChange={e => setEditForm(f => ({...f, ala_id: e.target.value as AlaId, numero_leito: ''}))}>
-                      {ALAS.map(a => <option key={a.id} value={a.id} className="text-slate-800">{a.nome}</option>)}
+                      onChange={e => setEditForm(f => ({...f, ala_id: e.target.value, numero_leito: ''}))}>
+                      {alas.map(a => <option key={a.id} value={a.id} className="text-slate-800">{a.nome}</option>)}
                     </ESelect>
                   </EF>
                   <EF label="Leito" error={editErrors.numero_leito}>
                     <ESelect value={editForm.numero_leito}
                       onChange={e => setEditForm(f => ({...f, numero_leito: e.target.value}))}>
                       <option value="" className="text-slate-800">Selecione...</option>
-                      {(ALAS.find(a => a.id === editForm.ala_id)?.leitos ?? []).map(l => (
+                      {(alas.find(a => a.id === editForm.ala_id)?.leitos ?? []).map(l => (
                         <option key={l} value={String(l)} className="text-slate-800">Leito {String(l).padStart(2,'0')}</option>
                       ))}
                     </ESelect>

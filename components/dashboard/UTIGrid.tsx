@@ -7,12 +7,17 @@ import CadastroForm   from '@/components/paciente/CadastroForm'
 import ToastContainer, { useToast } from '@/components/ui/Toast'
 import { pad, fmtData, calcAge, normalizarNome } from '@/lib/utils'
 import { ehIntensivista, apenasMedicos } from '@/lib/cargos'
-import { ALAS } from '@/lib/config'
+import { nomeDaAla, type Unidade } from '@/lib/unidade'
 import type { Paciente } from '@/types'
 
-interface Props { initialPacientes: Paciente[]; userEmail: string }
+interface Props {
+  initialPacientes: Paciente[]
+  userEmail: string
+  /** Planta da unidade, vinda do banco. Null = usuário sem vínculo ativo em `staff`. */
+  unidade: Unidade | null
+}
 
-export default function UTIGrid({ initialPacientes, userEmail }: Props) {
+export default function UTIGrid({ initialPacientes, userEmail, unidade }: Props) {
   const router           = useRouter()
   const supabase         = createClient()
   const { toasts, showToast, removeToast } = useToast()
@@ -99,12 +104,16 @@ export default function UTIGrid({ initialPacientes, userEmail }: Props) {
     if (data) setPacientes(data as Paciente[])
   }, [])
 
-  // Valid leito numbers across all alas
-  const validLeitos = new Set(ALAS.flatMap(a => a.leitos))
+  const alas = unidade?.alas ?? []
+
+  // Leitos válidos = os que existem na planta desta unidade. Antes vinha de uma
+  // constante no código; agora do banco, então uma UTI com outra numeração
+  // funciona sem tocar em nada aqui.
+  const validLeitos = new Set(alas.flatMap(a => a.leitos))
   const pacientesVisiveis  = pacientes.filter(p => validLeitos.has(p.numero_leito))
   const pacientesFantasmas = pacientes.filter(p => !validLeitos.has(p.numero_leito))
   const ocupados = pacientesVisiveis.length
-  const total    = 19
+  const total    = unidade?.leitosAtivos ?? 0
 
   const buscaNorm = normalizarNome(busca.trim())
   const resultadosBusca = buscaNorm
@@ -119,6 +128,9 @@ export default function UTIGrid({ initialPacientes, userEmail }: Props) {
           <div>
             <h1 className="text-xl font-bold">🏥 ProMed UTI</h1>
             <p className="text-indigo-200 text-xs mt-0.5">
+              {/* Com mais de uma unidade na mesma instalação, saber QUAL UTI está
+                  na tela deixa de ser detalhe e vira segurança do paciente. */}
+              {unidade && <>{unidade.nome} &nbsp;·&nbsp; </>}
               {ocupados}/{total} leitos ocupados &nbsp;·&nbsp; Tempo real
             </p>
           </div>
@@ -178,7 +190,7 @@ export default function UTIGrid({ initialPacientes, userEmail }: Props) {
                   className="w-full text-left px-4 py-2.5 hover:bg-indigo-50 transition-colors border-b border-slate-100 last:border-b-0">
                   <span className="text-sm font-medium text-slate-800">{p.nome}</span>
                   <span className="text-xs text-slate-400 ml-2">
-                    {ALAS.find(a => a.id === p.ala_id)?.nome ?? p.ala_id} — Leito {pad(p.numero_leito)} · {calcAge(p.data_nascimento)}
+                    {nomeDaAla(unidade, p.ala_id)} — Leito {pad(p.numero_leito)} · {calcAge(p.data_nascimento)}
                   </span>
                 </button>
               ))}
@@ -211,7 +223,25 @@ export default function UTIGrid({ initialPacientes, userEmail }: Props) {
 
       {/* Grid */}
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        {ALAS.map(ala => {
+        {!unidade ? (
+          // Sem vínculo em `staff`, o RLS não devolveria paciente nenhum. Dizer
+          // isso é muito melhor do que mostrar um mapa vazio, que se leria como
+          // "a UTI está sem ninguém internado".
+          <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-6 text-center space-y-1">
+            <p className="text-2xl">🔑</p>
+            <p className="text-sm font-bold text-amber-800">Seu usuário não está vinculado a nenhuma unidade</p>
+            <p className="text-xs text-amber-700">
+              Peça ao responsável da UTI para cadastrar você na equipe. Sem o vínculo,
+              o sistema não tem como saber quais pacientes são seus.
+            </p>
+          </div>
+        ) : alas.length === 0 ? (
+          <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-6 text-center space-y-1">
+            <p className="text-2xl">🛏️</p>
+            <p className="text-sm font-bold text-amber-800">A unidade ainda não tem alas e leitos cadastrados</p>
+            <p className="text-xs text-amber-700">Cadastre a planta da UTI para o mapa de leitos aparecer.</p>
+          </div>
+        ) : alas.map(ala => {
           const ocAla = pacientesVisiveis.filter(p => p.ala_id === ala.id).length
           return (
             <section key={ala.id}>
@@ -238,9 +268,11 @@ export default function UTIGrid({ initialPacientes, userEmail }: Props) {
       </main>
 
       {/* Cadastro modal */}
-      {showCadastro && selectedLeito && (
+      {showCadastro && selectedLeito && unidade && (
         <CadastroForm
           alaId={selectedLeito.alaId}
+          alaNome={nomeDaAla(unidade, selectedLeito.alaId)}
+          unitId={unidade.unitId}
           numeroLeito={selectedLeito.numero}
           onClose={() => { setShowCadastro(false); setSelectedLeito(null) }}
           onSaved={async () => {
@@ -256,6 +288,7 @@ export default function UTIGrid({ initialPacientes, userEmail }: Props) {
       {selectedPac && (
         <PacienteModal
           paciente={selectedPac}
+          unidade={unidade}
           onClose={() => setSelectedPac(null)}
           onAltaConcedida={async () => {
             setSelectedPac(null)

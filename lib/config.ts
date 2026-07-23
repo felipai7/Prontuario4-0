@@ -1,18 +1,11 @@
-// Configuração de alas, leitos e planos — fonte única para todo o app.
+// Listas de referência do app.
 //
-// ATENÇÃO: o banco espelha os ids de ala numa check constraint
-// (supabase/schema.sql: check (ala_id in ('uti-01', 'uti-02'))).
-// Ao adicionar/renomear uma ala aqui, atualize também a constraint no banco.
-
-export const ALAS = [
-  { id: 'uti-01', nome: 'UTI 01', leitos: Array.from({ length: 9 },  (_, i) => i + 1)  },
-  { id: 'uti-02', nome: 'UTI 02', leitos: Array.from({ length: 10 }, (_, i) => i + 10) },
-] as const
-
-export type AlaId = (typeof ALAS)[number]['id']
-
-export const ALAS_MAP: Record<AlaId, string> =
-  Object.fromEntries(ALAS.map(a => [a.id, a.nome])) as Record<AlaId, string>
+// A PLANTA DA UNIDADE NÃO MORA MAIS AQUI. As alas e os leitos saíram deste
+// arquivo e foram para as tabelas `alas` e `leitos` do banco — veja
+// lib/unidade.ts e supabase/multiunidade_1_estrutura.sql. Enquanto estavam aqui
+// (junto de uma check constraint em pacientes.ala_id), atender uma segunda UTI
+// exigia editar código e publicar; e duas unidades jamais poderiam coexistir na
+// mesma instalação.
 
 export const PLANOS = ['IPASGO', 'Unimed', 'Particular', 'Bradesco', 'Outros']
 

@@ -1,5 +1,3 @@
-import type { AlaId } from '@/lib/config'
-
 export interface Paciente {
   id: string
   nome: string
@@ -9,8 +7,11 @@ export interface Paciente {
   hora_internacao: string   // HH:MM
   peso_kg: number | null
   hipoteses: string | null
-  ala_id: AlaId
+  /** Código da ala, validado por FK contra alas(unit_id, codigo) — não é mais um enum do TypeScript. */
+  ala_id: string
   numero_leito: number
+  /** Unidade dona do paciente: o único ponto de tenancy do lado clínico. */
+  unit_id: string
   saps3: number | null
   /** Quando o SAPS 3 foi pontuado — revela pontuação retrospectiva (feita já sabendo o desfecho). */
   saps3_calculado_em: string | null
