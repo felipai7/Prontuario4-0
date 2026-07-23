@@ -294,6 +294,29 @@ export interface Unit {
   created_at: string
 }
 
+/** Ala (setor físico) de uma unidade. Antes era a constante ALAS de lib/config.ts. */
+export interface Ala {
+  id: string
+  unit_id: string
+  /** Código curto gravado em pacientes.ala_id. Único dentro da unidade. */
+  codigo: string
+  nome: string
+  ordem: number
+  ativa: boolean
+  created_at: string
+}
+
+export interface Leito {
+  id: string
+  ala_id: string
+  numero: number
+  /** Data em que o leito passou a operar — antes dela não conta nos leitos-dia. */
+  ativo_desde: string
+  /** Null = ainda ativo. */
+  ativo_ate: string | null
+  created_at: string
+}
+
 export interface Staff {
   id: string
   user_id: string | null

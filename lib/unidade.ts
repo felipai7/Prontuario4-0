@@ -22,6 +22,8 @@ export interface Unidade {
   alas: Ala[]
   /** Total de leitos vigentes hoje — denominador da taxa de ocupação. */
   leitosAtivos: number
+  /** Quantas OUTRAS unidades a pessoa atende. >0 faz o seletor aparecer. */
+  outrasUnidades: number
 }
 
 /** Formato cru vindo do PostgREST (alas com leitos embutidos). */
@@ -58,6 +60,9 @@ export function leitosVigentes(leitos: LeitoRow[], hoje: string): number[] {
     .sort((x, y) => x - y)
 }
 
+/** Nome do cookie que guarda a unidade escolhida por quem trabalha em mais de uma. */
+export const COOKIE_UNIDADE = 'unidade_ativa'
+
 /**
  * Carrega a unidade do usuário logado e a planta dela.
  *
@@ -66,23 +71,32 @@ export function leitosVigentes(leitos: LeitoRow[], hoje: string): number[] {
  * forma, e é melhor a tela dizer isso do que mostrar um mapa vazio como se a
  * UTI estivesse sem ninguém.
  *
+ * `preferida` é a unidade escolhida no seletor (cookie). Se a pessoa não tem
+ * vínculo com ela — deixou de ter, ou o cookie veio adulterado —, cai na
+ * primeira unidade dela. Nunca confia no cookie para dar acesso: a lista de
+ * vínculos vem do banco e o RLS decide o resto.
+ *
  * Recebe o client por parâmetro para servir tanto ao servidor quanto ao
  * navegador — o módulo não importa nada de server-only.
  */
 export async function carregarUnidade(
   supabase: SupabaseClient,
   userId: string,
+  preferida?: string,
 ): Promise<Unidade | null> {
   const { data: staffRows } = await supabase
     .from('staff')
-    .select('unit_id, units(name)')
+    .select('unit_id, created_at, units(name)')
     .eq('user_id', userId)
     .eq('active', true)
-    .limit(1)
+    // Ordem estável: sem isso, quem trabalha em duas unidades cairia numa ou
+    // noutra a cada carregamento, sem explicação.
+    .order('created_at')
 
-  const vinculo = (staffRows ?? [])[0] as
-    | { unit_id: string; units: { name: string } | { name: string }[] | null }
-    | undefined
+  type Vinculo = { unit_id: string; units: { name: string } | { name: string }[] | null }
+  const vinculos = (staffRows ?? []) as Vinculo[]
+
+  const vinculo = (preferida && vinculos.find(v => v.unit_id === preferida)) || vinculos[0]
   if (!vinculo) return null
 
   // O PostgREST devolve o relacionamento como objeto ou array conforme a
@@ -110,7 +124,23 @@ export async function carregarUnidade(
     nome,
     alas,
     leitosAtivos: alas.reduce((n, a) => n + a.leitos.length, 0),
+    outrasUnidades: vinculos.length - 1,
   }
+}
+
+/**
+ * Deriva o código da ala a partir do nome digitado: minúsculas, sem acento,
+ * separadores viram hífen.
+ *
+ * Este código é gravado em `pacientes.ala_id` e NUNCA muda depois — renomear a
+ * ala troca só o rótulo. Por isso ele precisa ser estável e sem acento: é uma
+ * chave, não um texto de tela.
+ */
+export function normalizarCodigo(texto: string): string {
+  return texto.trim().toLowerCase()
+    .normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]', 'g'), '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
 }
 
 /** Nome de exibição de uma ala pelo código. Cai no próprio código se não achar. */

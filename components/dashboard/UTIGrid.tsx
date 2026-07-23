@@ -7,17 +7,20 @@ import CadastroForm   from '@/components/paciente/CadastroForm'
 import ToastContainer, { useToast } from '@/components/ui/Toast'
 import { pad, fmtData, calcAge, normalizarNome } from '@/lib/utils'
 import { ehIntensivista, apenasMedicos } from '@/lib/cargos'
+import SeletorUnidade from './SeletorUnidade'
 import { nomeDaAla, type Unidade } from '@/lib/unidade'
-import type { Paciente } from '@/types'
+import type { Paciente, Unit } from '@/types'
 
 interface Props {
   initialPacientes: Paciente[]
   userEmail: string
   /** Planta da unidade, vinda do banco. Null = usuário sem vínculo ativo em `staff`. */
   unidade: Unidade | null
+  /** Só vem preenchida para quem atende mais de uma unidade. */
+  unidades: Unit[]
 }
 
-export default function UTIGrid({ initialPacientes, userEmail, unidade }: Props) {
+export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades }: Props) {
   const router           = useRouter()
   const supabase         = createClient()
   const { toasts, showToast, removeToast } = useToast()
@@ -129,21 +132,35 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade }: Props)
             <h1 className="text-xl font-bold">🏥 ProMed UTI</h1>
             <p className="text-indigo-200 text-xs mt-0.5">
               {/* Com mais de uma unidade na mesma instalação, saber QUAL UTI está
-                  na tela deixa de ser detalhe e vira segurança do paciente. */}
-              {unidade && <>{unidade.nome} &nbsp;·&nbsp; </>}
+                  na tela deixa de ser detalhe e vira segurança do paciente.
+                  Quem atende só uma vê o nome; quem atende várias, o seletor. */}
+              {unidade && unidade.outrasUnidades === 0 && <>{unidade.nome} &nbsp;·&nbsp; </>}
               {ocupados}/{total} leitos ocupados &nbsp;·&nbsp; Tempo real
             </p>
           </div>
           <div className="flex items-center gap-3 text-sm">
             <span className="text-indigo-200 hidden sm:block">{userEmail}</span>
+            {unidade && unidade.outrasUnidades > 0 && unidades.length > 1 && (
+              <SeletorUnidade unidades={unidades} atual={unidade.unitId} />
+            )}
             {souChefe && (
-              <button
-                onClick={() => router.push('/indicadores')}
-                className="bg-white/20 hover:bg-white/30 border border-white/30
-                           px-3 py-1.5 rounded-lg text-white text-sm font-medium transition-colors"
-              >
-                📊 Indicadores
-              </button>
+              <>
+                <button
+                  onClick={() => router.push('/indicadores')}
+                  className="bg-white/20 hover:bg-white/30 border border-white/30
+                             px-3 py-1.5 rounded-lg text-white text-sm font-medium transition-colors"
+                >
+                  📊 Indicadores
+                </button>
+                <button
+                  onClick={() => router.push('/unidade')}
+                  title="Alas, leitos e cadastro de unidades"
+                  className="bg-white/20 hover:bg-white/30 border border-white/30
+                             px-3 py-1.5 rounded-lg text-white text-sm font-medium transition-colors"
+                >
+                  🏗️ Unidade
+                </button>
+              </>
             )}
             <button
               onClick={() => router.push('/escalas')}

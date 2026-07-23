@@ -1,9 +1,10 @@
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import IndicadoresHome from '@/components/indicadores/IndicadoresHome'
 import { calcularLeitosDia } from '@/lib/indicadores/formulas'
 import { ehIntensivista } from '@/lib/cargos'
-import { carregarUnidade } from '@/lib/unidade'
+import { carregarUnidade, COOKIE_UNIDADE } from '@/lib/unidade'
 import type {
   Staff, ContagensMes, QualidadeMes, ContagensFisioMes, ContagensEnfermagemMes, ContagensNutricaoMes, ContagensIrasMes,
 } from '@/types'
@@ -60,7 +61,10 @@ export default async function IndicadoresPage(
   const hoje = hojeEmBrasilia()
   const { ano, mes } = mesDaUrl(searchParams.mes, hoje)
 
-  const unidade = await carregarUnidade(supabase, user.id)
+  // Mesma unidade escolhida no painel: trocar lá e ver os indicadores da outra
+  // seria a pior forma possível de errar um número de gestão.
+  const escolhida = (await cookies()).get(COOKIE_UNIDADE)?.value
+  const unidade = await carregarUnidade(supabase, user.id, escolhida)
   const leitosAtivos = unidade?.leitosAtivos ?? 0
 
   if (!souChefe) {

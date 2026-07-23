@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { leitosVigentes, nomeDaAla, type Unidade } from './unidade'
+import { leitosVigentes, nomeDaAla, normalizarCodigo, type Unidade } from './unidade'
 
 const leito = (numero: number, desde = '2000-01-01', ate: string | null = null) =>
   ({ numero, ativo_desde: desde, ativo_ate: ate })
@@ -33,9 +33,33 @@ describe('leitosVigentes', () => {
   })
 })
 
+describe('normalizarCodigo', () => {
+  it('reproduz o código das alas que já existem', () => {
+    // Garantia de continuidade: 'UTI 01' precisa continuar virando 'uti-01',
+    // que é o valor gravado em pacientes.ala_id desde o começo do app.
+    expect(normalizarCodigo('UTI 01')).toBe('uti-01')
+    expect(normalizarCodigo('UTI 02')).toBe('uti-02')
+  })
+
+  it('remove acento — o código é chave, não texto de tela', () => {
+    expect(normalizarCodigo('UTI Cardiológica')).toBe('uti-cardiologica')
+    expect(normalizarCodigo('Unidade Coronariana Não-Invasiva')).toBe('unidade-coronariana-nao-invasiva')
+  })
+
+  it('colapsa separadores repetidos e apara as pontas', () => {
+    expect(normalizarCodigo('  UTI   ---  03  ')).toBe('uti-03')
+  })
+
+  it('nome só de pontuação vira string vazia, e não um hífen solto', () => {
+    // A tela usa isso para recusar o cadastro: um código '-' passaria batido.
+    expect(normalizarCodigo('---')).toBe('')
+    expect(normalizarCodigo('   ')).toBe('')
+  })
+})
+
 describe('nomeDaAla', () => {
   const unidade: Unidade = {
-    unitId: 'u1', nome: 'UTI Adulto', leitosAtivos: 3,
+    unitId: 'u1', nome: 'UTI Adulto', leitosAtivos: 3, outrasUnidades: 0,
     alas: [{ id: 'uti-01', nome: 'UTI 01', leitos: [1, 2, 3] }],
   }
 
