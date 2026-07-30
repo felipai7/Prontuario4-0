@@ -141,3 +141,6 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Service worker gerado a partir de public/sw.template.js (scripts/gen-sw.mjs)
+public/sw.js
