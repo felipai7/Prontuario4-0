@@ -414,8 +414,10 @@ export default function PacienteModal({ paciente, unidade, onClose, onAltaConced
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/60 z-40 flex items-start justify-center p-4 overflow-y-auto"
-        onClick={e => e.target === e.currentTarget && onClose()}>
+      {/* Sem fechar ao clicar fora: um clique acidental no fundo fechava o modal
+          e derrubava um formulário meio preenchido (ex.: o balanço). O fechamento
+          é só pelo X ou por ESC (ver o handler de teclado acima). */}
+      <div className="fixed inset-0 bg-black/60 z-40 flex items-start justify-center p-4 overflow-y-auto">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[1300px] my-2 flex flex-col" style={{maxHeight:'97vh'}}>
 
           {/* Header */}

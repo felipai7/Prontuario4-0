@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { isDateFuture, toTitleCaseNome, normalizarNome, fmtDataHora } from '@/lib/utils'
+import { isDateFuture, toTitleCaseNome, normalizarNome, fmtDataHora, parseDataParaISO } from '@/lib/utils'
 import { PLANOS } from '@/lib/config'
 import type { ToastData } from '@/types'
 
@@ -148,7 +148,14 @@ export default function CadastroForm({ alaId, alaNome, unitId, numeroLeito, onCl
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Data de Nascimento *" error={errors.dataNasc}>
+              {/* onPaste: um <input type="date"> não aceita texto colado sozinho.
+                  Aqui interceptamos a colagem do prontuário (ex.: "12/05/1970") e
+                  convertemos para o formato ISO que o campo entende. */}
               <input type="date" value={dataNasc} max={hoje}
+                onPaste={e => {
+                  const iso = parseDataParaISO(e.clipboardData.getData('text'))
+                  if (iso) { e.preventDefault(); setDataNasc(iso) }
+                }}
                 onChange={e => setDataNasc(e.target.value)} className={input(errors.dataNasc)} />
             </Field>
             <Field label="Peso (Kg)">

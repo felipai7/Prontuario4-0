@@ -79,6 +79,46 @@ export function isDateFuture(str: string): boolean {
   return date > today
 }
 
+function anoDe2Digitos(y: number): number {
+  if (y >= 100) return y
+  // Data de nascimento: '70' → 1970, '05' → 2005. O corte em 30 é um chute
+  // razoável (paciente de UTI nascido em '25 quase sempre é 1925, não 2025).
+  return y <= 30 ? 2000 + y : 1900 + y
+}
+
+function montarISO(y: number, mo: number, d: number): string | null {
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null
+  // new Date normaliza overflow (32/01 vira 01/02); comparar de volta rejeita datas que não existem.
+  const dt = new Date(y, mo - 1, d)
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${y}-${pad(mo)}-${pad(d)}`
+}
+
+/**
+ * Converte uma data digitada/colada em ISO (YYYY-MM-DD), ou null se não der.
+ *
+ * Existe para permitir COLAR a data num `<input type="date">`, que sozinho não
+ * aceita texto. Aceita o que aparece ao copiar de um prontuário: DD/MM/AAAA,
+ * DD/MM/AA, D/M/AAAA, com `/ . -` como separador, DDMMAAAA sem separador, e o
+ * próprio ISO.
+ */
+export function parseDataParaISO(texto: string): string | null {
+  const t = (texto ?? '').trim()
+  if (!t) return null
+
+  let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)          // ISO
+  if (m) return montarISO(+m[1], +m[2], +m[3])
+
+  m = t.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})$/) // DD/MM/AAAA e variantes
+  if (m) return montarISO(anoDe2Digitos(+m[3]), +m[2], +m[1])
+
+  m = t.match(/^(\d{2})(\d{2})(\d{4})$/)                     // DDMMAAAA
+  if (m) return montarISO(+m[3], +m[2], +m[1])
+
+  return null
+}
+
 /** Dias corridos desde uma data YYYY-MM-DD até hoje (mínimo 0). */
 export function diasDesde(dataYYYYMMDD: string): number {
   const inicio = new Date(dataYYYYMMDD + 'T00:00:00')

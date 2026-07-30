@@ -191,7 +191,7 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
               </div>
               <div className="bg-white border border-indigo-100 rounded-lg p-3">
                 <p className="text-xs font-bold text-indigo-700 mb-1.5">Resumo extraído pela IA</p>
-                <p className="text-sm text-slate-700 leading-relaxed">{aiResult.resumo}</p>
+                <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{aiResult.resumo}</p>
               </div>
               {Object.keys(aiResult.achados).length > 0 && (
                 <div className="bg-white border border-indigo-100 rounded-lg p-3 space-y-1.5">
@@ -287,7 +287,9 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
                   </div>
 
                   {ex.resumo_ia && (
-                    <p className={`text-xs text-slate-600 mt-1.5 leading-relaxed ${!isExp ? 'line-clamp-2' : ''}`}>
+                    // whitespace-pre-wrap preserva os parágrafos do laudo colado;
+                    // line-clamp-2 ainda recorta para 2 linhas enquanto fechado.
+                    <p className={`text-xs text-slate-600 mt-1.5 leading-relaxed whitespace-pre-wrap ${!isExp ? 'line-clamp-2' : ''}`}>
                       {ex.resumo_ia}
                     </p>
                   )}
