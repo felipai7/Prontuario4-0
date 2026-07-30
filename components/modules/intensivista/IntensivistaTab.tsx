@@ -35,6 +35,15 @@ const VIAS_POR_DROGA: Record<DrogaAnticoag, ViaAnticoag[]> = {
   'Outro': ['Subcutâneo', 'Endovenoso', 'Enteral'],
 }
 const UNIDADES_DOSE = ['mg', 'mg/kg', 'UI', 'UI/h', 'UI/kg/h']
+// Posologias comuns oferecidas no combobox — o campo aceita texto livre, então
+// servem de atalho, não de enum. Cobrem "quantas vezes" e "de quanto em quanto".
+const POSOLOGIAS = ['1x/dia', '2x/dia', '12/12h', '8/8h', '6/6h', 'Contínuo', 'ACM (se necessário)']
+
+// Medicações padrão pré-preenchidas ao marcar "em uso" — o intensivista ajusta
+// caso a caso. Confirmadas com o Dr. Flaubert: IBP = Pantoprazol 40mg VO 1x/dia
+// profilático; Anticoagulante = Enoxaparina 40mg SC 1x/dia profilática.
+const PADRAO_IBP = { via: 'Enteral' as ViaIBP, dose: '40', unid: 'mg', freq: '1x/dia', objetivo: 'profilatico' as Objetivo }
+const PADRAO_ANTICOAG = { droga: 'Enoxaparina' as DrogaAnticoag, via: 'Subcutâneo' as ViaAnticoag, dose: '40', unid: 'mg', freq: '1x/dia', objetivo: 'profilatico' as Objetivo }
 
 function atbEmAlerta(atb: ATB): boolean {
   const dia = diaAtualATB(atb)
@@ -104,6 +113,7 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
   const [ibpVia,        setIbpVia]        = useState<ViaIBP | ''>(cuidados?.ibp_via ?? '')
   const [ibpDoseValor,  setIbpDoseValor]  = useState(cuidados?.ibp_dose_valor != null ? String(cuidados.ibp_dose_valor) : '')
   const [ibpDoseUnid,   setIbpDoseUnid]   = useState(cuidados?.ibp_dose_unidade ?? 'mg')
+  const [ibpFrequencia, setIbpFrequencia] = useState(cuidados?.ibp_frequencia ?? '')
   const [ibpObjetivo,   setIbpObjetivo]   = useState<Objetivo | ''>(cuidados?.ibp_objetivo ?? '')
 
   const [anticoagEmUso,     setAnticoagEmUso]     = useState(cuidados?.anticoag_em_uso ?? false)
@@ -112,7 +122,27 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
   const [anticoagVia,       setAnticoagVia]       = useState<ViaAnticoag | ''>(cuidados?.anticoag_via ?? '')
   const [anticoagDoseValor, setAnticoagDoseValor] = useState(cuidados?.anticoag_dose_valor != null ? String(cuidados.anticoag_dose_valor) : '')
   const [anticoagDoseUnid,  setAnticoagDoseUnid]  = useState(cuidados?.anticoag_dose_unidade ?? 'mg')
+  const [anticoagFrequencia, setAnticoagFrequencia] = useState(cuidados?.anticoag_frequencia ?? '')
   const [anticoagObjetivo,  setAnticoagObjetivo]  = useState<Objetivo | ''>(cuidados?.anticoag_objetivo ?? '')
+
+  // Ao marcar "em uso" pela primeira vez (campos ainda vazios), preenche a
+  // medicação padrão. Não sobrescreve o que já foi configurado: re-marcar com
+  // dados existentes preserva o que estava lá.
+  const toggleIbp = (on: boolean) => {
+    setIbpEmUso(on)
+    if (on && !ibpVia && !ibpDoseValor) {
+      setIbpVia(PADRAO_IBP.via); setIbpDoseValor(PADRAO_IBP.dose); setIbpDoseUnid(PADRAO_IBP.unid)
+      setIbpFrequencia(PADRAO_IBP.freq); setIbpObjetivo(PADRAO_IBP.objetivo)
+    }
+  }
+  const toggleAnticoag = (on: boolean) => {
+    setAnticoagEmUso(on)
+    if (on && !anticoagDroga && !anticoagDoseValor) {
+      setAnticoagDroga(PADRAO_ANTICOAG.droga); setAnticoagVia(PADRAO_ANTICOAG.via)
+      setAnticoagDoseValor(PADRAO_ANTICOAG.dose); setAnticoagDoseUnid(PADRAO_ANTICOAG.unid)
+      setAnticoagFrequencia(PADRAO_ANTICOAG.freq); setAnticoagObjetivo(PADRAO_ANTICOAG.objetivo)
+    }
+  }
 
   // Corticoide e opioide: sim/não, sem dose. Alimentam "% disfunção glicêmica +
   // corticoide" e "constipação relacionada a opioides". Guardam o estado atual —
@@ -129,6 +159,7 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
     setIbpVia(cuidados?.ibp_via ?? '')
     setIbpDoseValor(cuidados?.ibp_dose_valor != null ? String(cuidados.ibp_dose_valor) : '')
     setIbpDoseUnid(cuidados?.ibp_dose_unidade ?? 'mg')
+    setIbpFrequencia(cuidados?.ibp_frequencia ?? '')
     setIbpObjetivo(cuidados?.ibp_objetivo ?? '')
     setAnticoagEmUso(cuidados?.anticoag_em_uso ?? false)
     setAnticoagDroga(cuidados?.anticoag_droga ?? '')
@@ -136,6 +167,7 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
     setAnticoagVia(cuidados?.anticoag_via ?? '')
     setAnticoagDoseValor(cuidados?.anticoag_dose_valor != null ? String(cuidados.anticoag_dose_valor) : '')
     setAnticoagDoseUnid(cuidados?.anticoag_dose_unidade ?? 'mg')
+    setAnticoagFrequencia(cuidados?.anticoag_frequencia ?? '')
     setAnticoagObjetivo(cuidados?.anticoag_objetivo ?? '')
     setCorticoideEmUso(cuidados?.corticoide_em_uso ?? false)
     setOpioideEmUso(cuidados?.opioide_em_uso ?? false)
@@ -157,6 +189,7 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
       ibp_via:               ibpEmUso ? (ibpVia || null) : null,
       ibp_dose_valor:        ibpEmUso && ibpDoseValor ? parseFloat(ibpDoseValor) : null,
       ibp_dose_unidade:      ibpEmUso ? ibpDoseUnid : null,
+      ibp_frequencia:        ibpEmUso ? (ibpFrequencia.trim() || null) : null,
       ibp_objetivo:          ibpEmUso ? (ibpObjetivo || null) : null,
       anticoag_em_uso:       anticoagEmUso,
       anticoag_droga:        anticoagEmUso ? (anticoagDroga || null) : null,
@@ -164,6 +197,7 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
       anticoag_via:          anticoagEmUso ? (anticoagVia || null) : null,
       anticoag_dose_valor:   anticoagEmUso && anticoagDoseValor ? parseFloat(anticoagDoseValor) : null,
       anticoag_dose_unidade: anticoagEmUso ? anticoagDoseUnid : null,
+      anticoag_frequencia:   anticoagEmUso ? (anticoagFrequencia.trim() || null) : null,
       anticoag_objetivo:     anticoagEmUso ? (anticoagObjetivo || null) : null,
       corticoide_em_uso:     corticoideEmUso,
       opioide_em_uso:        opioideEmUso,
@@ -381,13 +415,13 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
       {/* IBP */}
       <section className="border border-slate-200 rounded-xl p-4 space-y-3">
         <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked={ibpEmUso} onChange={e => setIbpEmUso(e.target.checked)} disabled={!podeEditar}
+          <input type="checkbox" checked={ibpEmUso} onChange={e => toggleIbp(e.target.checked)} disabled={!podeEditar}
             className="w-4 h-4 accent-indigo-600 disabled:cursor-not-allowed" />
           <span className="font-semibold text-slate-700">💊 Em uso de Pantoprazol (IBP)</span>
         </label>
 
         {ibpEmUso && (
-          <fieldset disabled={!podeEditar} className="grid grid-cols-3 gap-3 pl-6 disabled:opacity-60">
+          <fieldset disabled={!podeEditar} className="grid grid-cols-2 gap-3 pl-6 disabled:opacity-60">
             <div>
               <label className={labelCls}>Via</label>
               <select value={ibpVia} onChange={e => setIbpVia(e.target.value as ViaIBP)} className={inputCls}>
@@ -407,6 +441,11 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
               </div>
             </div>
             <div>
+              <label className={labelCls}>Frequência</label>
+              <Combobox value={ibpFrequencia} onChange={setIbpFrequencia} options={POSOLOGIAS}
+                placeholder="ex: 1x/dia" className={inputCls} />
+            </div>
+            <div>
               <label className={labelCls}>Objetivo</label>
               <select value={ibpObjetivo} onChange={e => setIbpObjetivo(e.target.value as Objetivo)} className={inputCls}>
                 <option value="">Selecione...</option>
@@ -421,7 +460,7 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
       {/* Anticoagulante */}
       <section className="border border-slate-200 rounded-xl p-4 space-y-3">
         <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked={anticoagEmUso} onChange={e => setAnticoagEmUso(e.target.checked)} disabled={!podeEditar}
+          <input type="checkbox" checked={anticoagEmUso} onChange={e => toggleAnticoag(e.target.checked)} disabled={!podeEditar}
             className="w-4 h-4 accent-indigo-600 disabled:cursor-not-allowed" />
           <span className="font-semibold text-slate-700">🩸 Em uso de Anticoagulante</span>
         </label>
@@ -458,15 +497,22 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
                 <input value={anticoagOutro} onChange={e => setAnticoagOutro(e.target.value)} className={inputCls} />
               </div>
             )}
-            <div className="max-w-xs">
-              <label className={labelCls}>Dose</label>
-              <div className="flex gap-1">
-                <input type="number" step="0.1" min="0" value={anticoagDoseValor} onChange={e => setAnticoagDoseValor(e.target.value)}
-                  onWheel={noScrollInput} onKeyDown={noArrowInput} className={inputCls} />
-                <select value={anticoagDoseUnid} onChange={e => setAnticoagDoseUnid(e.target.value)}
-                  className="border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                  {UNIDADES_DOSE.map(u => <option key={u} value={u}>{u}</option>)}
-                </select>
+            <div className="grid grid-cols-2 gap-3 max-w-md">
+              <div>
+                <label className={labelCls}>Dose</label>
+                <div className="flex gap-1">
+                  <input type="number" step="0.1" min="0" value={anticoagDoseValor} onChange={e => setAnticoagDoseValor(e.target.value)}
+                    onWheel={noScrollInput} onKeyDown={noArrowInput} className={inputCls} />
+                  <select value={anticoagDoseUnid} onChange={e => setAnticoagDoseUnid(e.target.value)}
+                    className="border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    {UNIDADES_DOSE.map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className={labelCls}>Frequência</label>
+                <Combobox value={anticoagFrequencia} onChange={setAnticoagFrequencia} options={POSOLOGIAS}
+                  placeholder="ex: 1x/dia" className={inputCls} />
               </div>
             </div>
           </fieldset>

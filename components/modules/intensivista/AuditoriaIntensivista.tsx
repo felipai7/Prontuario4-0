@@ -16,6 +16,7 @@ const CAMPOS_CUIDADOS: Record<string, string> = {
   ibp_via: 'Via do IBP',
   ibp_dose_valor: 'Dose do IBP',
   ibp_dose_unidade: 'Unidade da dose do IBP',
+  ibp_frequencia: 'Frequência do IBP',
   ibp_objetivo: 'Objetivo do IBP',
   anticoag_em_uso: 'Anticoagulante',
   anticoag_droga: 'Droga anticoagulante',
@@ -23,6 +24,7 @@ const CAMPOS_CUIDADOS: Record<string, string> = {
   anticoag_via: 'Via do anticoagulante',
   anticoag_dose_valor: 'Dose do anticoagulante',
   anticoag_dose_unidade: 'Unidade da dose do anticoagulante',
+  anticoag_frequencia: 'Frequência do anticoagulante',
   anticoag_objetivo: 'Objetivo do anticoagulante',
 }
 

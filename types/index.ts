@@ -236,6 +236,8 @@ export interface CuidadosHorizontais {
   ibp_via: ViaIBP | null
   ibp_dose_valor: number | null
   ibp_dose_unidade: string | null
+  /** Posologia (ex.: "1x/dia", "12/12h"). Texto livre. */
+  ibp_frequencia: string | null
   ibp_objetivo: Objetivo | null
 
   anticoag_em_uso: boolean
@@ -244,6 +246,8 @@ export interface CuidadosHorizontais {
   anticoag_via: ViaAnticoag | null
   anticoag_dose_valor: number | null
   anticoag_dose_unidade: string | null
+  /** Posologia (ex.: "1x/dia", "12/12h"). Texto livre. */
+  anticoag_frequencia: string | null
   anticoag_objetivo: Objetivo | null
 
   corticoide_em_uso: boolean
