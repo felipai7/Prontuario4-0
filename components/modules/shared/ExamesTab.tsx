@@ -1,6 +1,7 @@
 'use client'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { agruparExamesPorHorario, parseExameTimestamp, type ClusterExames } from '@/lib/exames/agrupamento'
 import type { Exame, Paciente, ResultadoExame, ToastData } from '@/types'
 
 interface Props {
@@ -174,15 +175,6 @@ function buildTableRows(allParams: string[]): TableRow[] {
   return rows
 }
 
-function parseExameDate(ex: Exame): number {
-  if (ex.data_exame) {
-    const [d, m, y] = ex.data_exame.split('/')
-    const ts = new Date(`${y}-${m}-${d}`).getTime()
-    if (!isNaN(ts)) return ts
-  }
-  return new Date(ex.created_at).getTime()
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Props) {
   const supabase = createClient()
@@ -203,26 +195,33 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
   const [pastedImgs, setPastedImgs] = useState<{ base64: string; mediaType: string; preview: string }[]>([])
 
   // ── Pivot table data ─────────────────────────────────────────────────────
-  const sorted  = [...exames].sort((a, b) => parseExameDate(a) - parseExameDate(b))
-  const comRes  = sorted.filter(ex => ex.resultados && ex.resultados.length > 0)
-  const semRes  = sorted.filter(ex => !ex.resultados || ex.resultados.length === 0)
+  const comRes  = exames.filter(ex => ex.resultados && ex.resultados.length > 0)
+  const semRes  = [...exames].filter(ex => !ex.resultados || ex.resultados.length === 0)
+    .sort((a, b) => parseExameTimestamp(b) - parseExameTimestamp(a))
 
-  // Deduplicated canonical params (first-seen order)
+  // Uma coluna por HORÁRIO de coleta (não por print enviado), do mais novo ao
+  // mais antigo. Ver lib/exames/agrupamento.ts.
+  const clusters = agruparExamesPorHorario(comRes)
+
+  // Params canônicos, sem repetição. Do mais novo p/ o mais antigo, para os
+  // parâmetros recentes virem primeiro dentro de cada categoria.
   const allParams: string[] = []
   const seenCanonical = new Set<string>()
-  comRes.forEach(ex => {
+  clusters.forEach(cl => cl.exames.forEach(ex => {
     (ex.resultados || []).forEach(r => {
       const c = canonicalize(r.nome)
       if (!seenCanonical.has(c)) { seenCanonical.add(c); allParams.push(c) }
     })
-  })
+  }))
 
-  // Lookup by canonical name
+  // Lookup por COLUNA (grupo): junta os resultados de todos os exames do grupo.
+  // Se o mesmo parâmetro vier em mais de um exame do grupo, vence o mais recente
+  // (os exames já vêm ordenados por created_at asc, então o último set prevalece).
   const lookup = new Map<string, Map<string, ResultadoExame>>()
-  comRes.forEach(ex => {
+  clusters.forEach(cl => {
     const m = new Map<string, ResultadoExame>()
-    ;(ex.resultados || []).forEach(r => m.set(canonicalize(r.nome), r))
-    lookup.set(ex.id, m)
+    cl.exames.forEach(ex => (ex.resultados || []).forEach(r => m.set(canonicalize(r.nome), r)))
+    lookup.set(cl.key, m)
   })
 
   const tableRows = buildTableRows(allParams)
@@ -230,6 +229,11 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [editExame,  setEditExame]  = useState<{ id: string; tipo: string; data: string; obs: string } | null>(null)
   const [editSaving, setEditSaving] = useState(false)
+  // Coluna com mais de um exame: abre um seletor para escolher qual editar/excluir.
+  const [colChooser, setColChooser] = useState<ClusterExames | null>(null)
+
+  const abrirEdicao = (ex: Exame) =>
+    setEditExame({ id: ex.id, tipo: ex.tipo_exame, data: ex.data_exame ?? '', obs: ex.observacoes ?? '' })
 
   const handleDeleteExame = async (id: string) => {
     if (!confirm('Excluir este exame? Esta ação não pode ser desfeita.')) return
@@ -614,21 +618,30 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
                 <th className="sticky left-0 z-20 bg-slate-100 px-3 py-2.5 text-left font-bold text-slate-700 border-b-2 border-r-2 border-slate-300 min-w-[170px]">
                   Parâmetro
                 </th>
-                {comRes.map((ex, idx) => {
-                  const parts = ex.data_exame?.split(' ')
-                  const datePart = parts?.[0] ?? null
-                  const timePart = parts?.[1] ?? null
+                {clusters.map((cl, idx) => {
+                  const solo = cl.exames.length === 1
                   return (
-                    <th key={ex.id} className="px-2 py-2 text-center bg-slate-100 border-b-2 border-r border-slate-200 font-semibold min-w-[80px] whitespace-nowrap">
-                      <p className="text-slate-700 font-semibold text-xs leading-tight">{datePart ?? `Exame ${idx + 1}`}</p>
-                      {timePart && <p className="text-slate-400 font-normal text-xs mt-0.5">{timePart}</p>}
+                    <th key={cl.key} className="px-2 py-2 text-center bg-slate-100 border-b-2 border-r border-slate-200 font-semibold min-w-[80px] whitespace-nowrap">
+                      <p className="text-slate-700 font-semibold text-xs leading-tight">{cl.dataLabel ?? `Exame ${idx + 1}`}</p>
+                      {cl.horaLabel && <p className="text-slate-400 font-normal text-xs mt-0.5">{cl.horaLabel}</p>}
+                      {!solo && (
+                        <p className="text-[10px] text-indigo-500 font-semibold mt-0.5"
+                          title={`${cl.exames.length} exames desta coleta agrupados nesta coluna`}>
+                          {cl.exames.length} exames
+                        </p>
+                      )}
                       <div className="flex justify-center gap-1 mt-1">
-                        <button onClick={() => setEditExame({ id: ex.id, tipo: ex.tipo_exame, data: ex.data_exame ?? '', obs: ex.observacoes ?? '' })}
-                          title="Editar" className="text-indigo-300 hover:text-indigo-600 text-xs px-1">✏️</button>
-                        <button onClick={() => handleDeleteExame(ex.id)} disabled={deletingId === ex.id}
-                          title="Excluir" className="text-red-200 hover:text-red-500 text-xs px-1">
-                          {deletingId === ex.id ? '⏳' : '✕'}
-                        </button>
+                        {/* Uma coluna pode conter vários exames (mesma coleta): com 1, edita
+                            direto; com vários, abre o seletor para escolher qual. */}
+                        <button onClick={() => solo ? abrirEdicao(cl.exames[0]) : setColChooser(cl)}
+                          title={solo ? 'Editar' : 'Gerenciar exames desta coluna'}
+                          className="text-indigo-300 hover:text-indigo-600 text-xs px-1">✏️</button>
+                        {solo && (
+                          <button onClick={() => handleDeleteExame(cl.exames[0].id)} disabled={deletingId === cl.exames[0].id}
+                            title="Excluir" className="text-red-200 hover:text-red-500 text-xs px-1">
+                            {deletingId === cl.exames[0].id ? '⏳' : '✕'}
+                          </button>
+                        )}
                       </div>
                     </th>
                   )
@@ -640,7 +653,7 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
                 if (row.kind === 'header') {
                   return (
                     <tr key={`hdr-${row.label}`}>
-                      <td colSpan={comRes.length + 1}
+                      <td colSpan={clusters.length + 1}
                         className="sticky left-0 z-10 px-3 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 border-b border-t border-indigo-100">
                         {row.label}
                       </td>
@@ -648,7 +661,7 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
                   )
                 }
                 const paramName = row.name
-                const hasAlt = comRes.some(ex => lookup.get(ex.id)?.get(paramName)?.alterado)
+                const hasAlt = clusters.some(cl => lookup.get(cl.key)?.get(paramName)?.alterado)
                 const rowBg = rowIdx % 2 === 0 ? '#ffffff' : '#f8fafc'
                 return (
                   <tr key={`p-${paramName}`}>
@@ -656,9 +669,9 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
                       style={{ background: rowBg }}>
                       {paramName}
                     </td>
-                    {comRes.map(ex => {
-                      const r = lookup.get(ex.id)?.get(paramName)
-                      return <PivotCell key={ex.id} r={r} rowBg={rowBg} />
+                    {clusters.map(cl => {
+                      const r = lookup.get(cl.key)?.get(paramName)
+                      return <PivotCell key={cl.key} r={r} rowBg={rowBg} />
                     })}
                   </tr>
                 )
@@ -694,6 +707,46 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
               {ex.observacoes && <p className="text-xs text-slate-500 italic mt-2">💬 {ex.observacoes}</p>}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Seletor de coluna: qual exame desta coleta editar/excluir */}
+      {colChooser && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={e => e.target === e.currentTarget && setColChooser(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-bold text-slate-800">Exames desta coluna</p>
+                <p className="text-xs text-slate-400">
+                  {colChooser.dataLabel}{colChooser.horaLabel ? ` · ${colChooser.horaLabel}` : ''} — {colChooser.exames.length} exames agrupados
+                </p>
+              </div>
+              <button onClick={() => setColChooser(null)} className="text-slate-400 hover:text-slate-700 text-lg">✕</button>
+            </div>
+            <p className="text-xs text-slate-500">
+              Para separar um exame que caiu no horário errado, edite a data/hora dele — a coluna se reagrupa sozinha.
+            </p>
+            <div className="space-y-2">
+              {colChooser.exames.map(ex => (
+                <div key={ex.id} className="flex items-center justify-between gap-2 border border-slate-200 rounded-lg px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-700 truncate">{ex.tipo_exame}</p>
+                    {ex.data_exame && <p className="text-xs text-slate-400">{ex.data_exame}</p>}
+                  </div>
+                  <div className="flex gap-1 flex-shrink-0">
+                    <button onClick={() => { abrirEdicao(ex); setColChooser(null) }}
+                      className="text-xs text-indigo-500 hover:text-indigo-700 border border-indigo-100 hover:border-indigo-300 px-2 py-1 rounded-lg transition-colors">
+                      ✏️ Editar
+                    </button>
+                    <button onClick={() => { handleDeleteExame(ex.id); setColChooser(null) }}
+                      className="text-xs text-red-400 hover:text-red-700 border border-red-100 hover:border-red-300 px-2 py-1 rounded-lg transition-colors">
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
