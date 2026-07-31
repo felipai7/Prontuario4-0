@@ -1,0 +1,40 @@
+name: CI
+
+# 7.B-16 · No clinBoard não havia CI, e nada forçava a suíte a rodar.
+# 7.B-9  · A suíte que NÃO depende de dado de paciente roda primeiro e é a que
+#          trava o merge. Os testes sobre o corpus real (PDFs de pacientes, que
+#          nunca entram no git) são alvo separado, rodado localmente antes de
+#          cada release — nunca aqui.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      # Tipos primeiro: é o portão mais barato e o que pega a classe inteira de
+      # defeitos de escopo que o clinBoard tinha por rodar fora de modo estrito.
+      - name: Checagem de tipos (strict)
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      # Suíte sintética: zero dado de paciente, zero I/O de fixture. Roda em
+      # qualquer clone limpo. É o portão de merge.
+      - name: Testes
+        run: npm test
