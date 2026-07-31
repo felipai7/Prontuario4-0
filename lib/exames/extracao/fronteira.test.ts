@@ -86,13 +86,22 @@ describe('estrutura do módulo', () => {
 // No clinBoard, apagar um bloco inteiro do arquivo sintético reduzia a suíte
 // de 71 para 60 checagens sem falhar nada. Aqui a contagem é afirmada: remover
 // testes quebra o build, e aumentar o piso é uma edição consciente.
-const CHECAGENS_MINIMAS = 27
+const CHECAGENS_MINIMAS = 57
+
+function arquivosDeTeste(dir: string): string[] {
+  const saida: string[] = []
+  for (const entrada of readdirSync(dir)) {
+    const caminho = join(dir, entrada)
+    if (statSync(caminho).isDirectory()) saida.push(...arquivosDeTeste(caminho))
+    else if (entrada.endsWith('.test.ts')) saida.push(caminho)
+  }
+  return saida
+}
 
 describe('piso de cobertura', () => {
   it(`o módulo mantém ao menos ${CHECAGENS_MINIMAS} checagens`, () => {
-    const testes = readdirSync(RAIZ_MODULO).filter(f => f.endsWith('.test.ts'))
-    const total = testes.reduce((soma, arquivo) => {
-      const codigo = semComentarios(readFileSync(join(RAIZ_MODULO, arquivo), 'utf8'))
+    const total = arquivosDeTeste(RAIZ_MODULO).reduce((soma, arquivo) => {
+      const codigo = semComentarios(readFileSync(arquivo, 'utf8'))
       return soma + (codigo.match(/^\s*it\(/gm) ?? []).length
     }, 0)
     expect(total).toBeGreaterThanOrEqual(CHECAGENS_MINIMAS)

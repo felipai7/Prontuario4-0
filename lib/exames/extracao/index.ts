@@ -19,7 +19,9 @@ import type {
   ExtractionRequest,
   ExtractionResult,
   LabDetection,
+  Warning,
 } from './contratos'
+import { ErroLeituraPdf, lerDocumento } from './texto/pdf'
 
 export type {
   Analyte,
@@ -109,20 +111,55 @@ export async function extrairExames(req: ExtractionRequest): Promise<ExtractionR
   // seguintes; o motor as consumirá via ParseContext.
   resolverOpcoes(req.options)
   const documentHash = hashDocumento(req.document.bytes)
+  const warnings: Warning[] = []
 
-  // ── F1: esqueleto. As camadas 1–7 entram nas fases seguintes. ───────────
+  // ── Camada 1 · texto com geometria ─────────────────────────────────────
+  let texto: DocumentText = { pages: [], lines: [], hasTextLayer: false }
+  try {
+    texto = await lerDocumento(req.document.bytes)
+  } catch (e) {
+    // Fora daqui não sobe exceção: falha é dado de retorno. E o `detail`
+    // carrega só o motivo tipado, nunca conteúdo do documento (R10).
+    warnings.push({
+      code: 'malformedDocument',
+      page: null,
+      lineIndex: null,
+      detail: e instanceof ErroLeituraPdf ? e.motivo : 'erroDesconhecido',
+    })
+  }
+
+  if (texto.pages.length > 0 && !texto.hasTextLayer) {
+    // PDF escaneado: tem páginas, não tem camada de texto. Seção 9 — sem OCR
+    // nesta fase, o documento resolve para `unrecognized` com aviso claro.
+    warnings.push({ code: 'noTextLayer', page: null, lineIndex: null, detail: null })
+  }
+
+  // ── Camada 2 · detecção ────────────────────────────────────────────────
+  const detection = detectarLaboratorio(texto)
+  if (detection.profileId === null) {
+    warnings.push({ code: 'unrecognizedDocument', page: null, lineIndex: null, detail: null })
+  }
+
+  // ── Camadas 3–7 entram nas fases seguintes. ────────────────────────────
+  warnings.push({
+    code: 'notImplemented',
+    page: null,
+    lineIndex: null,
+    detail: `motor de extração ausente na versão ${MODULE_VERSION}`,
+  })
+
   const diagnostics: Diagnostics = {
     moduleVersion: MODULE_VERSION,
     catalogVersion: 'não-carregado',
     documentHash,
-    pageCount: 0,
-    lineCount: 0,
+    pageCount: texto.pages.length,
+    lineCount: texto.lines.length,
     counts: {
       observations: 0,
       cultures: 0,
       imaging: 0,
       discarded: 0,
-      warnings: 1,
+      warnings: warnings.length,
       requiresReview: 0,
     },
     matcherHits: {},
@@ -130,19 +167,12 @@ export async function extrairExames(req: ExtractionRequest): Promise<ExtractionR
 
   return {
     documentKind: 'unrecognized',
-    detection: { profileId: null, confidence: 0, evidence: [], tiedWith: [] },
+    detection,
     observations: [],
     cultures: [],
     imaging: [],
     discarded: [],
-    warnings: [
-      {
-        code: 'notImplemented',
-        page: null,
-        lineIndex: null,
-        detail: `motor de extração ausente na versão ${MODULE_VERSION}`,
-      },
-    ],
+    warnings,
     diagnostics,
   }
 }

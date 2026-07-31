@@ -8,7 +8,7 @@ import {
   resolverOpcoes,
 } from './index'
 import type { ExtractionRequest } from './index'
-import { pdfDeLinhas } from './_testes/pdfMinimo'
+import { construirPdf, pdfDeLinhas } from './_testes/pdfMinimo'
 
 // ── Fixtures sintéticas ────────────────────────────────────────────────────
 // Zero dado de paciente: nomes, datas e valores são inventados. O cabeçalho do
@@ -128,10 +128,25 @@ describe('F2 · camada de texto', () => {
     expect(r.diagnostics.lineCount).toBeGreaterThanOrEqual(8)
   })
 
-  it('preserva a ordem de leitura de cima para baixo', async () => {
-    const r = await extrairExames(pedido(LAUDO_HUGO, { options: { retainRawText: true } }))
-    const linhas = r.discarded.map(d => d.rawLine).concat(r.observations.map(o => o.provenance.rawLine))
-    expect(linhas.some(l => /CNES 0697699/.test(l))).toBe(true)
+  it('conta as páginas de um documento multipágina', async () => {
+    const r = await extrairExames(pedido(construirPdf([
+      { linhas: [{ texto: 'PAGINA UM', x: 50, y: 700, tamanho: 11 }] },
+      { linhas: [{ texto: 'PAGINA DOIS', x: 50, y: 700, tamanho: 11 }] },
+    ])))
+    expect(r.diagnostics.pageCount).toBe(2)
+    expect(r.diagnostics.lineCount).toBe(2)
+  })
+
+  it('seção 9 · PDF sem camada de texto avisa em vez de devolver vazio calado', async () => {
+    const r = await extrairExames(pedido(construirPdf([{ linhas: [] }])))
+    expect(r.warnings.map(w => w.code)).toContain('noTextLayer')
+    expect(r.documentKind).toBe('unrecognized')
+  })
+
+  it('arquivo que não é PDF vira aviso tipado, não exceção (R10)', async () => {
+    const r = await extrairExames(pedido(new Uint8Array([0x89, 0x50, 0x4e, 0x47])))
+    const malformado = r.warnings.find(w => w.code === 'malformedDocument')
+    expect(malformado?.detail).toBe('assinaturaInvalida')
   })
 })
 

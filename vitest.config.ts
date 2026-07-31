@@ -9,5 +9,11 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['lib/**/*.test.ts'],
+    // O pdfjs avisa sobre canvas e fontes padrão a cada documento lido. Não
+    // afeta a extração de texto (as larguras medidas são idênticas com e sem
+    // as fontes), mas afogaria a saída dos testes. Filtra só esse ruído
+    // conhecido — qualquer outra saída continua visível.
+    onConsoleLog: (log) =>
+      !/Cannot polyfill|fetchStandardFontData|standardFontDataUrl|Require stack|pdfjs-dist/.test(log),
   },
 })
