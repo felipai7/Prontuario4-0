@@ -1,6 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getAI, generateWithFallback } from '@/lib/ai'
+import { featureFlags } from '@/lib/featureFlags'
+import { extrairExames } from '@/lib/exames/extracao'
+import { adaptarParaExames, type ExameParaSalvar } from '@/lib/exames/adaptador'
+
+/**
+ * Extração LOCAL, sem mandar o PDF para lugar nenhum.
+ *
+ * Decisão Q6 (01/08/2026): laudos dos laboratórios reconhecidos são lidos aqui;
+ * só documento não reconhecido cai na IA. Devolve `null` quando não reconheceu
+ * nada — e é o chamador que decide se aciona o fallback.
+ *
+ * Nenhum conteúdo do laudo aparece em erro nem em log (R10): o módulo não
+ * lança, e o que ele devolve de diagnóstico são contadores e um hash.
+ */
+async function extrairLocalmente(base64: string): Promise<{
+  exames: ExameParaSalvar[]
+  laboratorio: string | null
+  avisos: string[]
+} | null> {
+  const bytes = new Uint8Array(Buffer.from(base64, 'base64'))
+  const resultado = await extrairExames({
+    document: { bytes, filename: null },
+    hints: null,
+    options: null,
+  })
+  if (resultado.observations.length === 0) return null
+  return {
+    exames: adaptarParaExames(resultado),
+    laboratorio: resultado.detection.profileId,
+    avisos: resultado.warnings.map(w => w.code),
+  }
+}
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -16,6 +48,22 @@ export async function POST(request: NextRequest) {
     // images: [{ base64, mediaType }]  — multi-image paste
     // base64 + mediaType               — single file upload
     // rawText                          — plain text paste
+
+    // ── Caminho local ──────────────────────────────────────────────────────
+    // Só para PDF: prints colados e texto colado continuam indo para a IA,
+    // porque a camada de texto trabalha sobre o arquivo.
+    if (featureFlags.extracaoLocal && base64 && mediaType === 'application/pdf') {
+      const local = await extrairLocalmente(base64)
+      if (local) {
+        return NextResponse.json({
+          via: 'local',
+          laboratorio: local.laboratorio,
+          exames: local.exames,
+          avisos: local.avisos,
+        })
+      }
+      // Não reconhecido: segue para a IA, e o resultado nasce para revisão.
+    }
 
     const ai = getAI()
 
@@ -59,6 +107,7 @@ export async function POST(request: NextRequest) {
       null
 
     return NextResponse.json({
+      via: 'ia',
       tipo_exame:  parsed?.tipo_exame  || 'Exame',
       data_exame:  parsed?.data_exame  || null,
       resultados:  parsed?.resultados  || null,

@@ -368,12 +368,28 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
       })
       const data = await resp.json()
       if (!resp.ok) throw new Error(data.error)
-      await supabase.from('exames').insert({
-        paciente_id: paciente.id, tipo_exame: data.tipo_exame,
-        data_exame: data.data_exame, resultados: data.resultados,
-        observacoes: data.observacoes, raw_text: data.raw_text, nome_arquivo: file.name,
-      })
-      resetAdding(); onRefresh(); showToast('Exame extraído e salvo!')
+
+      // A extração local devolve UM REGISTRO POR DATA DE COLETA: um laudo com
+      // coletas de dois dias vira dois exames, cada resultado na data em que
+      // foi colhido. A IA continua devolvendo um só.
+      const linhas = data.via === 'local'
+        ? (data.exames as { tipo_exame: string; data_exame: string | null; resultados: unknown; observacoes: string | null }[])
+        : [{ tipo_exame: data.tipo_exame, data_exame: data.data_exame, resultados: data.resultados, observacoes: data.observacoes }]
+
+      await supabase.from('exames').insert(linhas.map(l => ({
+        paciente_id: paciente.id, tipo_exame: l.tipo_exame,
+        data_exame: l.data_exame, resultados: l.resultados,
+        observacoes: l.observacoes,
+        raw_text: data.via === 'local' ? null : data.raw_text,
+        nome_arquivo: file.name,
+      })))
+
+      resetAdding(); onRefresh()
+      showToast(
+        linhas.length > 1
+          ? `Laudo com ${linhas.length} datas de coleta: ${linhas.length} exames salvos!`
+          : 'Exame extraído e salvo!',
+      )
     } catch (e: any) { setLocalErr(e.message) }
     setExtracting(false)
   }

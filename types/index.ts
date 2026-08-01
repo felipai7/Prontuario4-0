@@ -26,11 +26,34 @@ export interface Paciente {
 
 export interface ResultadoExame {
   nome: string
+  /** Como exibir: preserva a grafia do laudo, inclusive "< 5,0". */
   valor: string
   unidade: string | null
   referencia: string | null
   alterado: boolean
   direcao: 'alto' | 'baixo' | 'normal' | 'qualitativo'
+
+  // ── Campos do extrator determinístico ────────────────────────────────────
+  // Opcionais porque exames salvos antes dele não os têm. A coluna `resultados`
+  // é jsonb, então acrescentá-los não exigiu migração: linha antiga continua
+  // válida, linha nova carrega mais informação.
+
+  /**
+   * O número, separado do texto. "< 5,0" tem `valor_num` 5 e `censura` 'lt'.
+   *
+   * Sem isto, um resultado censurado não entra em gráfico nem em cálculo: ele
+   * é só uma string. E "< 5,0" guardado como 0 — o que o clinBoard fazia —
+   * vira um valor normal indistinguível de um zero de verdade.
+   */
+  valor_num?: number | null
+  /** Operador do valor censurado. Quatro, não dois: `<` e `≤` são diferentes. */
+  censura?: 'lt' | 'lte' | 'gt' | 'gte' | null
+  /** Identificador do analito no catálogo, quando reconhecido. */
+  analito_id?: string | null
+  /** Marcado pelo extrator como pendente de conferência humana. */
+  revisar?: boolean
+  /** Por que precisa de revisão — em português, para a tela mostrar direto. */
+  motivos_revisao?: string[]
 }
 
 export interface Exame {
