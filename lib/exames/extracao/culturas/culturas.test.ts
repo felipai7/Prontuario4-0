@@ -209,6 +209,46 @@ describe('ausência de crescimento no campo do isolado', () => {
   })
 })
 
+describe('vigilância epidemiológica não é sinônimo de MRSA', () => {
+  // Correção clínica de 01/08/2026. O catálogo do clinBoard colapsa TODA
+  // cultura de vigilância em "MRSA". Nos laudos do corpus, a vigilância por
+  // swab anal declara textualmente que pesquisou "Enterococcus resistentes a
+  // Vancomicina" — é VRE, e MRSA é Staphylococcus aureus. Rotular um pelo
+  // outro no prontuário afirma um germe que o exame não procurou.
+  it('vigilância por swab anal NÃO vira MRSA', async () => {
+    const r = await extrair([
+      'CULTURA DE VIGILÂNCIA EPIDEMIOLÓGICA - SWAB ANAL',
+      'Material: Swab anal   Coleta...: 28/07/2026 - 10:00',
+      'Neste exame foram pesquisados:',
+      'Enterococcus resistentes a Vancomicina',
+    ])
+    expect(r.cultures[0]!.specimen).toBe('Cultura de Vigilância')
+    expect(r.cultures[0]!.specimen).not.toMatch(/MRSA/)
+  })
+
+  it('quando o laudo DIZ pesquisa de MRSA, o nome carrega o germe', async () => {
+    const r = await extrair([
+      'CULTURA DE VIGILÂNCIA - PESQUISA DE MRSA',
+      'Material: Swab nasal   Coleta...: 28/07/2026 - 10:00',
+      'Não houve desenvolvimento de Staphylococcus aureus resistente a meticilina',
+    ])
+    expect(r.cultures[0]!.specimen).toBe('Vigilância MRSA')
+    expect(r.cultures[0]!.growth).toBe('noGrowth')
+  })
+
+  it('a chave mais específica vence a mais genérica', async () => {
+    // "CULTURA DE VIGILÂNCIA - PESQUISA DE MRSA" casa com duas entradas do
+    // catálogo. Escolher a primeira do objeto fazia o exame que procurou MRSA
+    // perder o nome do germe que procurou.
+    const generico = await extrair([
+      'CULTURA DE VIGILÂNCIA EPIDEMIOLÓGICA',
+      'Material: Swab anal   Coleta...: 28/07/2026 - 10:00',
+      'Bactéria isolada....: Escherichia coli',
+    ])
+    expect(generico.cultures[0]!.specimen).toBe('Cultura de Vigilância')
+  })
+})
+
 describe('camada de texto corrompida', () => {
   it('R1 · texto ilegível é reconhecido como tal', () => {
     // Reproduz o estrago real de um laudo do corpus: bytes UTF-16 com a ordem

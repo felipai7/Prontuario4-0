@@ -1200,6 +1200,20 @@
       "plausibleRange": null,
       "valueKind": "numeric"
     },
+    "cultura.de.vigilancia.serum": {
+      "canonicalName": "Cultura de Vigilância",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "cultura.de.vigilancia.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
     "dengue.igg.serum": {
       "canonicalName": "Dengue IgG",
       "category": null,
@@ -3653,6 +3667,20 @@
       "plausibleRange": null,
       "valueKind": "numeric"
     },
+    "swab.anal.serum": {
+      "canonicalName": "Swab Anal",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "swab.anal.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
     "swab.nasal.serum": {
       "canonicalName": "Swab Nasal",
       "category": null,
@@ -4153,6 +4181,20 @@
       "needsClinicalReview": true,
       "origem": [
         "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "vigilancia.mrsa.serum": {
+      "canonicalName": "Vigilância MRSA",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "vigilancia.mrsa.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "regra"
       ],
       "plausibleRange": null,
       "valueKind": "numeric"

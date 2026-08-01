@@ -28,6 +28,16 @@ import culturas from '../catalogo/culturas.json'
 
 const MATERIAIS = culturas.materials as Record<string, string>
 
+/**
+ * As chaves ordenadas da mais longa para a mais curta.
+ *
+ * Casar por prefixo exige escolher a mais específica: senão "CULTURA DE
+ * VIGILÂNCIA - PESQUISA DE MRSA" cai em "CULTURA DE VIGILÂNCIA" e o exame
+ * perde o germe que de fato procurou.
+ */
+const CHAVES_POR_ESPECIFICIDADE = Object.entries(MATERIAIS)
+  .sort((a, b) => b[0].length - a[0].length)
+
 /** Cabeçalho que abre um bloco de cultura. */
 const RE_CABECALHO_CULTURA =
   /^(?:hemocultura|urocultura|urinocultura|coprocultura|cultura\b|swab\b|aspirado\b|secre[çc][ãa]o\b|pesquisa\s+de\s+mrsa)/i
@@ -137,12 +147,13 @@ function materialDe(titulo: string): string {
     .replace(/\s*\+\s*TSA\s*$/, '')
     .replace(/\s+/g, ' ')
     .trim()
-  for (const [chave, canonico] of Object.entries(MATERIAIS)) {
-    if (alvo.startsWith(chave)) return canonico
-  }
+  // Da chave MAIS ESPECÍFICA para a mais genérica. "CULTURA DE VIGILÂNCIA -
+  // PESQUISA DE MRSA" casa com duas entradas, e a genérica ("CULTURA DE
+  // VIGILÂNCIA") vinha primeiro por acaso da ordem do objeto — o exame que
+  // procurou MRSA perdia o nome do germe que procurou.
   const original = titulo.toUpperCase().replace(/\s+/g, ' ').trim()
-  for (const [chave, canonico] of Object.entries(MATERIAIS)) {
-    if (original.startsWith(chave)) return canonico
+  for (const [chave, canonico] of CHAVES_POR_ESPECIFICIDADE) {
+    if (original.startsWith(chave) || alvo.startsWith(chave)) return canonico
   }
   return titulo.trim()
 }

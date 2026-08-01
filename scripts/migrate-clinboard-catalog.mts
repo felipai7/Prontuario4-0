@@ -450,7 +450,35 @@ for (const ctx of ['Arterial', 'Venosa']) {
     geradosPorRegra.push(especial as string)
   }
 }
+/**
+ * Correção clínica de 01/08/2026 nos materiais de cultura.
+ *
+ * O doador colapsa TODA cultura de vigilância em "MRSA". Nos laudos do corpus,
+ * "CULTURA DE VIGILÂNCIA EPIDEMIOLÓGICA - SWAB ANAL" declara textualmente que
+ * pesquisou "Enterococcus resistentes a Vancomicina" — é VRE, e MRSA é
+ * Staphylococcus aureus. Rotular um pelo outro no prontuário afirma um germe
+ * que o exame não procurou.
+ *
+ * A correção não substitui um palpite por outro: a vigilância genérica passa a
+ * se chamar apenas "Cultura de Vigilância", sem afirmar alvo nenhum. Só quando
+ * o laudo DIZ "pesquisa de MRSA" é que o nome carrega o germe.
+ */
+const CULTURAS_CORRIGIDAS: Record<string, string> = {
+  ...(D.CULTURE_TYPES as Record<string, string>),
+  'CULTURA DE VIGILÂNCIA': 'Cultura de Vigilância',
+  'CULTURA DE VIGILANCIA': 'Cultura de Vigilância',
+  'CULTURA DE VIGILÂNCIA EPIDEMIOLÓGICA': 'Cultura de Vigilância',
+  'CULTURA DE VIGILANCIA EPIDEMIOLOGICA': 'Cultura de Vigilância',
+  'CULTURA DE VIGILÂNCIA - PESQUISA DE MRSA': 'Vigilância MRSA',
+  'PESQUISA DE MRSA': 'Vigilância MRSA',
+  'SWAB ANAL': 'Swab Anal',
+  'SWAB NASAL': 'Swab Nasal',
+  'VIGILÂNCIA': 'Cultura de Vigilância',
+  'VIGILANCIA': 'Cultura de Vigilância',
+}
+
 for (const nome of Object.values(D.CULTURE_TYPES as Record<string, string>)) geradosPorRegra.push(nome)
+for (const nome of Object.values(CULTURAS_CORRIGIDAS)) geradosPorRegra.push(nome)
 
 for (const nome of geradosPorRegra) {
   const id = registrarAnalito(nome, 'regra')
@@ -483,9 +511,16 @@ for (const [, nomes] of porChaveFrouxa) {
 // Esperado hoje: zero. Se um dia aparecer item aqui, é uma regra nova emitindo
 // nome que ninguém cadastrou — a família exata do E2.
 const vocabularioDoador = new Set([...(D.PARAM_WHITELIST as Set<string>)].map(chaveSinonimo))
+// Vocabulário NOVO, autorado aqui por decisão clínica: não estar no doador é o
+// esperado, não um conflito. O que este cheque procura é regra emitindo nome
+// que NINGUÉM cadastrou.
+const autorados = new Set(
+  ['Cultura de Vigilância', 'Vigilância MRSA', 'Swab Anal', 'Swab Nasal']
+    .map(chaveSinonimo),
+)
 for (const nome of [...new Set(geradosPorRegra)].sort()) {
   const k = chaveSinonimo(nome)
-  if (!vocabularioDoador.has(k)) {
+  if (!vocabularioDoador.has(k) && !autorados.has(k)) {
     conflitos.push({ tipo: 'geradoPorRegraForaDoVocabulario', detalhe: `"${nome}"` })
   }
 }
@@ -540,7 +575,7 @@ escrever('qualitativos.json', {
   // Continua visível em `discarded[]` com motivo `notUsedClinically` (R1).
   notUsedClinically: NAO_USADOS,
 })
-escrever('culturas.json', { version: VERSAO, materials: D.CULTURE_TYPES })
+escrever('culturas.json', { version: VERSAO, materials: CULTURAS_CORRIGIDAS })
 escrever('descartes.json', { version: VERSAO, skipNames: [...(D.SKIP_NAMES as Set<string>)].sort() })
 // Marcadores acrescentados a partir do corpus de culturas, que o doador não
 // cobria: "Coletado em (20/07/2026 16:54)" e "Coleta...: 27/07/2026 - 08:40".
