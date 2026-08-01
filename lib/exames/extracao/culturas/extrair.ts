@@ -24,6 +24,7 @@ import type {
 } from '../contratos'
 import { marcadorDeColeta } from '../normalizadores/data'
 import { separarColunas } from '../extratores/colunas'
+import { ehRotuloDeMetadado } from '../extratores/metadados'
 import culturas from '../catalogo/culturas.json'
 
 const MATERIAIS = culturas.materials as Record<string, string>
@@ -42,8 +43,24 @@ const CHAVES_POR_ESPECIFICIDADE = Object.entries(MATERIAIS)
 const RE_CABECALHO_CULTURA =
   /^(?:hemocultura|urocultura|urinocultura|coprocultura|cultura\b|swab\b|aspirado\b|secre[çc][ãa]o\b|pesquisa\s+de\s+mrsa)/i
 
-/** Layout A: o isolado vem rotulado. */
-const RE_ISOLADO_A = /^(?:bact[ée]ria\s+isolada|micro-?organismo\s+isolado|agente\s+isolado)\s*[.:]+\s*(.+)$/i
+/**
+ * Layout A: o isolado vem rotulado.
+ *
+ * `Resultado` entra na lista porque a cultura de VIGILÂNCIA do IMEC usa esse
+ * rótulo para o germe: "Resultado...........: Klebsiella pneumoniae". Sem ele,
+ * uma vigilância POSITIVA para enterobactéria produtora de ESBL era registrada
+ * como indeterminada e sem isolado — e vigilância positiva define precaução de
+ * contato.
+ *
+ * Só vale DENTRO de um bloco de cultura, e só quando o valor não é número:
+ * "Resultado: 154,1" num laudo bioquímico é valor de exame, e pertence ao
+ * matcher de bloco.
+ */
+const RE_ISOLADO_A =
+  /^(?:bact[ée]ria\s+isolada|micro-?organismo\s+isolado|agente\s+isolado|resultados?)\s*[.:]+\s*(.+)$/i
+
+/** Um organismo é texto, não número. Barra "Resultado: 154,1" de virar isolado. */
+const RE_NAO_ORGANISMO = /^[<>=]?\s*[\d.,]+\s*[A-Za-zµ%/³]*\s*$/
 
 /** Layout B: isolados numerados, com a contagem colada. */
 const RE_ISOLADO_B = /^micro-?organismo\s*\[(\d+)\]\s*[.:]+\s*(.+)$/i
@@ -348,6 +365,13 @@ export function extrairCulturas(
       const bruto = a?.[1] ?? b?.[2]
       if (!bruto) continue
       const organismo = bruto.replace(/\s{2,}.*$/, '').trim()
+      // Nome de organismo não é número nem rótulo do laudo. Sem esta guarda,
+      // "Resultado:   Valor de referência :" — o cabeçalho de duas colunas da
+      // tabela — virava um isolado chamado "Valor de referência", e a cultura
+      // saía POSITIVA por causa dele.
+      if (RE_NAO_ORGANISMO.test(organismo)) continue
+      if (ehRotuloDeMetadado(organismo)) continue
+      if (RE_SEM_CRESCIMENTO.test(organismo)) { linhasUsadas.add(linha.index); continue }
       linhasUsadas.add(linha.index)
       if (!organismo || vistos.has(organismo)) continue
       // "Bactéria isolada: NÃO HOUVE CRESCIMENTO DE BACTÉRIAS." — o campo do
