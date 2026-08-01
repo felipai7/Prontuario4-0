@@ -199,18 +199,40 @@ describe('termo de crescimento no lugar do valor, fora de bloco de cultura', () 
   })
 })
 
-// ── 6. Bloco cujo título traz a sigla entre parênteses ─────────────────────
-// 3 ocorrências (IMEC1, IMEC4, IMEC5). O título é
-// "TEMPO DE TROMBOPLASTINA PARCIAL ATIVADO (TTPA)" e o valor vem abaixo; o
-// matcher de bloco procura o nome acima e não o reconhece por extenso.
-describe('lacuna · título de bloco com a sigla entre parênteses', () => {
-  it.fails('o TTPA deveria ser extraído do bloco cujo título traz a sigla', async () => {
+// ── 6. Bloco cujo título traz a sigla entre parênteses — CORRIGIDA ─────────
+// 3 ocorrências (IMEC1, IMEC4, IMEC5). Duas causas somadas: o título tem 46
+// caracteres e caía na guarda de metadado (limite 42, feita para separar
+// rótulo de prosa), e mesmo passando dela a frase por extenso não está no
+// catálogo — quem está é a sigla.
+describe('título de bloco com a sigla entre parênteses', () => {
+  it('o TTPA é extraído do bloco cujo título traz a sigla', async () => {
     const r = await extrair([
       'TEMPO DE TROMBOPLASTINA PARCIAL ATIVADO (TTPA)',
       'Coleta: 12/05/2026',
       'Resultado: 25,6  segundos',
     ])
     expect(nomes(r)).toContain('TTPA')
+    expect(r.observations[0]!.value).toMatchObject({ kind: 'numeric', value: 25.6 })
+  })
+
+  it('o texto por extenso também vale quando é ele que está no catálogo', async () => {
+    const r = await extrair([
+      'DOSAGEM DE CREATININA (CREA)',
+      'Coleta: 12/05/2026',
+      'Resultado: 1,42  mg/dL',
+    ])
+    expect(nomes(r)).toContain('Creatinina')
+  })
+
+  it('título longo que NÃO resolve continua sendo tratado como prosa', async () => {
+    // A guarda de comprimento só é dispensada quando alguma variante do nome
+    // resolve no catálogo. Sem isso, qualquer frase longa viraria exame.
+    const r = await extrair([
+      'Observação: amostra coletada em condições inadequadas de jejum (repetir)',
+      'Coleta: 12/05/2026',
+      'Resultado: 9,9  mg/dL',
+    ])
+    expect(r.observations).toHaveLength(0)
   })
 })
 

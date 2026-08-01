@@ -16,7 +16,7 @@
 // não têm como se confundir, porque nenhum dos dois escreve em lugar nenhum.
 // ══════════════════════════════════════════════════════════════════════════
 
-import type { Matcher, MatchOutcome, ParseContext, Segment, TextLine } from '../contratos'
+import type { Matcher, MatchOutcome, ParseContext, Segment, SpecimenContext, TextLine } from '../contratos'
 import { separarColunas, separarValorUnidade, pareceReferencia } from './colunas'
 import { resolverAnalito } from '../catalogo'
 import { ehNaoUsadoClinicamente } from '../normalizadores/valor'
@@ -31,10 +31,38 @@ const RE_LINHA_REFERENCIA = /^\s*valor(?:es)?\s+de\s+refer[êe]ncia\s*[:.]?/i
 /** Quantas linhas para trás procurar o nome do exame. */
 const ALCANCE = 6
 
-/** Um nome de exame candidato: sem dígito, sem dois-pontos, curto. */
-function pareceNomeDeExame(texto: string): boolean {
+/**
+ * Formas sob as quais um título de bloco pode estar no catálogo.
+ *
+ * Os laudos escrevem o exame por extenso com a sigla entre parênteses —
+ * "TEMPO DE TROMBOPLASTINA PARCIAL ATIVADO (TTPA)". O catálogo conhece a
+ * sigla, não a frase. Testar só o texto inteiro perdia o bloco todo.
+ */
+function variantesDeNome(texto: string): string[] {
   const t = texto.trim()
-  return t.length >= 2 && !/\d/.test(t) && !t.includes(':') && !ehRotuloDeMetadado(t)
+  const variantes = [t]
+  const sigla = t.match(/\(([^)]{2,12})\)\s*$/)
+  if (sigla) {
+    variantes.push(sigla[1]!.trim())
+    variantes.push(t.replace(/\s*\([^)]*\)\s*$/, '').trim())
+  }
+  return variantes.filter(Boolean)
+}
+
+/**
+ * Um nome de exame candidato: sem dígito, sem dois-pontos.
+ *
+ * O limite de comprimento da guarda de metadado (42 caracteres, feito para
+ * separar rótulo de prosa) reprova títulos legítimos como o do TTPA, que tem
+ * 46. Por isso a guarda é dispensada quando ALGUMA variante do nome resolve no
+ * catálogo: constar do vocabulário clínico é evidência mais forte do que o
+ * comprimento da linha.
+ */
+function pareceNomeDeExame(texto: string, especime: SpecimenContext): boolean {
+  const t = texto.trim()
+  if (t.length < 2 || /\d/.test(t) || t.includes(':')) return false
+  if (variantesDeNome(t).some(v => resolverAnalito(v, especime))) return true
+  return !ehRotuloDeMetadado(t)
 }
 
 export const matcherBloco: Matcher = {
@@ -57,8 +85,10 @@ export const matcherBloco: Matcher = {
     let nome: string | null = null
     for (let i = posicao - 1; i >= 0 && i >= posicao - ALCANCE; i--) {
       const candidato = segment.lines[i]!.text.trim()
-      if (!pareceNomeDeExame(candidato)) continue
-      if (resolverAnalito(candidato, segment.specimen)) { nome = candidato; break }
+      if (!pareceNomeDeExame(candidato, segment.specimen)) continue
+      const reconhecida = variantesDeNome(candidato)
+        .find(v => resolverAnalito(v, segment.specimen))
+      if (reconhecida) { nome = reconhecida; break }
       // Um título que o catálogo não conhece ainda vale como nome: quem decide
       // se o exame é reconhecido é a etapa seguinte, com registro.
       if (nome === null) nome = candidato
