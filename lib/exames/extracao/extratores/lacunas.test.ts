@@ -253,3 +253,42 @@ describe('não é lacuna · cultura vive em cultures[], não em observations[]',
     expect(nomes(r)).not.toContain('Hemocultura')
   })
 })
+
+// ── 8. O doador está ERRADO e divergimos de propósito ──────────────────────
+// A contrapartida do arquivo: aqui a paridade acusa "regressão" e a regressão
+// é dele. O clinBoard não sufixa o espécime, então a glicose do LÍQUOR sai
+// como "Glicose" — indistinguível de glicemia. Num laudo real do IMEC isso
+// gravava 166 mg/dL de LCR como se fosse a glicemia do paciente.
+//
+// Ligar a herança de espécime no IMEC custou 11 "regressões" de paridade, e
+// as 11 são este acerto. Por isso a decisão está no perfil e o guarda está
+// aqui: se alguém desligar a herança para "melhorar a paridade", quebra.
+describe('não é lacuna · o espécime do líquor não se perde na subseção neutra', () => {
+  const LAUDO = [
+    'ROTINA DE LÍQUOR',
+    'Material: Liquor   Coleta...: 12/05/2026 - 19:10',
+    'Aspecto:   Límpido.   Límpido',
+    'BIOQUIMICA',
+    'Glicose:   166   mg/dL   40 - 70',
+    'Proteínas:   28   mg/dL   15 - 45',
+  ]
+
+  // `hints` porque a fixture sintética não carrega a impressão digital do
+  // laboratório, e a herança de espécime é dado do PERFIL (A3).
+  const extrairComoImec = () => extrairExames({
+    document: { bytes: pdfDeLinhas(LAUDO), filename: null },
+    hints: { labProfileId: 'imec', expectedCollectedAt: null },
+    options: null,
+  })
+
+  it('a glicose do líquor NUNCA é gravada como glicemia', async () => {
+    const r = await extrairComoImec()
+    expect(nomes(r)).toContain('Glicose (LCR)')
+    expect(nomes(r)).not.toContain('Glicose')
+  })
+
+  it('a subseção neutra não interrompe o contexto de líquor', async () => {
+    const r = await extrairComoImec()
+    expect(nomes(r)).toContain('Proteínas (LCR)')
+  })
+})

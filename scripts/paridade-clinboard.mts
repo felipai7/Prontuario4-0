@@ -156,6 +156,18 @@ for (const arquivo of arquivos) {
   // fosse um exame de valor. Aqui a cultura vive em `cultures[]`, com material,
   // isolados e antibiograma. O dado E extraido — muda o lugar, nao a presenca.
   // Sem isto, seis culturas contavam como regressao.
+  // O doador rotula o exame de LÍQUOR sem sufixo: a glicose do liquor sai como
+  // "Glicose", igual à glicemia. Quando temos o mesmo exame COM sufixo de
+  // espécime, não é ausência — é o mesmo dado, mais preciso. Sem esta regra a
+  // paridade PREMIA a resposta errada, e foi o que quase me fez desligar a
+  // herança de líquor no IMEC.
+  const comSufixo = new Map<string, any>()
+  for (const o of novo.observations) {
+    if (!o.canonicalName) continue
+    const m = o.canonicalName.match(/^(.*?)\s*\((LCR|U|Arterial|Venosa)\)\s*$/)
+    if (m) comSufixo.set(chave(m[1]!), o)
+  }
+
   const materiaisDeCultura = new Set(novo.cultures.map((c: any) => chave(c.specimen)))
   const ehCultura = (nome: string) => {
     const k = chave(nome)
@@ -168,6 +180,18 @@ for (const arquivo of arquivos) {
     const b = porNomeNovo.get(k)
     if (!b) {
       soDoador++
+      const maisPreciso = comSufixo.get(k)
+      if (maisPreciso) {
+        divergencias.push({
+          arquivo: rotulo, exame: a.name,
+          unidade: '', referencia: '', data: a.date ?? '',
+          categoria: 'correcaoIntencional',
+          motivo: `o doador não sufixa o espécime; aqui é "${maisPreciso.canonicalName}"`,
+          clinboard: `${a.value ?? '—'}`,
+          novo: maisPreciso.value?.kind === 'numeric' ? String(maisPreciso.value.value) : String(maisPreciso.value?.kind),
+        })
+        continue
+      }
       if (novo.cultures.length > 0 && ehCultura(a.name)) {
         divergencias.push({
           arquivo: rotulo, exame: a.name,

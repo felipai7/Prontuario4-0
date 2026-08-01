@@ -151,37 +151,39 @@ describe('A3 · regra de bloco de referência é dado do perfil', () => {
 })
 
 describe('A3 · regra de espécime é dado do perfil', () => {
-  it('só o HOC herda o espécime através de subseção neutra', () => {
-    // Num laudo de líquor do HOC, a subseção "BIOQUÍMICA" continua sendo
-    // líquor — a glicose ali é do líquor, não glicemia. Num laudo de líquor do
-    // IMEC ela é SÉRICA, porque aquele arquivo mistura os dois materiais.
+  it('HOC e IMEC herdam o espécime através de subseção neutra', () => {
+    // Num laudo de líquor, a subseção "BIOQUÍMICA" continua sendo líquor: a
+    // glicose ali é do líquor, não glicemia. Sem a herança, o IMEC gravava a
+    // glicose de 166 mg/dL do LCR como se fosse glicemia do paciente.
     //
-    // Medido sobre o corpus. Primeira rodada, seis combinações:
-    //   base                        64 regressões · 609 idênticos
-    //   HOC herda                   56 regressões · 616 idênticos  ← escolhido
-    //   IMEC pela linha "Material" 102 regressões · 567 idênticos
-    //   HOC herda + IMEC material   94 regressões · 574 idênticos
-    //   todos herdam                67 regressões · 607 idênticos
-    //   todos pela linha Material  122 regressões · 553 idênticos
-    //
-    // Segunda rodada, já com o extrator bem melhor, tentando fechar os quatro
-    // itens do líquor do IMEC:
-    //   base                        17 regressões · 655 idênticos  ← mantido
+    // ATENÇÃO A QUEM FOR MEXER AQUI. A medição contra o doador diz o
+    // CONTRÁRIO, e por três rodadas ela mandou nesta decisão:
+    //   base (só HOC herda)         17 regressões · 655 idênticos
     //   IMEC herda csf + urine      28 regressões · 646 idênticos
     //   IMEC herda só csf           28 regressões · 646 idênticos
-    //   HOC e IMEC herdam só csf    28 regressões · 646 idênticos
     //
-    // A conclusão não mudou, e agora está medida duas vezes: o laudo de líquor
-    // do IMEC MISTURA líquor e sangue no mesmo arquivo — há um bloco de 22
-    // linhas de bioquímica sérica depois da parte do líquor. Qualquer regra
-    // posicional que estenda o contexto de líquor engole essa parte, e troca
-    // quatro exames por onze.
+    // As "11 regressões a mais" são o doador estando errado. Ele não sufixa o
+    // espécime: a glicose do líquor sai como "Glicose", igual à glicemia. Ao
+    // acertar, deixamos de casar com ele — e a paridade, que compara por nome,
+    // chama de ausência o que é correção. Extraído do arquivo real:
+    //
+    //   sem herança (11):  pH, Glicose, Cloro, Hemácias, Neutrófilos…
+    //   com herança (16):  pH (LCR), Glicose (LCR), Cloretos (LCR),
+    //                      Proteínas (LCR), Bacterioscopia Gram (LCR)…
+    //
+    // Com a herança ligada recuperamos 5 exames E rotulamos os 16 certo.
+    // `paridade-clinboard.mts` hoje classifica esse par como correção
+    // intencional, e não como regressão.
+    //
+    // A lição não é sobre líquor: PARIDADE NÃO É CORREÇÃO. Onde o doador erra,
+    // medir contra ele premia o erro. Antes de desfazer algo "porque a
+    // paridade piorou", olhe QUAIS itens divergiram.
     //
     // A "prova pela linha Material:", tentada por intuição, é prejudicial em
-    // TODOS os cenários. Fica no contrato, desligada, com a medição registrada
-    // — para ninguém tentar de novo achando que é óbvia.
+    // todos os cenários — e ali a piora é real, são exames perdidos, não
+    // renomeados. Fica no contrato, desligada, com a medição registrada.
     const herdam = PERFIS.filter(p => p.specimen.inherit.length > 0).map(p => p.id)
-    expect(herdam).toEqual(['hoc'])
+    expect(herdam).toEqual(['hoc', 'imec'])
   })
 
   it('nenhum perfil usa a linha "Material:" como prova de espécime', () => {
