@@ -2702,6 +2702,20 @@
       "plausibleRange": null,
       "valueKind": "numeric"
     },
+    "mieloblastos.serum": {
+      "canonicalName": "Mieloblastos",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "mieloblastos.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "corpus"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
     "mielocitos.serum": {
       "canonicalName": "Mielócitos",
       "category": null,
@@ -2865,6 +2879,7 @@
       "origem": [
         "GASO_PARAMS",
         "PARAM_WHITELIST",
+        "corpus",
         "regra"
       ],
       "plausibleRange": null,
@@ -2881,6 +2896,7 @@
       "origem": [
         "GASO_PARAMS",
         "PARAM_WHITELIST",
+        "corpus",
         "regra"
       ],
       "plausibleRange": null,

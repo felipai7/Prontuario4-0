@@ -190,6 +190,19 @@ const DESCRICAO_FISICA = [
  */
 const NAO_USADOS = ['IMUNE', 'NÃO IMUNE', 'NAO IMUNE']
 
+/**
+ * Grafias que o LIS usa e o doador não cobria.
+ *
+ * A seção 8.1 avisa que estes laudos grafam o oxigênio de forma irregular — o
+ * catálogo herdado já trazia "02 SAT" com o DÍGITO ZERO no lugar da letra O.
+ * Faltava a forma COLADA, sem separador nenhum, que é a que o IMEC usa: sete
+ * saturações perdidas no corpus por causa de um espaço.
+ */
+const SINONIMOS_EXTRA: Record<string, string> = {
+  'O2SAT': 'O2 Sat', '02SAT': 'O2 Sat', 'SATO2': 'O2 Sat', 'SAT O2': 'O2 Sat',
+  'MIELOBLASTOS': 'Mieloblastos',
+}
+
 // ── Diferencial leucocitário (decisão clínica de 31/07/2026) ────────────────
 //
 // O laudo traz DOIS números na mesma linha:
@@ -206,6 +219,8 @@ const CELULAS_DIFERENCIAL = [
   'Promielócitos', 'Mielócitos', 'Metamielócitos', 'Bastonetes', 'Segmentados',
   'Neutrófilos', 'Eosinófilos', 'Basófilos', 'Linfócitos', 'Linfócitos Atípicos',
   'Monócitos', 'Plasmócitos', 'Blastos',
+  // Faltava, e aparecia no HUGO. Sem ele a linha inteira caía em descarte.
+  'Mieloblastos',
 ]
 
 // ── Faixas de plausibilidade (decisão clínica de 31/07/2026) ────────────────
@@ -328,6 +343,14 @@ for (const nome of D.PARAM_WHITELIST as Set<string>) {
   sinonimos[chaveSinonimo(nome)] = id
 }
 
+// 1c) Grafias extras, autoradas a partir do corpus. As de gasometria entram
+//     no escopo dos dois contextos, como as demais do GASO_PARAMS.
+for (const [bruto, canonico] of Object.entries(SINONIMOS_EXTRA)) {
+  if (canonico === 'O2 Sat') continue // tratado abaixo, com escopo
+  const id = registrarAnalito(canonico, 'corpus')
+  sinonimos[chaveSinonimo(bruto)] = id
+}
+
 // 2) Vocabulário POR ESPÉCIME.
 //
 // R6: contexto de espécime é escopo léxico. "Glicose" dentro de uma seção de
@@ -393,6 +416,10 @@ for (const [contexto, especime] of [['Arterial', 'arterialBlood'], ['Venosa', 'v
   }
   for (const [bruto, canonico] of Object.entries((D.GASO_SPECIAL_NAMES as any)[contexto] ?? {})) {
     registrarPorEspecime(especime, bruto, canonico as string, 'GASO_SPECIAL_NAMES')
+  }
+  for (const [bruto, canonico] of Object.entries(SINONIMOS_EXTRA)) {
+    if (canonico !== 'O2 Sat') continue
+    registrarPorEspecime(especime, bruto, `${canonico} (${contexto})`, 'corpus')
   }
 }
 

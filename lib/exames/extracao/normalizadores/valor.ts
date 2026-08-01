@@ -19,6 +19,7 @@ import { converterNumero } from './numero'
 import type { ContextoNormalizacao } from './contexto'
 
 const CODIGOS = qualitativos.codes as Record<string, string>
+const CRESCIMENTO = qualitativos.growth as Record<string, string>
 const DESCRICAO_FISICA = new Set(qualitativos.physicalDescription)
 const NAO_USADOS = new Set(qualitativos.notUsedClinically)
 
@@ -91,13 +92,26 @@ export function interpretarValor(bruto: string, ctx: ContextoNormalizacao): Exam
   }
 
   // Vocabulário qualitativo.
-  const chave = chaveSinonimo(raw)
+  //
+  // O ponto final é pontuação de frase, não parte do termo: o líquor do IMEC
+  // escreve "Ausência de bactérias." e "Incolor.". Sem tirá-lo, o termo não
+  // casava com o vocabulário e o resultado virava texto solto — quatro exames
+  // no corpus. Só a pontuação de FIM sai; nada no meio, para não mexer em
+  // "1:80" nem em valores com vírgula.
+  const chave = chaveSinonimo(raw.replace(/[.;]+\s*$/, ''))
   const codigo = CODIGOS[chave]
   if (codigo) return { kind: 'qualitative', code: codigo as QualitativeCode, raw }
 
   // Descrição física (cor e aspecto do líquor e da urina): é TEXTO.
   // Decisão clínica de 31/07/2026 — "xantocrômico" não é resultado alterado.
   if (DESCRICAO_FISICA.has(chave)) return { kind: 'text', raw }
+
+  // Termo de crescimento de cultura aparecendo numa linha de resultado: no
+  // líquor, "Bactéria isolada" é parâmetro do laudo e o valor dele é a frase
+  // de crescimento. Ausência de crescimento é ausência — `absent`.
+  if (CRESCIMENTO[chave] === 'noGrowth') {
+    return { kind: 'qualitative', code: 'absent', raw }
+  }
 
   return { kind: 'text', raw }
 }

@@ -4,8 +4,8 @@ Gerado por `scripts/migrate-clinboard-catalog.mts`. Reexecutável.
 
 | Métrica | Valor |
 |---|---|
-| Sinônimos migrados | 790 |
-| Analitos distintos | 281 |
+| Sinônimos migrados | 791 |
+| Analitos distintos | 282 |
 | Nomes geráveis por regra | 72 |
 | Conflitos detectados | 0 |
 
@@ -15,7 +15,7 @@ Gerado por `scripts/migrate-clinboard-catalog.mts`. Reexecutável.
 
 Campos deixados em `null` porque preenchê-los seria inventar dado clínico:
 
-- `loinc` em todos os 281 analitos — o doador não tem LOINC. Nunca inventar.
+- `loinc` em todos os 282 analitos — o doador não tem LOINC. Nunca inventar.
 - `plausibleRange` em todos — é a faixa fisicamente possível, usada só para detectar erro de escala (potássio 7,2 lido como 0,72). Sem ela, o validador da F7 não protege contra erro de escala.
 - `defaultUnit` e `category` — o doador não os tem.
 - `unidades.json` — vazio; F4 popula a partir do corpus, sob revisão.

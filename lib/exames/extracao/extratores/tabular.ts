@@ -37,14 +37,39 @@ function absolutoDoDiferencial(
   campos: string[],
 ): { valor: string; unidade: string; referencia: string } | null {
   if (!CELULAS_DIFERENCIAL.has(nome.toUpperCase().replace(/\s+/g, ' '))) return null
-  const [v1, u1, v2, u2, r1, r2] = campos
-  const numero = /^[\d.,]+$/
-  if (!v1 || !u1 || !v2 || !u2) return null
-  if (!numero.test(v1) || !numero.test(v2)) return null
-  if (u1 !== '%' || !/\/\s*(mm3|mm³|µL|uL)/i.test(u2)) return null
-  // r1 é a faixa do percentual e r2 a do absoluto; com o absoluto vem r2.
-  void r1
-  return { valor: v2, unidade: u2, referencia: r2 ?? '' }
+
+  // Duas diagramações no corpus, conforme o laudo separe ou cole valor e
+  // unidade:
+  //   HOC    "0"  "%"  "125"  "/mm³"  "1 a 5"  "45 a 500"
+  //   HUGO   "0,0 %"   "125 uL"       "1 a 5 uL"
+  // Percorrer em pares fixos só funciona no primeiro. Aqui os campos viram
+  // pares (valor, unidade) qualquer que seja a diagramação.
+  const referencias = campos.filter(pareceReferencia)
+  const pares: { valor: string; unidade: string }[] = []
+  const restantes = campos.filter(c => !pareceReferencia(c))
+  const soNumero = /^[+-]?[\d.,]+$/
+  const soUnidade = /^[%A-Za-zµ³/]+$/
+
+  for (let i = 0; i < restantes.length; i++) {
+    const campo = restantes[i]!.trim()
+    if (soNumero.test(campo)) {
+      const proximo = restantes[i + 1]?.trim() ?? ''
+      if (soUnidade.test(proximo)) { pares.push({ valor: campo, unidade: proximo }); i++ }
+      else pares.push({ valor: campo, unidade: '' })
+      continue
+    }
+    const { valor, unidade } = separarValorUnidade(campo)
+    if (soNumero.test(valor)) pares.push({ valor, unidade })
+  }
+
+  const iPct = pares.findIndex(p => p.unidade === '%')
+  if (iPct < 0) return null
+  const abs = pares.slice(iPct + 1).find(p => /\/?\s*(mm3|mm³|µL|uL|mcL)/i.test(p.unidade))
+  if (!abs) return null
+
+  // Havendo duas faixas, a segunda é a do absoluto; havendo uma, é dele.
+  const referencia = referencias.length > 1 ? referencias[1]! : (referencias[0] ?? '')
+  return { valor: abs.valor, unidade: abs.unidade, referencia }
 }
 
 /** Parâmetros descartados de propósito dentro da gasometria, por redundância. */

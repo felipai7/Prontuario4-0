@@ -1,9 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import { extrairExames } from '../index'
-import { pdfDeLinhas } from '../_testes/pdfMinimo'
+import { pdfDeLinhas, pdfTabular } from '../_testes/pdfMinimo'
 
 // ══════════════════════════════════════════════════════════════════════════
-// LACUNAS CONHECIDAS — o que o clinBoard extrai e este módulo ainda não.
+// LACUNAS — o que o clinBoard extrai e este módulo não extraía.
+//
+// Cinco das sete famílias foram FECHADAS, e os `it.fails` correspondentes
+// viraram asserção normal no momento em que o defeito caiu — que é o serviço
+// que este arquivo presta. Sobra a família 6 (título de bloco com a sigla
+// entre parênteses).
 //
 // Cada bloco reproduz, em PDF sintético, o layout exato de um caso que a
 // paridade sobre o corpus real acusou como regressão. Os valores são
@@ -36,7 +41,7 @@ const nomes = (r: Awaited<ReturnType<typeof extrair>>) =>
 // todos com separador. A seção 8.1 já avisava que estes laudos grafam o
 // oxigênio de forma irregular — inclusive com o DÍGITO ZERO no lugar da letra
 // O ("02 SAT"), que o catálogo cobre.
-describe('lacuna · saturação de O2 grafada sem separador', () => {
+describe('saturação de O2 grafada sem separador', () => {
   const LAUDO = [
     'GASOMETRIA ARTERIAL',
     'Coleta: 12/05/2026',
@@ -48,7 +53,7 @@ describe('lacuna · saturação de O2 grafada sem separador', () => {
     expect(nomes(await extrair(LAUDO))).toContain('pH (Arterial)')
   })
 
-  it.fails('"O2SAT" colado deveria resolver para O2 Sat (Arterial)', async () => {
+  it('"O2SAT" colado resolve para O2 Sat (Arterial)', async () => {
     expect(nomes(await extrair(LAUDO))).toContain('O2 Sat (Arterial)')
   })
 })
@@ -127,29 +132,38 @@ describe('seção de cultura não engole mais o que vem depois', () => {
 // 2 ocorrências (HUGO1, HUGO2). "Mieloblastos" não está na lista de células
 // do diferencial nem no vocabulário. O HUGO ainda grafa a unidade como "uL",
 // e cola valor e unidade na mesma coluna.
-describe('lacuna · mieloblastos no diferencial', () => {
-  const LAUDO = [
-    'HEMOGRAMA',
-    'Coleta: 12/05/2026',
-    'Mieloblastos  :  0,0 %   0 uL   0 - 0 uL',
-    'Linfócitos  :  15,0 %   1875 uL   900 - 3500 uL',
-  ]
+describe('diferencial do HUGO: valor e unidade colados', () => {
+  // Colunas em POSIÇÃO, como o laudo as diagrama. Escrita com espaços, esta
+  // fixture fundia "Mieloblastos : 0,0 %" numa coluna só e era atendida por
+  // outro matcher — provava a coisa errada. É a terceira vez neste projeto que
+  // o vão sintético mais estreito que o real muda qual caminho é exercitado.
+  const COLUNAS = [50, 150, 175, 260, 350]
+  const bytes = pdfTabular([
+    ['HEMOGRAMA'],
+    ['Coleta: 12/05/2026'],
+    ['Mieloblastos', ':', '0,0 %', '0 uL', '0 - 0 uL'],
+    ['Linfócitos', ':', '15,0 %', '1875 uL', '900 - 3500 uL'],
+  ], COLUNAS)
 
-  it.fails('"Mieloblastos" deveria ser reconhecido', async () => {
-    expect(nomes(await extrair(LAUDO))).toContain('Mieloblastos')
+  const extrairHemograma = () =>
+    extrairExames({ document: { bytes, filename: null }, hints: null, options: null })
+
+  it('"Mieloblastos" é reconhecido', async () => {
+    expect(nomes(await extrairHemograma())).toContain('Mieloblastos')
   })
 
-  it.fails('com valor e unidade colados, o absoluto ainda deveria vencer', async () => {
-    const r = await extrair(LAUDO)
+  it('com valor e unidade colados, o absoluto vence o percentual', async () => {
+    const r = await extrairHemograma()
     const linf = r.observations.find(o => o.canonicalName === 'Linfócitos')
     expect(linf?.value).toMatchObject({ kind: 'numeric', value: 1875 })
+    expect(linf?.unit.raw).toBe('uL')
   })
 })
 
 // ── 4. Qualitativo com ponto final ─────────────────────────────────────────
 // 4 ocorrências no líquor do IMEC. O laudo escreve "Ausência de bactérias."
 // com ponto; o vocabulário tem o termo sem pontuação, e a coluna se repete.
-describe('lacuna · valor qualitativo terminado em ponto', () => {
+describe('valor qualitativo terminado em ponto', () => {
   const LAUDO = [
     'ROTINA DE LÍQUOR',
     'Material: Liquor   Coleta...: 12/05/2026 - 19:10',
@@ -161,7 +175,7 @@ describe('lacuna · valor qualitativo terminado em ponto', () => {
     expect(nomes(await extrair(LAUDO))).toContain('Bacterioscopia Gram (LCR)')
   })
 
-  it.fails('"Ausência de bactérias." com ponto deveria virar código qualitativo', async () => {
+  it('"Ausência de bactérias." com ponto vira código qualitativo', async () => {
     const r = await extrair(LAUDO)
     const bact = r.observations.find(o => o.canonicalName === 'Bacterioscopia Gram (LCR)')
     expect(bact?.value).toMatchObject({ kind: 'qualitative', code: 'absent' })
@@ -173,8 +187,8 @@ describe('lacuna · valor qualitativo terminado em ponto', () => {
 // laudo, não um bloco de cultura — e o valor dele é a frase de crescimento.
 // Distinto da correção feita no extrator de culturas, que trata o mesmo texto
 // dentro de um bloco de cultura de verdade.
-describe('lacuna · termo de crescimento no lugar do valor, fora de bloco de cultura', () => {
-  it.fails('"NÃO HOUVE CRESCIMENTO DE BACTÉRIAS" deveria ser reconhecido como ausência', async () => {
+describe('termo de crescimento no lugar do valor, fora de bloco de cultura', () => {
+  it('"NÃO HOUVE CRESCIMENTO DE BACTÉRIAS" é reconhecido como ausência', async () => {
     const r = await extrair([
       'ROTINA DE LÍQUOR',
       'Material: Liquor   Coleta...: 12/05/2026 - 19:10',

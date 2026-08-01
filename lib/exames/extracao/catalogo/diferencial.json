@@ -13,7 +13,8 @@
     "Linfócitos Atípicos",
     "Monócitos",
     "Plasmócitos",
-    "Blastos"
+    "Blastos",
+    "Mieloblastos"
   ],
   "preferAbsolute": true,
   "version": "1.0.0"
