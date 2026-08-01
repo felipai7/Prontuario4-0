@@ -325,8 +325,14 @@ document.addEventListener('click', e => {
     document.querySelectorAll('.barra button[data-f]').forEach(x => x.classList.toggle('on', x === b));
     return render(); }
   if (b.id === 'exportar'){
-    const linhas = DADOS.filter(d => dec[id(d)]).map(d => [d.arquivo, d.exame, d.clinboard, d.novo, dec[id(d)]].join('\t'));
-    const blob = new Blob(['laudo\texame\tclinboard\tnovo\tdecisao\n' + linhas.join('\n')], {type:'text/plain'});
+    // Sem sequências de escape neste trecho: ele vive dentro de um template
+    // literal do gerador, e as barras invertidas eram interpretadas ali,
+    // virando tabulação e quebra de linha DE VERDADE no arquivo emitido. A
+    // string JavaScript saía partida ao meio e a página não abria.
+    const TAB = String.fromCharCode(9), NL = String.fromCharCode(10);
+    const cab = ['laudo','exame','clinboard','novo','decisao'].join(TAB);
+    const linhas = DADOS.filter(d => dec[id(d)]).map(d => [d.arquivo, d.exame, d.clinboard, d.novo, dec[id(d)]].join(TAB));
+    const blob = new Blob([cab + NL + linhas.join(NL)], {type:'text/plain'});
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = 'decisoes-revisao.tsv'; a.click(); return; }
   if (b.dataset.k){ const k = decodeURIComponent(b.dataset.k);
