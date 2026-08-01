@@ -86,6 +86,25 @@ function chaveSinonimoBruta(s: string): string {
   return s.normalize('NFC').toUpperCase().replace(/\s+/g, ' ').trim()
 }
 
+/**
+ * Renomeações canônicas por decisão clínica (31/07/2026).
+ *
+ * O doador grafa o cálcio iônico venoso como "Cálcio iônico Venoso", sem
+ * parênteses, enquanto o arterial já é "Cálcio iônico (Arterial)" e todos os
+ * demais parâmetros de gasometria usam "(Arterial)"/"(Venosa)". Padronizado.
+ *
+ * A grafia antiga continua valendo como SINÔNIMO: laudos que a escrevem
+ * literalmente precisam seguir resolvendo, senão a padronização parte o
+ * histórico do paciente em duas linhas — o estrago que o E1 corrigiu.
+ */
+const RENOMEACOES_CLINICAS: Record<string, string> = {
+  'Cálcio iônico Venoso': 'Cálcio iônico (Venosa)',
+}
+
+function canonizar(nome: string): string {
+  return RENOMEACOES_CLINICAS[nome] ?? nome
+}
+
 /** Identificador estável de analito, derivado do nome canônico. */
 function idDeAnalito(nomeCanonico: string): { id: string; specimen: string; base: string } {
   const sufixos: [RegExp, string, string][] = [
@@ -235,7 +254,10 @@ for (const [bruto, canonico] of Object.entries(nameMap)) {
   vistos.set(chave, canonico)
 }
 
-function registrarAnalito(nomeCanonico: string, origem: string, valueKind = 'numeric') {
+function registrarAnalito(nomeBruto: string, origem: string, valueKind = 'numeric') {
+  const nomeCanonico = canonizar(nomeBruto)
+  // A grafia antiga segue resolvendo, para a padronização não partir histórico.
+  if (nomeCanonico !== nomeBruto) sinonimos[chaveSinonimo(nomeBruto)] = idDeAnalito(nomeCanonico).id
   const { id, specimen, base } = idDeAnalito(nomeCanonico)
   if (!analitos[id]) {
     analitos[id] = {

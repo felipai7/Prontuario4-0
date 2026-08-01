@@ -544,7 +544,7 @@
       "valueKind": "numeric"
     },
     "calcio.ionico.ven": {
-      "canonicalName": "Cálcio iônico Venoso",
+      "canonicalName": "Cálcio iônico (Venosa)",
       "category": null,
       "defaultSpecimen": "venousBlood",
       "defaultUnit": null,

@@ -1,0 +1,116 @@
+// ══════════════════════════════════════════════════════════════════════════
+// Camada 4 · segmentação: linhas → blocos tipados, com escopo de espécime e
+// de data.
+//
+// R6 — o espécime é escopo LÉXICO. No clinBoard, o contexto de gasometria era
+// uma global de módulo (`_currentGasoContext`) e vazava para o upload seguinte,
+// renomeando eletrólitos de OUTRO paciente. A correção D1 o transformou em
+// variável local. Aqui ele é campo do segmento: não existe onde vazar.
+//
+// R7/D6 — cada segmento carrega sua própria data, com a trava do doador: o
+// carimbo por seção só entra em ação quando o documento tem DUAS OU MAIS datas
+// de coleta distintas. Com zero ou uma, todo mundo recebe a data do documento,
+// e o comportamento é idêntico ao de antes — foi o que permitiu ligar a
+// funcionalidade sem risco de regressão em massa.
+// ══════════════════════════════════════════════════════════════════════════
+
+import type { DocumentText, Segment, SpecimenContext, TemporalRef, TextLine } from '../contratos'
+import { diaDe, marcadorDeColeta, SEM_DATA } from '../normalizadores/data'
+
+/** Cabeçalhos que provam o espécime da seção que se inicia. */
+const CABECALHOS: [RegExp, SpecimenContext, Segment['kind']][] = [
+  [/GASOMETRIA\s+ARTERIAL/i, 'arterialBlood', 'examSection'],
+  [/GASOMETRIA\s+VENOSA/i, 'venousBlood', 'examSection'],
+  [/\bGASOMETRIA\b/i, 'arterialBlood', 'examSection'],
+  [/ROTINA\s+DE\s+L[IÍ]QUOR|L[IÍ]QUOR|\bLCR\b/i, 'csf', 'examSection'],
+  [/\bEAS\b|ROTINA\s+DE\s+URINA|URIN[AÁ]LISE|ELEMENTOS\s+ANORMAIS/i, 'urine', 'eas'],
+  [/UROCULTURA|HEMOCULTURA|CULTURA\s+DE/i, 'unknown', 'culture'],
+  [/ANTIBIOGRAMA|TESTE\s+DE\s+SENSIBILIDADE/i, 'unknown', 'antibiogram'],
+  [/HEMOGRAMA|ERITROGRAMA|ERITOGRAMA|LEUCOGRAMA|PLAQUETOGRAMA/i, 'blood', 'examSection'],
+  [/COAGULOGRAMA|BIOQU[IÍ]MICA|SOROLOGIA|IMUNOLOGIA/i, 'blood', 'examSection'],
+]
+
+/** Uma linha é cabeçalho de seção quando casa e não traz valor junto. */
+function cabecalhoDe(linha: TextLine): { specimen: SpecimenContext; kind: Segment['kind'] } | null {
+  const texto = linha.text.trim()
+  // Um cabeçalho não tem número de resultado colado nele. "Glicose 92" não é
+  // cabeçalho de bioquímica só por conter a palavra.
+  if (texto.length > 60) return null
+  for (const [re, specimen, kind] of CABECALHOS) {
+    if (re.test(texto)) return { specimen, kind }
+  }
+  return null
+}
+
+/**
+ * Divide o documento em segmentos tipados.
+ *
+ * A data do documento é a PRIMEIRA marcada como coleta; quando há duas ou mais
+ * datas distintas, cada segmento passa a carregar a sua.
+ */
+export function segmentar(texto: DocumentText): { segments: Segment[]; documentDate: TemporalRef } {
+  // ── Primeira passada: todas as datas de coleta e onde elas aparecem ──────
+  const marcasPorLinha = new Map<number, TemporalRef>()
+  const diasDistintos = new Set<string>()
+  for (const linha of texto.lines) {
+    const marca = marcadorDeColeta(linha.text)
+    if (!marca) continue
+    marcasPorLinha.set(linha.index, marca)
+    const dia = diaDe(marca)
+    if (dia) diasDistintos.add(dia)
+  }
+
+  const primeira = [...marcasPorLinha.values()][0]
+  const dataDocumento: TemporalRef = primeira ?? SEM_DATA
+  // A trava do D6: com 0 ou 1 data, o carimbo por seção não entra em ação.
+  const carimbarPorSecao = diasDistintos.size >= 2
+
+  // ── Segunda passada: corta em seções e propaga os escopos ────────────────
+  const segments: Segment[] = []
+  let atual: Segment | null = null
+  let especimeCorrente: SpecimenContext = 'blood'
+  let dataCorrente: TemporalRef = dataDocumento
+
+  function abrir(titulo: string | null, specimen: SpecimenContext, kind: Segment['kind']): Segment {
+    const novo: Segment = {
+      kind,
+      title: titulo,
+      lines: [],
+      specimen,
+      date: carimbarPorSecao ? dataCorrente : dataDocumento,
+    }
+    segments.push(novo)
+    return novo
+  }
+
+  for (const linha of texto.lines) {
+    // Marcador de data vale a partir daqui — inclusive para a seção ABERTA,
+    // porque em vários laudos o "Coleta:" da urina vem DEPOIS do cabeçalho da
+    // própria seção. Sem isso o EAS herdava a data da seção anterior e os
+    // mesmos parâmetros duplicavam em duas datas.
+    const marca = marcasPorLinha.get(linha.index)
+    if (marca) {
+      dataCorrente = marca
+      if (atual && carimbarPorSecao && atual.lines.every(l => !temValor(l))) {
+        atual.date = marca
+      }
+    }
+
+    const cabecalho = cabecalhoDe(linha)
+    if (cabecalho) {
+      especimeCorrente = cabecalho.specimen
+      atual = abrir(linha.text.trim(), cabecalho.specimen, cabecalho.kind)
+      continue
+    }
+
+    if (atual === null) atual = abrir(null, especimeCorrente, 'examSection')
+    atual.lines.push(linha)
+  }
+
+  return { segments, documentDate: dataDocumento }
+}
+
+/** Aproximação barata de "esta linha traz resultado", só para o carimbo de data. */
+function temValor(linha: TextLine): boolean {
+  return /\d/.test(linha.text) && !marcadorDeColeta(linha.text)
+}

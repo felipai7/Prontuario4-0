@@ -1,0 +1,7 @@
+{
+  "id": "generic",
+  "displayName": "Perfil base (nenhum laboratório reconhecido)",
+  "fingerprint": { "threshold": 1, "signals": [] },
+  "preprocess": [],
+  "matchers": { "enable": [], "disable": [] }
+}

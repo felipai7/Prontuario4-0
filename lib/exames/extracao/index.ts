@@ -19,9 +19,13 @@ import type {
   ExtractionRequest,
   ExtractionResult,
   LabDetection,
+  LabProfile,
   Warning,
 } from './contratos'
 import { ErroLeituraPdf, lerDocumento } from './texto/pdf'
+import { extrairDoTexto } from './motor'
+import { carregarCatalogo } from './catalogo'
+import perfilBase from './perfis/generic/perfil.json'
 
 export type {
   Analyte,
@@ -109,7 +113,7 @@ export function detectarLaboratorio(_texto: DocumentText): LabDetection {
 export async function extrairExames(req: ExtractionRequest): Promise<ExtractionResult> {
   // Resolvidas já na F1 para que a fronteira pública não mude nas fases
   // seguintes; o motor as consumirá via ParseContext.
-  resolverOpcoes(req.options)
+  const opcoes = resolverOpcoes(req.options)
   const documentHash = hashDocumento(req.document.bytes)
   const warnings: Warning[] = []
 
@@ -140,38 +144,55 @@ export async function extrairExames(req: ExtractionRequest): Promise<ExtractionR
     warnings.push({ code: 'unrecognizedDocument', page: null, lineIndex: null, detail: null })
   }
 
-  // ── Camadas 3–7 entram nas fases seguintes. ────────────────────────────
-  warnings.push({
-    code: 'notImplemented',
-    page: null,
-    lineIndex: null,
-    detail: `motor de extração ausente na versão ${MODULE_VERSION}`,
-  })
+  // ── Camadas 3–7 ────────────────────────────────────────────────────────
+  // Sem perfil reconhecido, roda o perfil BASE — mas com o aviso já emitido
+  // acima, nunca em silêncio (A4). O que A4 proíbe é o fallback calado, não a
+  // extração.
+  const perfil = perfilBase as LabProfile
+  const motor = texto.hasTextLayer
+    ? extrairDoTexto(texto, perfil, opcoes)
+    : { observations: [], discarded: [], matcherHits: {}, documentDate: null }
 
+  if (motor.documentDate && motor.documentDate.source === 'absent') {
+    warnings.push({ code: 'documentDateAbsent', page: null, lineIndex: null, detail: null })
+  }
+  const datasDistintas = new Set(
+    motor.observations.map(o => o.collectedAt.iso?.slice(0, 10)).filter(Boolean),
+  )
+  if (datasDistintas.size >= 2) {
+    warnings.push({
+      code: 'multipleCollectionDates',
+      page: null,
+      lineIndex: null,
+      detail: `${datasDistintas.size} datas de coleta`,
+    })
+  }
+
+  const catalogo = carregarCatalogo()
   const diagnostics: Diagnostics = {
     moduleVersion: MODULE_VERSION,
-    catalogVersion: 'não-carregado',
+    catalogVersion: catalogo.version,
     documentHash,
     pageCount: texto.pages.length,
     lineCount: texto.lines.length,
     counts: {
-      observations: 0,
+      observations: motor.observations.length,
       cultures: 0,
       imaging: 0,
-      discarded: 0,
+      discarded: motor.discarded.length,
       warnings: warnings.length,
-      requiresReview: 0,
+      requiresReview: motor.observations.filter(o => o.requiresReview).length,
     },
-    matcherHits: {},
+    matcherHits: motor.matcherHits,
   }
 
   return {
-    documentKind: 'unrecognized',
+    documentKind: motor.observations.length > 0 ? 'laboratory' : 'unrecognized',
     detection,
-    observations: [],
+    observations: motor.observations,
     cultures: [],
     imaging: [],
-    discarded: [],
+    discarded: motor.discarded,
     warnings,
     diagnostics,
   }
