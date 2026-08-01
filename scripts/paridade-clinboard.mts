@@ -152,10 +152,32 @@ for (const arquivo of arquivos) {
   const porNomeNovo = new Map<string, any>()
   for (const o of novo.observations) if (o.canonicalName) porNomeNovo.set(chave(o.canonicalName), o)
 
+  // O clinBoard nao tem campo para cultura: ele emite "Hemocultura = 1" como se
+  // fosse um exame de valor. Aqui a cultura vive em `cultures[]`, com material,
+  // isolados e antibiograma. O dado E extraido — muda o lugar, nao a presenca.
+  // Sem isto, seis culturas contavam como regressao.
+  const materiaisDeCultura = new Set(novo.cultures.map((c: any) => chave(c.specimen)))
+  const ehCultura = (nome: string) => {
+    const k = chave(nome)
+    if (materiaisDeCultura.has(k)) return true
+    // "MRSA" do doador corresponde a "Vigilância MRSA" daqui, e assim por diante.
+    return [...materiaisDeCultura].some(m => m.includes(k) || k.includes(m))
+  }
+
   for (const [k, a] of porNomeDoador) {
     const b = porNomeNovo.get(k)
     if (!b) {
       soDoador++
+      if (novo.cultures.length > 0 && ehCultura(a.name)) {
+        divergencias.push({
+          arquivo: rotulo, exame: a.name,
+          unidade: '', referencia: '', data: a.date ?? '',
+          categoria: 'diferencaDeForma',
+          motivo: 'cultura: extraída em cultures[], com isolado e antibiograma, e não como exame de valor',
+          clinboard: `${a.value ?? '—'}`, novo: 'em cultures[]',
+        })
+        continue
+      }
       const { categoria, motivo } = classificar(a, null)
       // Ausência no novo é PERDA DE DADO CLÍNICO, e não uma divergência a
       // discutir: o clinBoard entrega o exame e o novo não. Só não conta como

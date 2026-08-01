@@ -201,6 +201,12 @@ const NAO_USADOS = ['IMUNE', 'NÃO IMUNE', 'NAO IMUNE']
 const SINONIMOS_EXTRA: Record<string, string> = {
   'O2SAT': 'O2 Sat', '02SAT': 'O2 Sat', 'SATO2': 'O2 Sat', 'SAT O2': 'O2 Sat',
   'MIELOBLASTOS': 'Mieloblastos',
+  // Abreviações do leucograma do PIOX, que escreve o diferencial encurtado
+  // para caber na coluna: "Neutr.Totais..:", "Linf.Atípicos.:".
+  'NEUTR.TOTAIS': 'Neutrófilos', 'NEUTR TOTAIS': 'Neutrófilos',
+  'NEUTROFILOS TOTAIS': 'Neutrófilos', 'NEUTRÓFILOS TOTAIS': 'Neutrófilos',
+  'LINF.ATÍPICOS': 'Linfócitos Atípicos', 'LINF.ATIPICOS': 'Linfócitos Atípicos',
+  'LINF ATÍPICOS': 'Linfócitos Atípicos', 'LINF ATIPICOS': 'Linfócitos Atípicos',
 }
 
 // ── Diferencial leucocitário (decisão clínica de 31/07/2026) ────────────────

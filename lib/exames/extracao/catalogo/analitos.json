@@ -2510,7 +2510,8 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
-        "NAME_MAP"
+        "NAME_MAP",
+        "corpus"
       ],
       "plausibleRange": null,
       "valueKind": "numeric"
@@ -2816,7 +2817,8 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
-        "NAME_MAP"
+        "NAME_MAP",
+        "corpus"
       ],
       "plausibleRange": null,
       "valueKind": "numeric"

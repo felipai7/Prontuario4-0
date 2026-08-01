@@ -16,61 +16,8 @@ import { interpretarValor, ehNaoUsadoClinicamente } from '../normalizadores/valo
 import { resolverAnalito } from '../catalogo'
 import especimes from '../catalogo/especimes.json'
 import { ehRotuloDeMetadado } from './metadados'
-import diferencial from '../catalogo/diferencial.json'
+import { absolutoDoDiferencial } from './diferencial'
 
-const CELULAS_DIFERENCIAL = new Set(
-  (diferencial.cells as string[]).map(c => c.toUpperCase().replace(/\s+/g, ' ')),
-)
-
-/**
- * Diferencial leucocitário: a linha traz DOIS números.
- *
- *   Neutrófilos   :  69   %   8.625   /mm³   51 a 65   2.295 a 6.500
- *                    └ percentual      └ absoluto
- *
- * Decisão clínica de 31/07/2026: vale o ABSOLUTO, em /mm³. Sem esta função o
- * percentual venceria por posição — ele vem primeiro na linha —, e o exame
- * ficaria com o número errado sem nenhum sinal de que algo se perdeu.
- */
-function absolutoDoDiferencial(
-  nome: string,
-  campos: string[],
-): { valor: string; unidade: string; referencia: string } | null {
-  if (!CELULAS_DIFERENCIAL.has(nome.toUpperCase().replace(/\s+/g, ' '))) return null
-
-  // Duas diagramações no corpus, conforme o laudo separe ou cole valor e
-  // unidade:
-  //   HOC    "0"  "%"  "125"  "/mm³"  "1 a 5"  "45 a 500"
-  //   HUGO   "0,0 %"   "125 uL"       "1 a 5 uL"
-  // Percorrer em pares fixos só funciona no primeiro. Aqui os campos viram
-  // pares (valor, unidade) qualquer que seja a diagramação.
-  const referencias = campos.filter(pareceReferencia)
-  const pares: { valor: string; unidade: string }[] = []
-  const restantes = campos.filter(c => !pareceReferencia(c))
-  const soNumero = /^[+-]?[\d.,]+$/
-  const soUnidade = /^[%A-Za-zµ³/]+$/
-
-  for (let i = 0; i < restantes.length; i++) {
-    const campo = restantes[i]!.trim()
-    if (soNumero.test(campo)) {
-      const proximo = restantes[i + 1]?.trim() ?? ''
-      if (soUnidade.test(proximo)) { pares.push({ valor: campo, unidade: proximo }); i++ }
-      else pares.push({ valor: campo, unidade: '' })
-      continue
-    }
-    const { valor, unidade } = separarValorUnidade(campo)
-    if (soNumero.test(valor)) pares.push({ valor, unidade })
-  }
-
-  const iPct = pares.findIndex(p => p.unidade === '%')
-  if (iPct < 0) return null
-  const abs = pares.slice(iPct + 1).find(p => /\/?\s*(mm3|mm³|µL|uL|mcL)/i.test(p.unidade))
-  if (!abs) return null
-
-  // Havendo duas faixas, a segunda é a do absoluto; havendo uma, é dele.
-  const referencia = referencias.length > 1 ? referencias[1]! : (referencias[0] ?? '')
-  return { valor: abs.valor, unidade: abs.unidade, referencia }
-}
 
 /** Parâmetros descartados de propósito dentro da gasometria, por redundância. */
 const DESCARTE_GASO = new Set(
@@ -195,7 +142,10 @@ export const matcherTabular: Matcher = {
       }
     }
 
-    const absoluto = absolutoDoDiferencial(nome, resto)
+    // O nome CANÔNICO, não o bruto: o PIOX escreve "Neutr.Totais" e a lista
+    // do diferencial guarda "Neutrófilos". Testar o bruto fazia o laudo
+    // abreviado receber o percentual enquanto os outros recebiam o absoluto.
+    const absoluto = absolutoDoDiferencial(analito?.canonicalName ?? nome, resto)
     const observacao: RawObservation = {
       rawName: nome,
       rawValue: absoluto?.valor ?? valorBruto,

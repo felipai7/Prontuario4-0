@@ -4,7 +4,7 @@ Gerado por `scripts/migrate-clinboard-catalog.mts`. Reexecutável.
 
 | Métrica | Valor |
 |---|---|
-| Sinônimos migrados | 794 |
+| Sinônimos migrados | 797 |
 | Analitos distintos | 285 |
 | Nomes geráveis por regra | 75 |
 | Conflitos detectados | 0 |

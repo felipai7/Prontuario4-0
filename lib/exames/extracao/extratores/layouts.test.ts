@@ -325,6 +325,47 @@ describe('resultado por palavra não é descartado', () => {
   })
 })
 
+describe('leucograma abreviado do PIOX', () => {
+  // Achado na revisão de paridade: dez exames perdidos em cinco laudos, e o
+  // absoluto virando percentual noutros. Três causas somadas, todas nesta
+  // única linha de laudo:
+  //
+  //   "Neutr.Totais..: 59  %   4.307 /mm³   51 a 65 %   2.295 a 6.500 /mm³"
+  //
+  //  1. o ponto DENTRO do nome não era aceito, e a linha inteira sumia;
+  //  2. a regra do diferencial vivia só no matcher tabular, e o PIOX passa
+  //     pelo de dois-pontos — o mesmo campo da tabela vinha em percentual num
+  //     laboratório e em absoluto noutro;
+  //  3. a regra testava o nome BRUTO, e a lista guarda o canônico.
+  // Colunas em POSIÇÃO, copiadas do laudo real. Escrita com espaços, esta
+  // fixture fundia as colunas de outro jeito e o teste provava a coisa errada.
+  const bytes = pdfTabular([
+    ['LEUCOGRAMA'],
+    ['Data de Coleta: 03/04/2026'],
+    ['Relativos', 'Absolutos', 'V.R. Relativos', 'V.R. Absolutos'],
+    ['Bastonetes....: 1', '%', '73 /mm³', '1 a 5 %', '45 a 500 /mm³'],
+    ['Neutr.Totais..: 59', '%', '4.307 /mm³', '51 a 65 %', '2.295 a 6.500 /mm³'],
+    ['Linf.Atípicos.: 0', '%', '0 /mm³', '0 %', '0 /mm³'],
+  ], [50, 145, 175, 260, 360])
+
+  const extrairLeucograma = () =>
+    extrairExames({ document: { bytes, filename: null }, hints: null, options: null })
+
+  it('o nome abreviado com ponto no meio é reconhecido', async () => {
+    const nomes = (await extrairLeucograma()).observations.map(o => o.canonicalName)
+    expect(nomes).toContain('Neutrófilos')
+    expect(nomes).toContain('Linfócitos Atípicos')
+  })
+
+  it('o absoluto vence aqui também, e não só no layout tabular', async () => {
+    const r = await extrairLeucograma()
+    const porNome = new Map(r.observations.map(o => [o.canonicalName, o]))
+    expect(porNome.get('Neutrófilos')?.value).toMatchObject({ value: 4307 })
+    expect(porNome.get('Bastonetes')?.value).toMatchObject({ value: 73 })
+    expect(porNome.get('Neutrófilos')?.unit.canonical).toBe('/mm³')
+  })
+})
+
 describe('metadado nunca é confundido com resultado', () => {
   it('rótulos de identificação, data e laboratório são reconhecidos como tal', () => {
     const rotulos = [
