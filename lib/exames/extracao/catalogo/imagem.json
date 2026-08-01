@@ -1,0 +1,50 @@
+{
+  "modalities": [
+    {
+      "code": "PET",
+      "flags": "i",
+      "pattern": "\\bPET[-\\s]?CT\\b|PET[-\\s]?SCAN|TOMOGRAFIA\\s+POR\\s+EMISS"
+    },
+    {
+      "code": "ECO",
+      "flags": "i",
+      "pattern": "ECOCARDIOGRA|ECODOPPLERCARDIOGRA"
+    },
+    {
+      "code": "COL",
+      "flags": "i",
+      "pattern": "COLONOSCOPIA"
+    },
+    {
+      "code": "END",
+      "flags": "i",
+      "pattern": "ENDOSCOPIA|\\bEDA\\b"
+    },
+    {
+      "code": "CINT",
+      "flags": "i",
+      "pattern": "CINTILOGRAFIA|CINTILOGR"
+    },
+    {
+      "code": "TC",
+      "flags": "i",
+      "pattern": "TOMOGRAFIA|ANGIOTOMOGRAFIA|\\bTC\\b"
+    },
+    {
+      "code": "RNM",
+      "flags": "i",
+      "pattern": "RESS?ON[ÂA]NCIA|ANGIORR?ESS?ON|\\bRNM\\b|\\bRM\\b"
+    },
+    {
+      "code": "USG",
+      "flags": "i",
+      "pattern": "ULTRASSON|ULTRA[-\\s]?SOM|D[ÚU]PLEX|ECO[-\\s]?DOPPLER|DOPPLER|MAPEAMENTO"
+    },
+    {
+      "code": "RX",
+      "flags": "i",
+      "pattern": "RADIOGRAFIA|RAIO[-\\s]?X|ESCANOMETRIA|\\bRX\\b"
+    }
+  ],
+  "version": "1.0.0"
+}

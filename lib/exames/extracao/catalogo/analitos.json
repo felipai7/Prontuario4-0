@@ -1,0 +1,4040 @@
+{
+  "analytes": {
+    "acido.folico.serum": {
+      "canonicalName": "Ácido Fólico",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "acido.folico.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "acido.urico.serum": {
+      "canonicalName": "Ácido Úrico",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "acido.urico.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "albumina.serum": {
+      "canonicalName": "Albumina",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "albumina.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "amh.serum": {
+      "canonicalName": "AMH",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "amh.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "amilase.serum": {
+      "canonicalName": "Amilase",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "amilase.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "anca.mpo.serum": {
+      "canonicalName": "ANCA MPO",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "anca.mpo.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "anca.pr3.serum": {
+      "canonicalName": "ANCA PR3",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "anca.pr3.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "anca.serum": {
+      "canonicalName": "ANCA",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "anca.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "anti.dna.serum": {
+      "canonicalName": "Anti-DNA",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "anti.dna.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "anti.hav.igg.serum": {
+      "canonicalName": "Anti-HAV IgG",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "anti.hav.igg.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "anti.hav.igm.serum": {
+      "canonicalName": "Anti-HAV IgM",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "anti.hav.igm.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "anti.hbc.igm.serum": {
+      "canonicalName": "Anti-HBc IgM",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "anti.hbc.igm.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "anti.hbc.total.serum": {
+      "canonicalName": "Anti-HBc Total",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "anti.hbc.total.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "anti.hbs.serum": {
+      "canonicalName": "Anti-HBs",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "anti.hbs.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "anti.hcv.serum": {
+      "canonicalName": "Anti-HCV",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "anti.hcv.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "aslo.serum": {
+      "canonicalName": "ASLO",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "aslo.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "aspecto.csf": {
+      "canonicalName": "Aspecto (LCR)",
+      "category": null,
+      "defaultSpecimen": "csf",
+      "defaultUnit": null,
+      "id": "aspecto.csf",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "aspecto.urine": {
+      "canonicalName": "Aspecto (U)",
+      "category": null,
+      "defaultSpecimen": "urine",
+      "defaultUnit": null,
+      "id": "aspecto.urine",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "PARAM_WHITELIST"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "aspirado.traqueal.serum": {
+      "canonicalName": "Aspirado Traqueal",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "aspirado.traqueal.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "bacteria.isolada.csf": {
+      "canonicalName": "Bactéria Isolada (LCR)",
+      "category": null,
+      "defaultSpecimen": "csf",
+      "defaultUnit": null,
+      "id": "bacteria.isolada.csf",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "bacterioscopia.gram.csf": {
+      "canonicalName": "Bacterioscopia Gram (LCR)",
+      "category": null,
+      "defaultSpecimen": "csf",
+      "defaultUnit": null,
+      "id": "bacterioscopia.gram.csf",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "bacterioscopia.ziehl.csf": {
+      "canonicalName": "Bacterioscopia Ziehl (LCR)",
+      "category": null,
+      "defaultSpecimen": "csf",
+      "defaultUnit": null,
+      "id": "bacterioscopia.ziehl.csf",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "basofilos.csf": {
+      "canonicalName": "Basófilos (LCR)",
+      "category": null,
+      "defaultSpecimen": "csf",
+      "defaultUnit": null,
+      "id": "basofilos.csf",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "basofilos.serum": {
+      "canonicalName": "Basófilos",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "basofilos.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "bastonetes.serum": {
+      "canonicalName": "Bastonetes",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "bastonetes.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "be.art": {
+      "canonicalName": "BE (Arterial)",
+      "category": null,
+      "defaultSpecimen": "arterialBlood",
+      "defaultUnit": null,
+      "id": "be.art",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "be.serum": {
+      "canonicalName": "BE",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "be.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "be.ven": {
+      "canonicalName": "BE (Venosa)",
+      "category": null,
+      "defaultSpecimen": "venousBlood",
+      "defaultUnit": null,
+      "id": "be.ven",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "bilirrubina.direta.serum": {
+      "canonicalName": "Bilirrubina Direta",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "bilirrubina.direta.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "bilirrubina.indireta.serum": {
+      "canonicalName": "Bilirrubina Indireta",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "bilirrubina.indireta.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "bilirrubina.total.serum": {
+      "canonicalName": "Bilirrubina Total",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "bilirrubina.total.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "bilirrubina.urine": {
+      "canonicalName": "Bilirrubina (U)",
+      "category": null,
+      "defaultSpecimen": "urine",
+      "defaultUnit": null,
+      "id": "bilirrubina.urine",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "blastos.serum": {
+      "canonicalName": "Blastos",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "blastos.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "bnp.serum": {
+      "canonicalName": "BNP",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "bnp.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "calcio.ionico.art": {
+      "canonicalName": "Cálcio iônico (Arterial)",
+      "category": null,
+      "defaultSpecimen": "arterialBlood",
+      "defaultUnit": null,
+      "id": "calcio.ionico.art",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "calcio.ionico.serum": {
+      "canonicalName": "Cálcio iônico",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "calcio.ionico.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "calcio.ionico.ven": {
+      "canonicalName": "Cálcio iônico Venoso",
+      "category": null,
+      "defaultSpecimen": "venousBlood",
+      "defaultUnit": null,
+      "id": "calcio.ionico.ven",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "calcio.total.serum": {
+      "canonicalName": "Cálcio Total",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "calcio.total.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "cel.epiteliais.serum": {
+      "canonicalName": "Cél. Epiteliais",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "cel.epiteliais.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "cel.escamosas.serum": {
+      "canonicalName": "Cél. Escamosas",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "cel.escamosas.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "PARAM_WHITELIST"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "cel.nao.escamosas.serum": {
+      "canonicalName": "Cél. Não Escamosas",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "cel.nao.escamosas.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "PARAM_WHITELIST"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "cel.transicionais.serum": {
+      "canonicalName": "Cél. Transicionais",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "cel.transicionais.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "PARAM_WHITELIST"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "cel.tubulares.serum": {
+      "canonicalName": "Cél. Tubulares",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "cel.tubulares.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "PARAM_WHITELIST"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "celulas.csf": {
+      "canonicalName": "Células (LCR)",
+      "category": null,
+      "defaultSpecimen": "csf",
+      "defaultUnit": null,
+      "id": "celulas.csf",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "celulas.nucleadas.csf": {
+      "canonicalName": "Células Nucleadas (LCR)",
+      "category": null,
+      "defaultSpecimen": "csf",
+      "defaultUnit": null,
+      "id": "celulas.nucleadas.csf",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "celulas.nucleadas.serum": {
+      "canonicalName": "Células Nucleadas",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "celulas.nucleadas.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "celulas.serum": {
+      "canonicalName": "Células",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "celulas.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "cetonas.serum": {
+      "canonicalName": "Cetonas",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "cetonas.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "chagas.igg.serum": {
+      "canonicalName": "Chagas IgG",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "chagas.igg.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "chagas.serum": {
+      "canonicalName": "Chagas",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "chagas.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "chcm.serum": {
+      "canonicalName": "CHCM",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "chcm.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "chikungunya.igg.serum": {
+      "canonicalName": "Chikungunya IgG",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "chikungunya.igg.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "chikungunya.igm.serum": {
+      "canonicalName": "Chikungunya IgM",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "chikungunya.igm.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "cilindros.hialinos.serum": {
+      "canonicalName": "Cilindros Hialinos",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "cilindros.hialinos.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "PARAM_WHITELIST"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "cilindros.patol.serum": {
+      "canonicalName": "Cilindros Patol.",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "cilindros.patol.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "PARAM_WHITELIST"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "cilindros.serum": {
+      "canonicalName": "Cilindros",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "cilindros.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "ck.mb.serum": {
+      "canonicalName": "CK-MB",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "ck.mb.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "cloretos.csf": {
+      "canonicalName": "Cloretos (LCR)",
+      "category": null,
+      "defaultSpecimen": "csf",
+      "defaultUnit": null,
+      "id": "cloretos.csf",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "cloretos.serum": {
+      "canonicalName": "Cloretos",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "cloretos.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "cloro.serum": {
+      "canonicalName": "Cloro",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "cloro.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "cmv.igg.serum": {
+      "canonicalName": "CMV IgG",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "cmv.igg.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "cmv.igm.serum": {
+      "canonicalName": "CMV IgM",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "cmv.igm.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "coagulo.csf": {
+      "canonicalName": "Coágulo (LCR)",
+      "category": null,
+      "defaultSpecimen": "csf",
+      "defaultUnit": null,
+      "id": "coagulo.csf",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "coagulograma.serum": {
+      "canonicalName": "Coagulograma",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "coagulograma.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "colesterol.nao.hdl.serum": {
+      "canonicalName": "Colesterol Não-HDL",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "colesterol.nao.hdl.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "colesterol.total.serum": {
+      "canonicalName": "Colesterol Total",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "colesterol.total.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "coprocultura.serum": {
+      "canonicalName": "Coprocultura",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "coprocultura.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "cor.csf": {
+      "canonicalName": "Cor (LCR)",
+      "category": null,
+      "defaultSpecimen": "csf",
+      "defaultUnit": null,
+      "id": "cor.csf",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "cor.urine": {
+      "canonicalName": "Cor (U)",
+      "category": null,
+      "defaultSpecimen": "urine",
+      "defaultUnit": null,
+      "id": "cor.urine",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "PARAM_WHITELIST"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "cortisol.serum": {
+      "canonicalName": "Cortisol",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "cortisol.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "covid.19.ag.serum": {
+      "canonicalName": "COVID-19 Ag",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "covid.19.ag.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "covid.19.igg.serum": {
+      "canonicalName": "COVID-19 IgG",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "covid.19.igg.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "covid.19.igm.serum": {
+      "canonicalName": "COVID-19 IgM",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "covid.19.igm.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "covid.19.serum": {
+      "canonicalName": "COVID-19",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "covid.19.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "covid.19.tr.serum": {
+      "canonicalName": "COVID-19 (TR)",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "covid.19.tr.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "cpk.serum": {
+      "canonicalName": "CPK",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "cpk.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "creatinina.serum": {
+      "canonicalName": "Creatinina",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "creatinina.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "creatinina.urinaria.serum": {
+      "canonicalName": "Creatinina Urinária",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "creatinina.urinaria.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "cristais.serum": {
+      "canonicalName": "Cristais",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "cristais.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "cultura.de.fezes.serum": {
+      "canonicalName": "Cultura de Fezes",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "cultura.de.fezes.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "dengue.igg.serum": {
+      "canonicalName": "Dengue IgG",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "dengue.igg.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "dengue.igm.serum": {
+      "canonicalName": "Dengue IgM",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "dengue.igm.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "dengue.ns1.serum": {
+      "canonicalName": "Dengue NS1",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "dengue.ns1.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "dengue.ns1.tr.serum": {
+      "canonicalName": "Dengue NS1 (TR)",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "dengue.ns1.tr.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "dengue.tr.serum": {
+      "canonicalName": "Dengue (TR)",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "dengue.tr.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "densidade.serum": {
+      "canonicalName": "Densidade",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "densidade.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "deposito.serum": {
+      "canonicalName": "Depósito",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "deposito.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "PARAM_WHITELIST"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "dhea.s.serum": {
+      "canonicalName": "DHEA-S",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "dhea.s.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "dhl.serum": {
+      "canonicalName": "DHL",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "dhl.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "dimero.d.serum": {
+      "canonicalName": "Dímero-D",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "dimero.d.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "ebv.ebna.igg.serum": {
+      "canonicalName": "EBV EBNA IgG",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "ebv.ebna.igg.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "ebv.igg.serum": {
+      "canonicalName": "EBV IgG",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "ebv.igg.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "ebv.igm.serum": {
+      "canonicalName": "EBV IgM",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "ebv.igm.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "ebv.vca.igg.serum": {
+      "canonicalName": "EBV VCA IgG",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "ebv.vca.igg.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "ebv.vca.igm.serum": {
+      "canonicalName": "EBV VCA IgM",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "ebv.vca.igm.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "eosinofilos.csf": {
+      "canonicalName": "Eosinófilos (LCR)",
+      "category": null,
+      "defaultSpecimen": "csf",
+      "defaultUnit": null,
+      "id": "eosinofilos.csf",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "eosinofilos.serum": {
+      "canonicalName": "Eosinófilos",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "eosinofilos.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "eritroblastos.serum": {
+      "canonicalName": "Eritroblastos",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "eritroblastos.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "escarro.serum": {
+      "canonicalName": "Escarro",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "escarro.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "espermatozoides.serum": {
+      "canonicalName": "Espermatozoides",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "espermatozoides.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "PARAM_WHITELIST"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "est.leucocitaria.serum": {
+      "canonicalName": "Est. Leucocitária",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "est.leucocitaria.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "estradiol.serum": {
+      "canonicalName": "Estradiol",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "estradiol.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "estriol.serum": {
+      "canonicalName": "Estriol",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "estriol.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "fan.serum": {
+      "canonicalName": "FAN",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "fan.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "ferritina.serum": {
+      "canonicalName": "Ferritina",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "ferritina.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "ferro.serico.serum": {
+      "canonicalName": "Ferro Sérico",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "ferro.serico.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "fibrinogenio.serum": {
+      "canonicalName": "Fibrinogênio",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "fibrinogenio.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "filamentos.de.muco.serum": {
+      "canonicalName": "Filamentos de Muco",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "filamentos.de.muco.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "PARAM_WHITELIST"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "fio2.serum": {
+      "canonicalName": "FiO2",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "fio2.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "flora.bacteriana.serum": {
+      "canonicalName": "Flora Bacteriana",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "flora.bacteriana.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "PARAM_WHITELIST"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "fosfatase.alcalina.serum": {
+      "canonicalName": "Fosfatase Alcalina",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "fosfatase.alcalina.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "fosforo.serum": {
+      "canonicalName": "Fósforo",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "fosforo.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "fragmento.serum": {
+      "canonicalName": "Fragmento",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "fragmento.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "fsh.serum": {
+      "canonicalName": "FSH",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "fsh.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "fta.abs.igg.serum": {
+      "canonicalName": "FTA-ABS IgG",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "fta.abs.igg.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "fta.abs.igm.serum": {
+      "canonicalName": "FTA-ABS IgM",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "fta.abs.igm.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "ggt.serum": {
+      "canonicalName": "GGT",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "ggt.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "glicose.art": {
+      "canonicalName": "Glicose (Arterial)",
+      "category": null,
+      "defaultSpecimen": "arterialBlood",
+      "defaultUnit": null,
+      "id": "glicose.art",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "glicose.csf": {
+      "canonicalName": "Glicose (LCR)",
+      "category": null,
+      "defaultSpecimen": "csf",
+      "defaultUnit": null,
+      "id": "glicose.csf",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "glicose.serum": {
+      "canonicalName": "Glicose",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "glicose.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "glicose.urine": {
+      "canonicalName": "Glicose (U)",
+      "category": null,
+      "defaultSpecimen": "urine",
+      "defaultUnit": null,
+      "id": "glicose.urine",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "PARAM_WHITELIST"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "glicose.ven": {
+      "canonicalName": "Glicose (Venosa)",
+      "category": null,
+      "defaultSpecimen": "venousBlood",
+      "defaultUnit": null,
+      "id": "glicose.ven",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "globulinas.serum": {
+      "canonicalName": "Globulinas",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "globulinas.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "haptoglobina.serum": {
+      "canonicalName": "Haptoglobina",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "haptoglobina.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "hba1c.serum": {
+      "canonicalName": "HbA1c",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "hba1c.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "hbsag.serum": {
+      "canonicalName": "HBsAg",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "hbsag.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "hcg.serum": {
+      "canonicalName": "β-hCG",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "hcg.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "hcm.serum": {
+      "canonicalName": "HCM",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "hcm.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "hco3.art": {
+      "canonicalName": "HCO3 (Arterial)",
+      "category": null,
+      "defaultSpecimen": "arterialBlood",
+      "defaultUnit": null,
+      "id": "hco3.art",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "hco3.serum": {
+      "canonicalName": "HCO3",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "hco3.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "hco3.ven": {
+      "canonicalName": "HCO3 (Venosa)",
+      "category": null,
+      "defaultSpecimen": "venousBlood",
+      "defaultUnit": null,
+      "id": "hco3.ven",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "hct.art": {
+      "canonicalName": "Hct (Arterial)",
+      "category": null,
+      "defaultSpecimen": "arterialBlood",
+      "defaultUnit": null,
+      "id": "hct.art",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "hct.ven": {
+      "canonicalName": "Hct (Venosa)",
+      "category": null,
+      "defaultSpecimen": "venousBlood",
+      "defaultUnit": null,
+      "id": "hct.ven",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "hdl.serum": {
+      "canonicalName": "HDL",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "hdl.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "hemacias.csf": {
+      "canonicalName": "Hemácias (LCR)",
+      "category": null,
+      "defaultSpecimen": "csf",
+      "defaultUnit": null,
+      "id": "hemacias.csf",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "hemacias.serum": {
+      "canonicalName": "Hemácias",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "hemacias.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "hemacias.urine": {
+      "canonicalName": "Hemácias (U)",
+      "category": null,
+      "defaultSpecimen": "urine",
+      "defaultUnit": null,
+      "id": "hemacias.urine",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "PARAM_WHITELIST"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "hematocrito.serum": {
+      "canonicalName": "Hematócrito",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "hematocrito.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "hemocultura.serum": {
+      "canonicalName": "Hemocultura",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "hemocultura.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "hemoglobina.serum": {
+      "canonicalName": "Hemoglobina",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "hemoglobina.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "hemoglobina.urine": {
+      "canonicalName": "Hemoglobina (U)",
+      "category": null,
+      "defaultSpecimen": "urine",
+      "defaultUnit": null,
+      "id": "hemoglobina.urine",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "PARAM_WHITELIST"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "hiv.1.2.serum": {
+      "canonicalName": "HIV 1/2",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "hiv.1.2.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "hiv.1.2.tr.serum": {
+      "canonicalName": "HIV 1/2 (TR)",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "hiv.1.2.tr.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "htlv.i.ii.serum": {
+      "canonicalName": "HTLV I/II",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "htlv.i.ii.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "iga.serum": {
+      "canonicalName": "IgA",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "iga.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "igg.serum": {
+      "canonicalName": "IgG",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "igg.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "igm.serum": {
+      "canonicalName": "IgM",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "igm.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "influenza.a.b.serum": {
+      "canonicalName": "Influenza A/B",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "influenza.a.b.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "influenza.a.serum": {
+      "canonicalName": "Influenza A",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "influenza.a.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "influenza.b.serum": {
+      "canonicalName": "Influenza B",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "influenza.b.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "influenza.tr.serum": {
+      "canonicalName": "Influenza (TR)",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "influenza.tr.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "inr.serum": {
+      "canonicalName": "INR",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "inr.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "insulina.serum": {
+      "canonicalName": "Insulina",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "insulina.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "lactato.art": {
+      "canonicalName": "Lactato (Arterial)",
+      "category": null,
+      "defaultSpecimen": "arterialBlood",
+      "defaultUnit": null,
+      "id": "lactato.art",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "lactato.csf": {
+      "canonicalName": "Lactato (LCR)",
+      "category": null,
+      "defaultSpecimen": "csf",
+      "defaultUnit": null,
+      "id": "lactato.csf",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "lactato.serum": {
+      "canonicalName": "Lactato",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "lactato.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "lactato.ven": {
+      "canonicalName": "Lactato Venoso",
+      "category": null,
+      "defaultSpecimen": "venousBlood",
+      "defaultUnit": null,
+      "id": "lactato.ven",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP",
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "lavado.broncoalveolar.serum": {
+      "canonicalName": "Lavado Broncoalveolar",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "lavado.broncoalveolar.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "ldh.serum": {
+      "canonicalName": "LDH",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "ldh.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "ldl.serum": {
+      "canonicalName": "LDL",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "ldl.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "leptospirose.igm.serum": {
+      "canonicalName": "Leptospirose IgM",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "leptospirose.igm.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "leucocitos.csf": {
+      "canonicalName": "Leucócitos (LCR)",
+      "category": null,
+      "defaultSpecimen": "csf",
+      "defaultUnit": null,
+      "id": "leucocitos.csf",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "leucocitos.serum": {
+      "canonicalName": "Leucócitos",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "leucocitos.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "leucocitos.urine": {
+      "canonicalName": "Leucócitos (U)",
+      "category": null,
+      "defaultSpecimen": "urine",
+      "defaultUnit": null,
+      "id": "leucocitos.urine",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "leveduras.serum": {
+      "canonicalName": "Leveduras",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "leveduras.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "lh.serum": {
+      "canonicalName": "LH",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "lh.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "linfocitos.atipicos.serum": {
+      "canonicalName": "Linfócitos Atípicos",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "linfocitos.atipicos.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "linfocitos.csf": {
+      "canonicalName": "Linfócitos (LCR)",
+      "category": null,
+      "defaultSpecimen": "csf",
+      "defaultUnit": null,
+      "id": "linfocitos.csf",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "linfocitos.serum": {
+      "canonicalName": "Linfócitos",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "linfocitos.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "lipase.serum": {
+      "canonicalName": "Lipase",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "lipase.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "liquido.ascitico.serum": {
+      "canonicalName": "Líquido Ascítico",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "liquido.ascitico.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "liquido.pleural.serum": {
+      "canonicalName": "Líquido Pleural",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "liquido.pleural.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "liquido.serum": {
+      "canonicalName": "Líquido",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "liquido.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "liquido.sinovial.serum": {
+      "canonicalName": "Líquido Sinovial",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "liquido.sinovial.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "liquor.serum": {
+      "canonicalName": "Líquor",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "liquor.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "macrofagos.csf": {
+      "canonicalName": "Macrófagos (LCR)",
+      "category": null,
+      "defaultSpecimen": "csf",
+      "defaultUnit": null,
+      "id": "macrofagos.csf",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "macrofagos.serum": {
+      "canonicalName": "Macrófagos",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "macrofagos.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "magnesio.serum": {
+      "canonicalName": "Magnésio",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "magnesio.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "metamielocitos.serum": {
+      "canonicalName": "Metamielócitos",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "metamielocitos.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "microalbuminuria.serum": {
+      "canonicalName": "Microalbuminúria",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "microalbuminuria.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "mielocitos.serum": {
+      "canonicalName": "Mielócitos",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "mielocitos.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "monocitos.csf": {
+      "canonicalName": "Monócitos (LCR)",
+      "category": null,
+      "defaultSpecimen": "csf",
+      "defaultUnit": null,
+      "id": "monocitos.csf",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "monocitos.serum": {
+      "canonicalName": "Monócitos",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "monocitos.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "mrsa.serum": {
+      "canonicalName": "MRSA",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "mrsa.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "neutrofilos.csf": {
+      "canonicalName": "Neutrófilos (LCR)",
+      "category": null,
+      "defaultSpecimen": "csf",
+      "defaultUnit": null,
+      "id": "neutrofilos.csf",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "neutrofilos.serum": {
+      "canonicalName": "Neutrófilos",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "neutrofilos.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "nitrito.serum": {
+      "canonicalName": "Nitrito",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "nitrito.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "PARAM_WHITELIST"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "nt.probnp.serum": {
+      "canonicalName": "NT-proBNP",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "nt.probnp.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "o2.ct.art": {
+      "canonicalName": "O2 CT (Arterial)",
+      "category": null,
+      "defaultSpecimen": "arterialBlood",
+      "defaultUnit": null,
+      "id": "o2.ct.art",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "o2.ct.ven": {
+      "canonicalName": "O2 CT (Venosa)",
+      "category": null,
+      "defaultSpecimen": "venousBlood",
+      "defaultUnit": null,
+      "id": "o2.ct.ven",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "o2.sat.art": {
+      "canonicalName": "O2 Sat (Arterial)",
+      "category": null,
+      "defaultSpecimen": "arterialBlood",
+      "defaultUnit": null,
+      "id": "o2.sat.art",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "o2.sat.ven": {
+      "canonicalName": "O2 Sat (Venosa)",
+      "category": null,
+      "defaultSpecimen": "venousBlood",
+      "defaultUnit": null,
+      "id": "o2.sat.ven",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "pco2.art": {
+      "canonicalName": "PCO2 (Arterial)",
+      "category": null,
+      "defaultSpecimen": "arterialBlood",
+      "defaultUnit": null,
+      "id": "pco2.art",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "pco2.serum": {
+      "canonicalName": "pCO2",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "pco2.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "pco2.ven": {
+      "canonicalName": "PCO2 (Venosa)",
+      "category": null,
+      "defaultSpecimen": "venousBlood",
+      "defaultUnit": null,
+      "id": "pco2.ven",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "pcr.serum": {
+      "canonicalName": "PCR",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "pcr.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "pct.serum": {
+      "canonicalName": "PCT",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "pct.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "pdw.serum": {
+      "canonicalName": "PDW",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "pdw.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "peptideo.c.serum": {
+      "canonicalName": "Peptídeo C",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "peptideo.c.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "pesquisa.de.fungos.2.amostra.serum": {
+      "canonicalName": "Pesquisa de Fungos (2ª amostra)",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "pesquisa.de.fungos.2.amostra.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "pesquisa.de.fungos.csf": {
+      "canonicalName": "Pesquisa De Fungos (LCR)",
+      "category": null,
+      "defaultSpecimen": "csf",
+      "defaultUnit": null,
+      "id": "pesquisa.de.fungos.csf",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "pesquisa.de.fungos.serum": {
+      "canonicalName": "Pesquisa de Fungos",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "pesquisa.de.fungos.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "ph.art": {
+      "canonicalName": "pH (Arterial)",
+      "category": null,
+      "defaultSpecimen": "arterialBlood",
+      "defaultUnit": null,
+      "id": "ph.art",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "ph.csf": {
+      "canonicalName": "pH (LCR)",
+      "category": null,
+      "defaultSpecimen": "csf",
+      "defaultUnit": null,
+      "id": "ph.csf",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "ph.serum": {
+      "canonicalName": "pH",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "ph.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "ph.urinario.serum": {
+      "canonicalName": "pH Urinário",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "ph.urinario.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "ph.urine": {
+      "canonicalName": "pH (U)",
+      "category": null,
+      "defaultSpecimen": "urine",
+      "defaultUnit": null,
+      "id": "ph.urine",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "PARAM_WHITELIST"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "ph.ven": {
+      "canonicalName": "pH (Venosa)",
+      "category": null,
+      "defaultSpecimen": "venousBlood",
+      "defaultUnit": null,
+      "id": "ph.ven",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "plaquetas.serum": {
+      "canonicalName": "Plaquetas",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "plaquetas.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "plasmocitos.csf": {
+      "canonicalName": "Plasmócitos (LCR)",
+      "category": null,
+      "defaultSpecimen": "csf",
+      "defaultUnit": null,
+      "id": "plasmocitos.csf",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "plasmocitos.serum": {
+      "canonicalName": "Plasmócitos",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "plasmocitos.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "po2.art": {
+      "canonicalName": "PO2 (Arterial)",
+      "category": null,
+      "defaultSpecimen": "arterialBlood",
+      "defaultUnit": null,
+      "id": "po2.art",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "po2.serum": {
+      "canonicalName": "pO2",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "po2.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "po2.ven": {
+      "canonicalName": "PO2 (Venosa)",
+      "category": null,
+      "defaultSpecimen": "venousBlood",
+      "defaultUnit": null,
+      "id": "po2.ven",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "ponta.de.cateter.serum": {
+      "canonicalName": "Ponta de Cateter",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "ponta.de.cateter.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "potassio.art": {
+      "canonicalName": "Potássio (Arterial)",
+      "category": null,
+      "defaultSpecimen": "arterialBlood",
+      "defaultUnit": null,
+      "id": "potassio.art",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "potassio.serum": {
+      "canonicalName": "Potássio",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "potassio.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "potassio.ven": {
+      "canonicalName": "Potássio (Venosa)",
+      "category": null,
+      "defaultSpecimen": "venousBlood",
+      "defaultUnit": null,
+      "id": "potassio.ven",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "procalcitonina.serum": {
+      "canonicalName": "Procalcitonina",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "procalcitonina.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "progesterona.serum": {
+      "canonicalName": "Progesterona",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "progesterona.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "prolactina.serum": {
+      "canonicalName": "Prolactina",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "prolactina.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "promielocitos.serum": {
+      "canonicalName": "Promielócitos",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "promielocitos.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "proteina.urinaria.serum": {
+      "canonicalName": "Proteína Urinária",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "proteina.urinaria.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "proteinas.csf": {
+      "canonicalName": "Proteínas (LCR)",
+      "category": null,
+      "defaultSpecimen": "csf",
+      "defaultUnit": null,
+      "id": "proteinas.csf",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "proteinas.totais.serum": {
+      "canonicalName": "Proteínas Totais",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "proteinas.totais.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "proteinas.urine": {
+      "canonicalName": "Proteínas (U)",
+      "category": null,
+      "defaultSpecimen": "urine",
+      "defaultUnit": null,
+      "id": "proteinas.urine",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "prova.do.laco.serum": {
+      "canonicalName": "Prova do Laço",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "prova.do.laco.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "psa.total.serum": {
+      "canonicalName": "PSA Total",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "psa.total.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "pth.serum": {
+      "canonicalName": "PTH",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "pth.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "rdw.serum": {
+      "canonicalName": "RDW",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "rdw.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "relacao.a.g.serum": {
+      "canonicalName": "Relação A/G",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "relacao.a.g.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "relacao.p.n.serum": {
+      "canonicalName": "Relação P/N",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "relacao.p.n.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "relacao.prot.creat.serum": {
+      "canonicalName": "Relação Prot/Creat",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "relacao.prot.creat.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "reticulocitos.serum": {
+      "canonicalName": "Reticulócitos",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "reticulocitos.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "sato2.serum": {
+      "canonicalName": "SatO2",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "sato2.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "secrecao.serum": {
+      "canonicalName": "Secreção",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "secrecao.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "secrecao.traqueal.serum": {
+      "canonicalName": "Secreção Traqueal",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "secrecao.traqueal.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "segmentados.serum": {
+      "canonicalName": "Segmentados",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "segmentados.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "sodio.art": {
+      "canonicalName": "Sódio (Arterial)",
+      "category": null,
+      "defaultSpecimen": "arterialBlood",
+      "defaultUnit": null,
+      "id": "sodio.art",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "sodio.serum": {
+      "canonicalName": "Sódio",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "sodio.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "sodio.ven": {
+      "canonicalName": "Sódio (Venosa)",
+      "category": null,
+      "defaultSpecimen": "venousBlood",
+      "defaultUnit": null,
+      "id": "sodio.ven",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "swab.nasal.serum": {
+      "canonicalName": "Swab Nasal",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "swab.nasal.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "swab.retal.serum": {
+      "canonicalName": "Swab Retal",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "swab.retal.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "swab.serum": {
+      "canonicalName": "Swab",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "swab.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "t3.livre.serum": {
+      "canonicalName": "T3 Livre",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "t3.livre.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "t4.livre.serum": {
+      "canonicalName": "T4 Livre",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "t4.livre.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "tco2.art": {
+      "canonicalName": "TCO2 (Arterial)",
+      "category": null,
+      "defaultSpecimen": "arterialBlood",
+      "defaultUnit": null,
+      "id": "tco2.art",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "tco2.serum": {
+      "canonicalName": "TCO2",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "tco2.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "tco2.ven": {
+      "canonicalName": "TCO2 (Venosa)",
+      "category": null,
+      "defaultSpecimen": "venousBlood",
+      "defaultUnit": null,
+      "id": "tco2.ven",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "temperatura.serum": {
+      "canonicalName": "Temperatura",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "temperatura.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "tempo.de.coagulacao.serum": {
+      "canonicalName": "Tempo de Coagulação",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "tempo.de.coagulacao.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "tempo.de.sangramento.serum": {
+      "canonicalName": "Tempo de Sangramento",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "tempo.de.sangramento.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "testosterona.serum": {
+      "canonicalName": "Testosterona",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "testosterona.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "tfg.serum": {
+      "canonicalName": "TFG",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "tfg.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "tgo.ast.serum": {
+      "canonicalName": "TGO (AST)",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "tgo.ast.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "tgp.alt.serum": {
+      "canonicalName": "TGP (ALT)",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "tgp.alt.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "toxina.a.c.difficile.serum": {
+      "canonicalName": "Toxina A (C. difficile)",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "toxina.a.c.difficile.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "toxina.b.c.difficile.serum": {
+      "canonicalName": "Toxina B (C. difficile)",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "toxina.b.c.difficile.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "toxoplasmose.igg.serum": {
+      "canonicalName": "Toxoplasmose IgG",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "toxoplasmose.igg.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "toxoplasmose.igm.serum": {
+      "canonicalName": "Toxoplasmose IgM",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "toxoplasmose.igm.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "tp.atividade.serum": {
+      "canonicalName": "TP - Atividade",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "tp.atividade.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "tp.segundos.serum": {
+      "canonicalName": "TP (segundos)",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "tp.segundos.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "tr.sifilis.serum": {
+      "canonicalName": "TR Sífilis",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "tr.sifilis.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "triglicerides.serum": {
+      "canonicalName": "Triglicérides",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "triglicerides.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "troponina.i.serum": {
+      "canonicalName": "Troponina I",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "troponina.i.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "troponina.serum": {
+      "canonicalName": "Troponina",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "troponina.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "tsh.serum": {
+      "canonicalName": "TSH",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "tsh.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "ttpa.serum": {
+      "canonicalName": "TTPA",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "ttpa.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "ureia.serum": {
+      "canonicalName": "Ureia",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "ureia.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "urobilinogenio.serum": {
+      "canonicalName": "Urobilinogênio",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "urobilinogenio.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "EAS_NAME_MAP",
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "urocultura.serum": {
+      "canonicalName": "Urocultura",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "urocultura.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "vcm.serum": {
+      "canonicalName": "VCM",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "vcm.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "vdrl.csf": {
+      "canonicalName": "VDRL (LCR)",
+      "category": null,
+      "defaultSpecimen": "csf",
+      "defaultUnit": null,
+      "id": "vdrl.csf",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "PARAM_WHITELIST",
+        "regra"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "vdrl.serum": {
+      "canonicalName": "VDRL",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "vdrl.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "vhs.serum": {
+      "canonicalName": "VHS",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "vhs.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "vitamina.b1.serum": {
+      "canonicalName": "Vitamina B1",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "vitamina.b1.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "vitamina.b12.serum": {
+      "canonicalName": "Vitamina B12",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "vitamina.b12.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "vitamina.b6.serum": {
+      "canonicalName": "Vitamina B6",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "vitamina.b6.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "vitamina.d.serum": {
+      "canonicalName": "Vitamina D",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "vitamina.d.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "vldl.serum": {
+      "canonicalName": "VLDL",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "vldl.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    },
+    "vpm.serum": {
+      "canonicalName": "VPM",
+      "category": null,
+      "defaultSpecimen": "blood",
+      "defaultUnit": null,
+      "id": "vpm.serum",
+      "loinc": null,
+      "needsClinicalReview": true,
+      "origem": [
+        "NAME_MAP"
+      ],
+      "plausibleRange": null,
+      "valueKind": "numeric"
+    }
+  },
+  "version": "1.0.0"
+}

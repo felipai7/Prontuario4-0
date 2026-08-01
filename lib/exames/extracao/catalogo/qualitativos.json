@@ -1,0 +1,62 @@
+{
+  "codes": {
+    "AUSENCIA DE BAAR": "absent",
+    "AUSENCIA DE BACTERIAS": "absent",
+    "AUSENCIA DE ESTRUTURAS FUNGICAS": "absent",
+    "AUSENCIA DE FUNGOS": "absent",
+    "AUSENTE": "absent",
+    "AUSÊNCIA DE ANTICORPOS": "absent",
+    "AUSÊNCIA DE BAAR": "absent",
+    "AUSÊNCIA DE BACTÉRIAS": "absent",
+    "AUSÊNCIA DE ESTRUTURAS FÚNGICAS": "absent",
+    "AUSÊNCIA DE FUNGOS": "absent",
+    "DETECTADO": "detected",
+    "DETECTAVEL": "detected",
+    "DETECTÁVEL": "detected",
+    "INCONCLUSIVO": "inconclusive",
+    "INDETERMINADO": "indeterminate",
+    "NAO DETECTADO": "undetected",
+    "NAO DETECTAVEL": "undetected",
+    "NAO REAGENTE": "nonreactive",
+    "NEGATIVA": "negative",
+    "NEGATIVO": "negative",
+    "NEGATIVOS": "negative",
+    "NÃO DETECTADO": "undetected",
+    "NÃO DETECTÁVEL": "undetected",
+    "NÃO REAGENTE": "nonreactive",
+    "POSITIVA": "positive",
+    "POSITIVO": "positive",
+    "PRESENCA DE ESTRUTURAS FUNGICAS": "present",
+    "PRESENTE": "present",
+    "PRESENÇA DE ESTRUTURAS FÚNGICAS": "present",
+    "REAGENTE": "reactive"
+  },
+  "growth": {
+    "NAO HOUVE CRESCIMENTO": "noGrowth",
+    "NAO HOUVE CRESCIMENTO DE BACTERIAS": "noGrowth",
+    "NÃO HOUVE CRESCIMENTO": "noGrowth",
+    "NÃO HOUVE CRESCIMENTO DE BACTÉRIAS": "noGrowth"
+  },
+  "needsClinicalReview": [
+    "IMUNE",
+    "NÃO IMUNE",
+    "NAO IMUNE"
+  ],
+  "physicalDescription": [
+    "LÍMPIDO",
+    "LIMPIDO",
+    "INCOLOR",
+    "CRISTALINO",
+    "TURVO",
+    "LIGEIRAMENTE TURVO",
+    "OPACO",
+    "HEMORRÁGICO",
+    "HEMORRAGICO",
+    "XANTOCRÔMICO",
+    "XANTOCROMICO",
+    "AMARELADO",
+    "ROSADO",
+    "AVERMELHADO"
+  ],
+  "version": "1.0.0"
+}

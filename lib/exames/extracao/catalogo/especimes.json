@@ -1,0 +1,115 @@
+{
+  "csf": {
+    "keep": [
+      "Aspecto (LCR)",
+      "Basófilos (LCR)",
+      "Cloretos (LCR)",
+      "Cor (LCR)",
+      "Coágulo (LCR)",
+      "Células (LCR)",
+      "Células Nucleadas (LCR)",
+      "Eosinófilos (LCR)",
+      "Glicose (LCR)",
+      "Hemácias (LCR)",
+      "Lactato (LCR)",
+      "Leucócitos (LCR)",
+      "Linfócitos (LCR)",
+      "Macrófagos (LCR)",
+      "Monócitos (LCR)",
+      "Neutrófilos (LCR)",
+      "Plasmócitos (LCR)",
+      "Proteínas (LCR)",
+      "VDRL (LCR)",
+      "pH (LCR)"
+    ],
+    "rename": {
+      "Aspecto": "Aspecto (LCR)",
+      "Bacteria Isolada": "Bactéria Isolada (LCR)",
+      "Bacterioscopia Gram": "Bacterioscopia Gram (LCR)",
+      "Bacterioscopia Ziehl": "Bacterioscopia Ziehl (LCR)",
+      "Bactéria Isolada": "Bactéria Isolada (LCR)",
+      "Basófilos": "Basófilos (LCR)",
+      "Cloro": "Cloretos (LCR)",
+      "Coagulo": "Coágulo (LCR)",
+      "Cor": "Cor (LCR)",
+      "Coágulo": "Coágulo (LCR)",
+      "Eosinófilos": "Eosinófilos (LCR)",
+      "Glicose": "Glicose (LCR)",
+      "Hemácias": "Hemácias (LCR)",
+      "Lactato": "Lactato (LCR)",
+      "Leucócitos": "Leucócitos (LCR)",
+      "Linfócitos": "Linfócitos (LCR)",
+      "Monócitos": "Monócitos (LCR)",
+      "Neutrófilos": "Neutrófilos (LCR)",
+      "Pesquisa De Fungos": "Pesquisa De Fungos (LCR)",
+      "Pesquisa de Fungos": "Pesquisa De Fungos (LCR)",
+      "Plasmócitos": "Plasmócitos (LCR)",
+      "Proteínas Totais": "Proteínas (LCR)",
+      "VDRL": "VDRL (LCR)",
+      "pH": "pH (LCR)"
+    },
+    "ruleOutputs": [
+      "Cloretos (LCR)",
+      "Células (LCR)",
+      "Células Nucleadas (LCR)",
+      "Macrófagos (LCR)",
+      "Proteínas (LCR)"
+    ]
+  },
+  "gasometry": {
+    "deliberatelyDiscarded": [
+      "TIPO DE COLETA",
+      "HB",
+      "HEMOGLOBINA"
+    ],
+    "params": {
+      "02 CT": "O2 CT",
+      "02 SAT": "O2 Sat",
+      "BE": "BE",
+      "CO2 TOTAL": "TCO2",
+      "GLI": "Glicose",
+      "GLICOSE": "Glicose",
+      "HB": null,
+      "HC03": "HCO3",
+      "HCO3": "HCO3",
+      "HCT": "Hct",
+      "HEMATOCRITO": "Hct",
+      "HEMATÓCRITO": "Hct",
+      "HEMOGLOBINA": null,
+      "K": "Potássio",
+      "LAC": "Lactato",
+      "LACTATO": "Lactato",
+      "NA": "Sódio",
+      "O2 CT": "O2 CT",
+      "O2 SAT": "O2 Sat",
+      "PCO2": "PCO2",
+      "PH": "pH",
+      "PO2": "PO2",
+      "POTASSIO": "Potássio",
+      "POTÁSSIO": "Potássio",
+      "SATO2": "O2 Sat",
+      "SO2": "O2 Sat",
+      "SODIO": "Sódio",
+      "SÓDIO": "Sódio",
+      "TCO2": "TCO2",
+      "TIPO DE COLETA": null
+    },
+    "specialNames": {
+      "Arterial": {
+        "CA+": "Cálcio iônico",
+        "CA++": "Cálcio iônico",
+        "CAI": "Cálcio iônico",
+        "CALCIO IONICO": "Cálcio iônico",
+        "CÁLCIO IÔNICO": "Cálcio iônico"
+      },
+      "Venosa": {
+        "CA+": "Cálcio iônico Venoso",
+        "CA++": "Cálcio iônico Venoso",
+        "CAI": "Cálcio iônico Venoso",
+        "CALCIO IONICO": "Cálcio iônico Venoso",
+        "CÁLCIO IÔNICO": "Cálcio iônico Venoso"
+      }
+    }
+  },
+  "version": "1.0.0"
+}
