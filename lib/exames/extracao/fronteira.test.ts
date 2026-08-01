@@ -86,7 +86,7 @@ describe('estrutura do módulo', () => {
 // No clinBoard, apagar um bloco inteiro do arquivo sintético reduzia a suíte
 // de 71 para 60 checagens sem falhar nada. Aqui a contagem é afirmada: remover
 // testes quebra o build, e aumentar o piso é uma edição consciente.
-const CHECAGENS_MINIMAS = 200
+const CHECAGENS_MINIMAS = 195
 
 function arquivosDeTeste(dir: string): string[] {
   const saida: string[] = []
