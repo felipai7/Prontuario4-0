@@ -15,6 +15,7 @@ import { separarColunas, separarValorUnidade, pareceReferencia } from './colunas
 import { interpretarValor, ehNaoUsadoClinicamente } from '../normalizadores/valor'
 import { resolverAnalito } from '../catalogo'
 import especimes from '../catalogo/especimes.json'
+import { ehRotuloDeMetadado } from './metadados'
 
 /** Parâmetros descartados de propósito dentro da gasometria, por redundância. */
 const DESCARTE_GASO = new Set(
@@ -48,6 +49,9 @@ export const matcherTabular: Matcher = {
 
     const nome = colunas[0]!.texto.replace(/[:.\s]+$/, '').trim()
     if (!nome || !RE_NOME.test(nome)) return { kind: 'noMatch' }
+    // Cabeçalho e rodapé têm a mesma forma de um resultado. Não são desta
+    // linha de montagem, e não são descarte: nunca foram candidatos.
+    if (ehRotuloDeMetadado(nome)) return { kind: 'noMatch' }
 
     // Campos após o nome. A atribuição é POSICIONAL, e não por aparência: num
     // laudo o layout é sempre nome | valor | unidade | referência, e um valor

@@ -21,6 +21,7 @@ import { interpretarValor } from './normalizadores/valor'
 import { interpretarReferencia } from './normalizadores/referencia'
 import { normalizarUnidade } from './normalizadores/unidade'
 import { marcadorDeColeta } from './normalizadores/data'
+import { ehRotuloDeMetadado } from './extratores/metadados'
 
 export interface ResultadoMotor {
   observations: Observation[]
@@ -148,5 +149,8 @@ export function extrairDoTexto(
 
 /** Tem nome à esquerda e número à direita — a forma de um resultado. */
 function pareceResultado(texto: string): boolean {
-  return /^[A-Za-zÀ-ÿ][^\d]{2,40}[\s:]+[<>≤≥]?\s*[\d.,]+/.test(texto.trim())
+  const t = texto.trim()
+  if (!/^[A-Za-zÀ-ÿ][^\d]{2,40}[\s:]+[<>≤≥]?\s*[\d.,]+/.test(t)) return false
+  const nome = t.split(/[:\s]{2,}|:/)[0] ?? ''
+  return !ehRotuloDeMetadado(nome)
 }

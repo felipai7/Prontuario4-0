@@ -25,7 +25,7 @@ const CABECALHO_RODAPE =
 
 /** Linhas que anunciam faixa de referência tabelada, não resultado. */
 const TABELA_REFERENCIA =
-  /^\s*(?:valores?\s+de\s+refer[êe]ncia|refer[êe]ncia\s*:|adultos?\s+(?:ambulat|internados|maior)|rec[ée]m\s*-?\s*nascidos?|crian[çc]as?\s+de\s+\d)/i
+  /^\s*(?:refer[êe]ncia\s*:|adultos?\s+(?:ambulat|internados|maior)|rec[ée]m\s*-?\s*nascidos?|crian[çc]as?\s+de\s+\d|resultado\s+valor\s+referencial|valor\s+cr[íi]tico)/i
 
 export interface Supressao {
   reason: DiscardReason
@@ -42,6 +42,12 @@ export interface Supressao {
 export function suprimir(linha: string): Supressao | null {
   const texto = linha.trim()
   if (!texto) return { reason: 'headerOrFooter', detail: 'linha vazia' }
+
+  // "VALOR DE REFERÊNCIA:" é consumido pelo matcher de bloco como a faixa do
+  // exame acima. Suprimir aqui o mataria antes disso — por isso ele NÃO entra
+  // em TABELA_REFERENCIA. "VALOR CRÍTICO", sim: valor crítico é interpretação
+  // clínica, e interpretação não entra neste módulo (R3).
+  if (/^\s*valor(?:es)?\s+de\s+refer[êe]ncia\s*[:.]/i.test(texto)) return null
 
   if (RESULTADO_ANTERIOR.test(texto)) {
     return { reason: 'historicalResult', detail: 'rótulo de resultado anterior' }

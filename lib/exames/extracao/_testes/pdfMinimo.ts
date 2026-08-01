@@ -57,7 +57,12 @@ export function construirPdf(paginas: PaginaPdf[]): Uint8Array {
 
   objetos[1] = '<< /Type /Catalog /Pages 2 0 R >>'
   objetos[2] = `<< /Type /Pages /Kids [${idsPaginas.map(id => `${id} 0 R`).join(' ')}] /Count ${paginas.length} >>`
-  objetos[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'
+  // /WinAnsiEncoding é obrigatório: sem ele o PDF usa a StandardEncoding
+  // embutida do Helvetica, e os bytes acentuados do latin1 mapeiam para outros
+  // glifos — "POTÁSSIO" vira "POT`SSIO" e "Método" vira "MØtodo". O texto sai
+  // do PDF corrompido, e um teste com acento passa a provar a coisa errada.
+  objetos[3] =
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>'
 
   paginas.forEach((pagina, i) => {
     const fluxo = fluxoDaPagina(pagina)

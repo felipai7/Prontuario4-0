@@ -71,6 +71,7 @@ if (process.argv.includes('--calibrar')) {
 // ── Execução normal ────────────────────────────────────────────────────────
 let totalObs = 0, totalDesc = 0, totalRev = 0
 const porMotivo = new Map<string, number>()
+const porNome = new Map<string, number>()
 const semNada: string[] = []
 
 for (const arquivo of arquivos) {
@@ -83,7 +84,12 @@ for (const arquivo of arquivos) {
   totalObs += r.observations.length
   totalDesc += r.discarded.length
   totalRev += r.observations.filter(o => o.requiresReview).length
-  for (const d of r.discarded) porMotivo.set(d.reason, (porMotivo.get(d.reason) ?? 0) + 1)
+  for (const d of r.discarded) {
+    porMotivo.set(d.reason, (porMotivo.get(d.reason) ?? 0) + 1)
+    if (d.reason === 'unrecognizedAnalyte' && d.detail) {
+      porNome.set(d.detail, (porNome.get(d.detail) ?? 0) + 1)
+    }
+  }
 
   const rotulo = arquivo.replace(FIXTURES, '').replace(/^\//, '')
   if (r.observations.length === 0) semNada.push(rotulo)
@@ -103,6 +109,12 @@ console.log(`\n── Descartes por motivo ──`)
 for (const [motivo, n] of [...porMotivo].sort((a, b) => b[1] - a[1])) {
   console.log(`  ${motivo.padEnd(22)} ${n}`)
 }
+if (process.argv.includes('--descartes')) {
+  console.log(`\n── Nomes mais descartados como analito desconhecido ──`)
+  const top = [...porNome].sort((a, b) => b[1] - a[1]).slice(0, 30)
+  for (const [nome, n] of top) console.log(`  ${String(n).padStart(4)}  ${nome}`)
+}
+
 if (semNada.length) {
   console.log(`\n⚠ ${semNada.length} laudos sem NENHUMA observação:`)
   semNada.forEach(s => console.log(`    ${s}`))

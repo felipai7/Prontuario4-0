@@ -105,6 +105,20 @@ describe('leitura de um PDF de verdade', () => {
     expect(doc.lines).toEqual([])
   })
 
+  it('acento sobrevive à ida e volta pelo PDF', async () => {
+    // Regressão: sem /WinAnsiEncoding na fonte, o PDF usa a StandardEncoding
+    // embutida do Helvetica e "POTÁSSIO" volta como "POT`SSIO". Um teste com
+    // acento passava a provar a coisa errada, em silêncio.
+    const doc = await lerDocumento(
+      pdfDeLinhas(['POTÁSSIO', 'Método REFERÊNCIA CRÍTICO', 'Hemácias Cálcio iônico Coágulo']),
+    )
+    expect(doc.lines.map(l => l.text)).toEqual([
+      'POTÁSSIO',
+      'Método REFERÊNCIA CRÍTICO',
+      'Hemácias Cálcio iônico Coágulo',
+    ])
+  })
+
   it('R8 · duas leituras do mesmo PDF produzem o mesmo objeto', async () => {
     const bytes = pdfDeLinhas(['Sodio  140  mmol/L  135 - 145'])
     expect(await lerDocumento(bytes)).toEqual(await lerDocumento(bytes))
