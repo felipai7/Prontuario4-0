@@ -76,11 +76,24 @@ export const matcherBloco: Matcher = {
     }
 
     // ── O valor: o que vem depois do rótulo "Resultado:" ──────────────────
+    //
+    // Dois formatos, conforme o vão que o laudo usa:
+    //   HOC    "Resultado   :   154,1   mmol/L"  → valor em coluna própria
+    //   PIOX   "Resultado: 35  mg/dL"            → rótulo e valor COLADOS
+    //
+    // Descartar a primeira coluna sempre — que era o que eu fazia — jogava
+    // fora o valor no segundo caso, e a ureia de 35 mg/dL virava "mg/dL".
     const colunas = separarColunas(linha).map(c => c.texto)
-    const depoisDoRotulo = colunas
-      .slice(1)
-      .map(c => c.replace(/^[:.\s]+/, '').trim())
-      .filter(Boolean)
+    // Os dois-pontos podem já ter virado coluna própria e sido filtrados, de
+    // modo que a coluna 0 fica só "Resultado". Por isso o rótulo é removido com
+    // a pontuação OPCIONAL — senão o próprio rótulo virava o valor.
+    const restoDoRotulo = (colunas[0] ?? '')
+      .replace(/^\s*resultados?\s*[:.]*\s*/i, '')
+      .trim()
+    const depoisDoRotulo = [
+      ...(restoDoRotulo ? [restoDoRotulo] : []),
+      ...colunas.slice(1).map(c => c.replace(/^[:.\s]+/, '').trim()),
+    ].filter(Boolean)
     if (depoisDoRotulo.length === 0) return { kind: 'noMatch' }
 
     const { valor: valorBruto, unidade: unidadeColada } = separarValorUnidade(depoisDoRotulo[0]!)

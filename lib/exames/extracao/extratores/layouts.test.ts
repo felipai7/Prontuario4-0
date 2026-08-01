@@ -83,6 +83,42 @@ describe('layout em bloco (HOC)', () => {
   })
 })
 
+describe('layout em bloco com rótulo colado no valor (PIOX)', () => {
+  // O mesmo layout de bloco do HOC, com uma diferença de diagramação: o rótulo
+  // e o valor ficam na MESMA coluna. Descartar sempre a primeira coluna — que
+  // é o que funciona no HOC — jogava fora o valor aqui, e a ureia de 35 mg/dL
+  // virava "mg/dL". Os dois formatos convivem no corpus.
+  const LAUDO = [
+    'UREIA',
+    'Data de Coleta: 03/04/2026',
+    'Material: Soro / Método: Urease',
+    'Resultado: 35  mg/dL',
+    'CREATININA',
+    'Data de Coleta: 03/04/2026',
+    'Material: Soro / Método: Picrato Alcalino',
+    'Resultado: 0,40  mg/dL',
+  ]
+
+  it('o valor colado no rótulo é extraído, não a unidade', async () => {
+    const r = await extrair(LAUDO)
+    const porNome = new Map(r.observations.map(o => [o.canonicalName, o]))
+    expect(porNome.get('Ureia')?.value).toMatchObject({ kind: 'numeric', value: 35 })
+    expect(porNome.get('Ureia')?.unit.canonical).toBe('mg/dL')
+    expect(porNome.get('Creatinina')?.value).toMatchObject({ kind: 'numeric', value: 0.4 })
+  })
+
+  it('o rótulo sozinho na coluna não vira o valor', async () => {
+    // No HOC a mesma linha sai como "Resultado" | "154,1" | "mmol/L", porque os
+    // dois-pontos ganham coluna própria. Ali a coluna 0 é só o rótulo.
+    const r = await extrair([
+      'SÓDIO',
+      'Coleta: 05/04/2026',
+      'Resultado   :  154,1   mmol/L',
+    ])
+    expect(r.observations[0]?.value).toMatchObject({ kind: 'numeric', value: 154.1 })
+  })
+})
+
 describe('tabela multiparâmetro com dois-pontos em coluna própria (HOC)', () => {
   // Este bloco existe por causa da F9: a paridade mostrou 115 exames perdidos
   // em quatro laudos do HOC porque os dois-pontos ficam numa COLUNA separada
