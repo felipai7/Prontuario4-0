@@ -203,6 +203,8 @@ function normaDoAntimicrobiano(
 
 interface Bloco {
   titulo: string
+  /** Índice global da linha de título, para marcá-la como consumida. */
+  tituloLinha: number | null
   linhas: TextLine[]
 }
 
@@ -214,7 +216,7 @@ function dividirEmBlocos(texto: DocumentText): Bloco[] {
     if (RE_CABECALHO_CULTURA.test(t) && t.length <= 70) {
       // O mesmo cabeçalho se repete a cada página; não abre bloco novo.
       if (atual && materialDe(atual.titulo) === materialDe(t)) { atual.linhas.push(linha); continue }
-      atual = { titulo: t, linhas: [] }
+      atual = { titulo: t, tituloLinha: linha.index, linhas: [] }
       blocos.push(atual)
       continue
     }
@@ -230,6 +232,7 @@ function lerTabelaMultiIsolado(
   quantidadeIsolados: number,
   norma: ReturnType<typeof normasDeclaradas>,
   unidadeMic: string,
+  usadas: Set<number>,
 ): Susceptibility[][] {
   const porIsolado: Susceptibility[][] = Array.from({ length: quantidadeIsolados }, () => [])
   for (let i = inicio; i < linhas.length; i++) {
@@ -238,6 +241,7 @@ function lerTabelaMultiIsolado(
     const nome = colunas[0]!.trim()
     if (RE_CABECALHO_TABELA.test(nome) || RE_LEGENDA.test(linhas[i]!.text)) continue
     if (!/^[A-Za-zÀ-ÿ]/.test(nome)) continue
+    usadas.add(linhas[i]!.index)
 
     // Pares (SENS, MIC) por isolado, na ordem das colunas.
     for (let k = 0; k < quantidadeIsolados; k++) {
@@ -265,6 +269,7 @@ function lerTabelaSimples(
   inicio: number,
   norma: ReturnType<typeof normasDeclaradas>,
   unidadeMic: string,
+  usadas: Set<number>,
 ): Susceptibility[] {
   const saida: Susceptibility[] = []
   for (let i = inicio; i < linhas.length; i++) {
@@ -277,6 +282,7 @@ function lerTabelaSimples(
     const interpretacao = INTERPRETACOES[bruta]
     if (!interpretacao) continue
     if (saida.some(x => semAcento(x.antimicrobial) === semAcento(nome))) continue
+    usadas.add(linhas[i]!.index)
     saida.push({
       antimicrobial: nome,
       interpretation: interpretacao,
@@ -294,9 +300,18 @@ export function extrairCulturas(
   dataDocumento: TemporalRef,
   opcoes: Readonly<ExtractionOptions>,
   profileId: string,
-): { cultures: CultureResult[]; discarded: DiscardedItem[] } {
+): { cultures: CultureResult[]; discarded: DiscardedItem[]; linhasUsadas: Set<number> } {
   const cultures: CultureResult[] = []
   const discarded: DiscardedItem[] = []
+  // Quais linhas este extrator realmente consumiu.
+  //
+  // Antes, o segmentador marcava um bloco inteiro como `culture` e nenhum
+  // matcher de laboratório se aplicava ali. Como a seção de cultura não tinha
+  // fim, ela engolia o que viesse depois: no IMEC5 uma sorologia inteira, 42
+  // linhas, sumia sem virar observação NEM descarte — o silêncio que R1
+  // proíbe. Declarar as linhas usadas troca uma heurística de fronteira por um
+  // fato: o que a cultura não usou volta para o motor.
+  const linhasUsadas = new Set<number>()
   const norma = normasDeclaradas(texto.lines)
   const unidadeMic =
     texto.lines.find(l => /MIC\s*=\s*mcg\/ml/i.test(l.text)) ? 'mg/L' : 'mg/L'
@@ -304,6 +319,7 @@ export function extrairCulturas(
   for (const bloco of dividirEmBlocos(texto)) {
     const primeira = bloco.linhas[0] ?? texto.lines[0]
     if (!primeira) continue
+    if (bloco.tituloLinha !== null) linhasUsadas.add(bloco.tituloLinha)
 
     // ── Data da coleta do bloco ─────────────────────────────────────────
     let coleta = dataDocumento
@@ -321,7 +337,13 @@ export function extrairCulturas(
       const bruto = a?.[1] ?? b?.[2]
       if (!bruto) continue
       const organismo = bruto.replace(/\s{2,}.*$/, '').trim()
+      linhasUsadas.add(linha.index)
       if (!organismo || vistos.has(organismo)) continue
+      // "Bactéria isolada: NÃO HOUVE CRESCIMENTO DE BACTÉRIAS." — o campo do
+      // isolado traz a AUSÊNCIA de isolado. Criar um isolado com esse nome
+      // fazia a cultura sair como `positive`: uma hemocultura negativa
+      // registrada como positiva, que é erro clínico direto.
+      if (RE_SEM_CRESCIMENTO.test(organismo)) continue
       vistos.add(organismo)
       isolates.push({
         organism: organismo,
@@ -331,6 +353,11 @@ export function extrairCulturas(
     }
 
     // ── Crescimento ─────────────────────────────────────────────────────
+    for (const l of bloco.linhas) {
+      if (RE_SEM_CRESCIMENTO.test(l.text) || RE_CONTAMINADA.test(l.text) || RE_LEGENDA.test(l.text)) {
+        linhasUsadas.add(l.index)
+      }
+    }
     const semCrescimento = bloco.linhas.some(l => RE_SEM_CRESCIMENTO.test(l.text))
     const contaminada = bloco.linhas.some(l => RE_CONTAMINADA.test(l.text))
     const growth: CultureResult['growth'] =
@@ -340,18 +367,19 @@ export function extrairCulturas(
 
     // ── Antibiograma ────────────────────────────────────────────────────
     const abertura = bloco.linhas.findIndex(l => RE_ABRE_ANTIBIOGRAMA.test(l.text.trim()))
+    if (abertura >= 0) linhasUsadas.add(bloco.linhas[abertura]!.index)
     if (abertura >= 0 && isolates.length > 0) {
       const multiIsolado = bloco.linhas
         .slice(abertura, abertura + 4)
         .some(l => /\[\s*1\s*\].*\[\s*2\s*\]/.test(l.text))
       if (multiIsolado && isolates.length > 1) {
         const tabelas = lerTabelaMultiIsolado(
-          bloco.linhas, abertura + 1, isolates.length, norma, unidadeMic,
+          bloco.linhas, abertura + 1, isolates.length, norma, unidadeMic, linhasUsadas,
         )
         tabelas.forEach((t, i) => { if (isolates[i]) isolates[i]!.susceptibilities = t })
       } else {
         isolates[0]!.susceptibilities = lerTabelaSimples(
-          bloco.linhas, abertura + 1, norma, unidadeMic,
+          bloco.linhas, abertura + 1, norma, unidadeMic, linhasUsadas,
         )
       }
     } else if (abertura >= 0) {
@@ -381,5 +409,5 @@ export function extrairCulturas(
     })
   }
 
-  return { cultures, discarded }
+  return { cultures, discarded, linhasUsadas }
 }

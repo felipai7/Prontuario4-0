@@ -183,6 +183,32 @@ describe('crescimento ausente', () => {
   })
 })
 
+describe('ausência de crescimento no campo do isolado', () => {
+  it('"Bactéria isolada: NÃO HOUVE CRESCIMENTO" não cria um isolado', async () => {
+    // O campo do isolado traz a AUSÊNCIA de isolado. Criar um isolado com esse
+    // nome fazia a cultura sair como `positive` — uma hemocultura negativa
+    // registrada como positiva, que é erro clínico direto e do tipo que parece
+    // certo: o nome do organismo é uma frase em português.
+    const r = await extrair([
+      'HEMOCULTURA - 1ª AMOSTRA',
+      'Material: Sangue periférico   Coleta...: 12/05/2026 - 08:40',
+      'Bactéria isolada....: NÃO HOUVE CRESCIMENTO DE BACTÉRIAS.',
+    ])
+    expect(r.cultures[0]!.isolates).toEqual([])
+    expect(r.cultures[0]!.growth).toBe('noGrowth')
+  })
+
+  it('um isolado de verdade continua sendo criado', async () => {
+    const r = await extrair([
+      'HEMOCULTURA - 1ª AMOSTRA',
+      'Material: Sangue periférico   Coleta...: 12/05/2026 - 08:40',
+      'Bactéria isolada....: Escherichia coli',
+    ])
+    expect(r.cultures[0]!.isolates.map(i => i.organism)).toEqual(['Escherichia coli'])
+    expect(r.cultures[0]!.growth).toBe('positive')
+  })
+})
+
 describe('camada de texto corrompida', () => {
   it('R1 · texto ilegível é reconhecido como tal', () => {
     // Reproduz o estrago real de um laudo do corpus: bytes UTF-16 com a ordem

@@ -53,19 +53,23 @@ describe('lacuna · saturação de O2 grafada sem separador', () => {
   })
 })
 
-// ── 2. Seção de cultura que nunca termina ──────────────────────────────────
-// 5 ocorrências (IMEC5 ×3, HUGO2, HUGO4), e a causa NÃO é a que eu supus.
+// ── 2. Seção de cultura que engolia o que vinha depois — CORRIGIDA ─────────
+// 5 ocorrências (IMEC5 ×3, HUGO2, HUGO4).
 //
 // Minha primeira hipótese foi vocabulário — "Influenza tipo A" contra
 // "Influenza A" no catálogo. A fixture desmentiu na hora: isolada, a sorologia
-// é extraída sem problema. O que quebra é o CONTEXTO.
+// era extraída sem problema. O que quebrava era o CONTEXTO.
 //
 // No IMEC5 o bloco de sorologia vem DEPOIS de uma hemocultura, e a seção de
-// cultura não tem fim: ela segue até o próximo cabeçalho reconhecido. Como
-// "COVID Ag / INFLUENZA A-B" não é um deles, as 42 linhas seguintes — incluindo
-// a sorologia inteira — ficam num segmento `culture`, onde nenhum matcher de
-// laboratório se aplica. Não viram observação NEM descarte: somem.
-describe('lacuna · seção de cultura sem fim engole o que vem depois', () => {
+// cultura não tinha fim: seguia até o próximo cabeçalho reconhecido. Como
+// "COVID Ag / INFLUENZA A-B" não é um deles, as 42 linhas seguintes — a
+// sorologia inteira — ficavam num segmento onde nenhum matcher de laboratório
+// se aplicava. Não viravam observação NEM descarte: sumiam.
+//
+// CORREÇÃO: o extrator de culturas passou a declarar quais linhas consumiu, e
+// o motor processa todo o resto. Trocou-se uma heurística de fronteira por um
+// fato. Estes testes eram `it.fails` e o mecanismo cobrou a virada.
+describe('seção de cultura não engole mais o que vem depois', () => {
   const SOROLOGIA = [
     'COVID Ag / INFLUENZA A-B',
     'Influenza tipo A:  NEGATIVO',
@@ -78,7 +82,7 @@ describe('lacuna · seção de cultura sem fim engole o que vem depois', () => {
     expect(nomes(r)).toContain('Influenza B')
   })
 
-  it.fails('depois de uma hemocultura, a mesma sorologia deveria continuar sendo extraída', async () => {
+  it('depois de uma hemocultura, a mesma sorologia continua sendo extraída', async () => {
     const r = await extrair([
       'HEMOCULTURA - 2ª AMOSTRA',
       'Material: Sangue periférico   Coleta...: 12/05/2026 - 08:40',
@@ -88,16 +92,34 @@ describe('lacuna · seção de cultura sem fim engole o que vem depois', () => {
     expect(nomes(r)).toContain('Influenza A')
   })
 
-  it.fails('R1 · o que a seção de cultura engole deveria ao menos virar descarte', async () => {
-    // Pior que não extrair: não extrair EM SILÊNCIO. Hoje estas linhas não
-    // aparecem em `discarded` — o usuário não tem como saber que existiram.
+  it('a cultura continua sendo extraída no campo dela', async () => {
+    // A correção não pode ter custado a cultura: as linhas que o extrator de
+    // culturas consome continuam sendo dele, e só o resto volta ao motor.
     const r = await extrair([
       'HEMOCULTURA - 2ª AMOSTRA',
       'Material: Sangue periférico   Coleta...: 12/05/2026 - 08:40',
       'Bactéria isolada....: NÃO HOUVE CRESCIMENTO DE BACTÉRIAS.',
       ...SOROLOGIA,
     ])
-    expect(r.discarded.length).toBeGreaterThan(0)
+    expect(r.cultures).toHaveLength(1)
+    expect(r.cultures[0]!.growth).toBe('noGrowth')
+  })
+
+  it('o antibiograma não vira observação de laboratório', async () => {
+    // Agora que os matchers alcançam segmentos de cultura, a tabela de
+    // sensibilidade poderia virar "exame Amicacina = S". Não pode: as linhas
+    // que a cultura consumiu ficam fora do alcance do motor.
+    const r = await extrair([
+      'HEMOCULTURA - 1ª AMOSTRA',
+      'Material: Sangue periférico   Coleta...: 12/05/2026 - 08:40',
+      'Bactéria isolada....: Escherichia coli',
+      'Antibiograma',
+      'Antimicrobiano   Classificação/Categoria   MIC',
+      'Amicacina   S   <=8',
+      'Meropenem   S   <=0.12',
+    ])
+    expect(nomes(r)).not.toContain('Amicacina')
+    expect(r.cultures[0]!.isolates[0]!.susceptibilities).toHaveLength(2)
   })
 })
 
@@ -147,9 +169,11 @@ describe('lacuna · valor qualitativo terminado em ponto', () => {
 })
 
 // ── 5. Crescimento de cultura numa linha de exame ──────────────────────────
-// 1 ocorrência (IMECliquor). "Bactéria isolada" com o texto de crescimento no
-// lugar do valor: é vocabulário de CULTURA aparecendo numa linha de resultado.
-describe('lacuna · termo de crescimento no lugar do valor', () => {
+// 1 ocorrência (IMECliquor). No líquor, "Bactéria isolada" é um parâmetro do
+// laudo, não um bloco de cultura — e o valor dele é a frase de crescimento.
+// Distinto da correção feita no extrator de culturas, que trata o mesmo texto
+// dentro de um bloco de cultura de verdade.
+describe('lacuna · termo de crescimento no lugar do valor, fora de bloco de cultura', () => {
   it.fails('"NÃO HOUVE CRESCIMENTO DE BACTÉRIAS" deveria ser reconhecido como ausência', async () => {
     const r = await extrair([
       'ROTINA DE LÍQUOR',

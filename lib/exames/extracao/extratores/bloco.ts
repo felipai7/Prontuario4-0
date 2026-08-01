@@ -41,7 +41,10 @@ export const matcherBloco: Matcher = {
   id: 'bloco',
 
   applicability(segment: Segment): boolean {
-    return segment.kind === 'examSection' || segment.kind === 'eas'
+    // `culture` entra: o que o extrator de culturas consumiu já foi retirado
+    // antes de chegar aqui, e o que sobra é resultado comum que por acaso caiu
+    // depois de um cabeçalho de cultura.
+    return segment.kind === 'examSection' || segment.kind === 'eas' || segment.kind === 'culture'
   },
 
   match(linha: TextLine, segment: Segment, ctx: ParseContext): MatchOutcome {

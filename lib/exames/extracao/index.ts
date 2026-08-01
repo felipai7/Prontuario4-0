@@ -195,8 +195,17 @@ export async function extrairExames(req: ExtractionRequest): Promise<ExtractionR
   // extração.
   const perfil =
     (detection.profileId ? perfilPorId(detection.profileId) : null) ?? (perfilBase as LabProfile)
+
+  // Culturas PRIMEIRO: elas declaram quais linhas consumiram, e o motor de
+  // laboratório processa todo o resto. A ordem importa — invertida, voltaria a
+  // haver um bloco de linhas fora do alcance dos matchers.
+  const semData = { iso: null, hasTime: false, source: 'absent' as const, raw: '' }
+  const culturas = texto.hasTextLayer
+    ? extrairCulturas(texto, semData, opcoes, perfil.id)
+    : { cultures: [], discarded: [], linhasUsadas: new Set<number>() }
+
   const motor = texto.hasTextLayer
-    ? extrairDoTexto(texto, perfil, opcoes)
+    ? extrairDoTexto(texto, perfil, opcoes, culturas.linhasUsadas)
     : { observations: [], discarded: [], matcherHits: {}, documentDate: null }
 
   if (motor.documentDate && motor.documentDate.source === 'absent') {
@@ -213,13 +222,6 @@ export async function extrairExames(req: ExtractionRequest): Promise<ExtractionR
       detail: `${datasDistintas.size} datas de coleta`,
     })
   }
-
-  // ── Culturas e antibiograma ────────────────────────────────────────────
-  // Bloco, não linha: o isolado, a contagem e a tabela de sensibilidade moram
-  // em lugares diferentes do documento, às vezes em páginas diferentes.
-  const culturas = texto.hasTextLayer
-    ? extrairCulturas(texto, motor.documentDate ?? { iso: null, hasTime: false, source: 'absent', raw: '' }, opcoes, perfil.id)
-    : { cultures: [], discarded: [] }
 
   // ── Laudos de imagem ───────────────────────────────────────────────────
   const imagens = texto.hasTextLayer

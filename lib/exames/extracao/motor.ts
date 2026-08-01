@@ -44,6 +44,15 @@ export function extrairDoTexto(
   texto: DocumentText,
   perfil: LabProfile,
   opcoes: ParseContext['options'],
+  /**
+   * Linhas já consumidas pelo extrator de culturas.
+   *
+   * O motor processa TODO o resto — inclusive o que estiver dentro de um
+   * segmento de cultura. Antes, o segmento inteiro ficava fora do alcance dos
+   * matchers, e como ele não tinha fim engolia o que viesse depois: uma
+   * sorologia de 42 linhas sumia sem virar observação nem descarte.
+   */
+  linhasConsumidas: ReadonlySet<number> = new Set(),
 ): ResultadoMotor {
   const catalogo = carregarCatalogo()
   const { segments, documentDate } = segmentar(texto, perfil)
@@ -68,6 +77,8 @@ export function extrairDoTexto(
     )
 
     for (const linha of segmento.lines) {
+      if (linhasConsumidas.has(linha.index)) continue
+
       const supressao = suprimir(linha.text)
       if (supressao) {
         // Linha em branco não interessa a ninguém; as demais supressões sim.
