@@ -144,3 +144,10 @@ vite.config.ts.timestamp-*
 
 # Service worker gerado a partir de public/sw.template.js (scripts/gen-sw.mjs)
 public/sw.js
+
+# Saída da paridade e da revisão clínica: contêm VALORES DE EXAME de pacientes
+# reais, ainda que sem nome. Resultado de exame é dado clínico — fica local,
+# como os PDFs do corpus.
+RELATORIO-PARIDADE.md
+REVISAO-PARIDADE.html
+paridade.json

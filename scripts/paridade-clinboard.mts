@@ -17,7 +17,9 @@
 //   FIXTURES_EXAMES=~/clinboard/fixtures CLINBOARD_HTML=~/clinboard/clinboard.html \
 //   npx tsx scripts/paridade-clinboard.mts
 //
-// Saída: RELATORIO-PARIDADE.md na raiz. Nunca entra no CI (depende do corpus).
+// Saída: RELATORIO-PARIDADE.md e REVISAO-PARIDADE.html na raiz. Os DOIS ficam
+// fora do git: trazem valores de exame de pacientes reais, e resultado de exame
+// é dado clínico ainda que sem o nome ao lado. Nunca entram no CI.
 // =============================================================================
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -65,6 +67,9 @@ const chave = (s: string) =>
 interface Divergencia {
   arquivo: string
   exame: string
+  unidade: string
+  referencia: string
+  data: string
   categoria: 'correcaoIntencional' | 'regressao' | 'diferencaDeForma' | 'naoClassificada'
   motivo: string
   clinboard: string
@@ -158,6 +163,7 @@ for (const arquivo of arquivos) {
       // importada, por exemplo).
       divergencias.push({
         arquivo: rotulo, exame: a.name,
+        unidade: a.unit ?? '', referencia: a.ref ?? '', data: a.date ?? '',
         categoria: categoria === 'correcaoIntencional' ? categoria : 'regressao',
         motivo: categoria === 'correcaoIntencional' ? motivo : 'o clinBoard extrai este exame e o novo não',
         clinboard: `${a.value ?? '—'} ${a.unit ?? ''}`.trim(), novo: '— ausente —',
@@ -172,6 +178,7 @@ for (const arquivo of arquivos) {
     const { categoria, motivo } = classificar(a, b)
     divergencias.push({
       arquivo: rotulo, exame: a.name, categoria, motivo,
+      unidade: a.unit ?? '', referencia: a.ref ?? '', data: a.date ?? '',
       clinboard: `${a.value ?? '—'} ${a.unit ?? ''}`.trim(),
       novo: b.value?.kind === 'numeric'
         ? `${b.value.censoring !== 'none' ? b.value.censoring + ' ' : ''}${b.value.value} ${b.unit?.canonical ?? ''}`.trim()
@@ -185,6 +192,9 @@ for (const arquivo of arquivos) {
     const { categoria, motivo } = classificar(null, b)
     divergencias.push({
       arquivo: rotulo, exame: b.canonicalName ?? b.rawName, categoria,
+      unidade: b.unit?.canonical ?? b.unit?.raw ?? '',
+      referencia: b.reference?.kind === 'range' ? `${b.reference.min} - ${b.reference.max}` : (b.reference?.kind ?? ''),
+      data: b.collectedAt?.iso ?? '',
       motivo: categoria === 'naoClassificada' ? 'extração NOVA: o clinBoard não pega este exame' : motivo,
       clinboard: '— ausente —',
       novo: b.value?.kind === 'numeric' ? String(b.value.value) : String(b.value?.kind),
@@ -239,6 +249,95 @@ md += tabela('Diferenças de forma', forma, 20)
 
 writeFileSync(join(process.cwd(), 'RELATORIO-PARIDADE.md'), md, 'utf8')
 
+// ── Página de revisão clínica ───────────────────────────────────────────────
+// Arquivo local, autocontido, aberto no navegador. NÃO é publicado em lugar
+// nenhum: traz valor de exame de paciente real. As decisões ficam no
+// localStorage do próprio navegador e podem ser exportadas.
+const paraRevisar = [...abertas, ...regressoes].map((d, i) => ({ i, ...d }))
+const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Revisão de divergências — extração de exames</title><style>
+:root{--b:#e2e8f0;--t:#0f172a;--m:#64748b;--ok:#16a34a;--no:#dc2626;--d:#ca8a04}
+*{box-sizing:border-box}body{font:15px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;color:var(--t);margin:0;padding:24px;background:#f8fafc}
+h1{font-size:20px;margin:0 0 4px}p.sub{color:var(--m);margin:0 0 20px}
+.barra{position:sticky;top:0;background:#f8fafc;padding:12px 0;border-bottom:1px solid var(--b);margin-bottom:16px;z-index:5}
+button{font:inherit;border:1px solid var(--b);background:#fff;border-radius:8px;padding:6px 12px;cursor:pointer}
+button.on{background:var(--t);color:#fff;border-color:var(--t)}
+.item{background:#fff;border:1px solid var(--b);border-radius:12px;padding:14px 16px;margin-bottom:10px}
+.item.decidido{opacity:.5}
+.cab{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:baseline}
+.exame{font-weight:600;font-size:16px}
+.laudo{color:var(--m);font-size:13px;font-family:ui-monospace,monospace}
+.vals{display:flex;gap:24px;flex-wrap:wrap;margin:10px 0 6px}
+.val{min-width:150px}.val .rot{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--m)}
+.val .v{font-size:16px;font-variant-numeric:tabular-nums}
+.meta{color:var(--m);font-size:13px}
+.acoes{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.acoes button.sel[data-v=novo]{background:var(--ok);color:#fff;border-color:var(--ok)}
+.acoes button.sel[data-v=clinboard]{background:var(--no);color:#fff;border-color:var(--no)}
+.acoes button.sel[data-v=duvida]{background:var(--d);color:#fff;border-color:var(--d)}
+.contador{color:var(--m);font-size:13px;margin-left:8px}
+</style></head><body>
+<h1>Revisão de divergências</h1>
+<p class="sub">Compare cada item com o laudo em papel e diga qual está certo.
+As respostas ficam salvas neste navegador. Nada é enviado para lugar nenhum.</p>
+<div class="barra">
+  <button data-f="todos" class="on">Todos</button>
+  <button data-f="regressao">Faltando no novo</button>
+  <button data-f="naoClassificada">Extração nova / a esclarecer</button>
+  <button data-f="pendentes">Só não decididos</button>
+  <button id="exportar">Exportar decisões</button>
+  <span class="contador" id="contador"></span>
+</div>
+<div id="lista"></div>
+<script>
+const DADOS = ${JSON.stringify(paraRevisar)};
+const chave = 'revisao-paridade';
+const dec = JSON.parse(localStorage.getItem(chave) || '{}');
+let filtro = 'todos';
+const id = d => d.arquivo + '|' + d.exame;
+function render(){
+  const lista = document.getElementById('lista');
+  const vis = DADOS.filter(d =>
+    filtro === 'todos' ? true :
+    filtro === 'pendentes' ? !dec[id(d)] : d.categoria === filtro);
+  lista.innerHTML = vis.map(d => {
+    const k = id(d), escolha = dec[k];
+    const b = (v, txt) => '<button class="' + (escolha === v ? 'sel' : '') + '" data-v="' + v + '" data-k="' + encodeURIComponent(k) + '">' + txt + '</button>';
+    return '<div class="item' + (escolha ? ' decidido' : '') + '">' +
+      '<div class="cab"><span class="exame">' + d.exame + '</span>' +
+      '<span class="laudo">' + d.arquivo + (d.data ? ' · ' + d.data : '') + '</span></div>' +
+      '<div class="vals">' +
+        '<div class="val"><div class="rot">clinBoard (em uso)</div><div class="v">' + d.clinboard + '</div></div>' +
+        '<div class="val"><div class="rot">extrator novo</div><div class="v">' + d.novo + '</div></div>' +
+        (d.referencia ? '<div class="val"><div class="rot">referência</div><div class="v">' + d.referencia + '</div></div>' : '') +
+      '</div>' +
+      '<div class="meta">' + d.motivo + '</div>' +
+      '<div class="acoes">' + b('novo','O novo está certo') + b('clinboard','O clinBoard está certo') +
+      b('duvida','Não sei / ver depois') + '</div></div>';
+  }).join('') || '<p class="meta">Nada nesta lista.</p>';
+  const decididos = DADOS.filter(d => dec[id(d)]).length;
+  document.getElementById('contador').textContent = decididos + ' de ' + DADOS.length + ' revisados';
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('button'); if(!b) return;
+  if (b.dataset.f){ filtro = b.dataset.f;
+    document.querySelectorAll('.barra button[data-f]').forEach(x => x.classList.toggle('on', x === b));
+    return render(); }
+  if (b.id === 'exportar'){
+    const linhas = DADOS.filter(d => dec[id(d)]).map(d => [d.arquivo, d.exame, d.clinboard, d.novo, dec[id(d)]].join('\t'));
+    const blob = new Blob(['laudo\texame\tclinboard\tnovo\tdecisao\n' + linhas.join('\n')], {type:'text/plain'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = 'decisoes-revisao.tsv'; a.click(); return; }
+  if (b.dataset.k){ const k = decodeURIComponent(b.dataset.k);
+    dec[k] = dec[k] === b.dataset.v ? undefined : b.dataset.v;
+    if (!dec[k]) delete dec[k];
+    localStorage.setItem(chave, JSON.stringify(dec)); render(); }
+});
+render();
+</script></body></html>`
+writeFileSync(join(process.cwd(), 'REVISAO-PARIDADE.html'), html, 'utf8')
+
 console.log(`laudos:                 ${arquivos.length}`)
 console.log(`valores idênticos:      ${paresIguais}`)
 console.log(`divergências:           ${divergencias.length}`)
@@ -246,4 +345,4 @@ console.log(`  correção intencional: ${intencionais.length}`)
 console.log(`  REGRESSÃO:            ${regressoes.length}`)
 console.log(`  diferença de forma:   ${forma.length}`)
 console.log(`  NÃO CLASSIFICADAS:    ${abertas.length}`)
-console.log(`\nRELATORIO-PARIDADE.md gerado.`)
+console.log(`\nRELATORIO-PARIDADE.md e REVISAO-PARIDADE.html gerados (locais, fora do git).`)
