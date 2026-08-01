@@ -102,14 +102,8 @@ export const matcherTabular: Matcher = {
       }
     }
 
-    const valor = interpretarValor(valorBruto, {
-      unidadeBruta,
-      analito,
-    })
-
-    // Sem valor reconhecível, a linha não é resultado — mas parecia um, então
-    // não pode sumir (R1, 7.B-2).
-    if (valor.kind === 'text' && !/\d/.test(valorBruto)) {
+    // Coluna de valor vazia: a linha parecia resultado e não é (R1, 7.B-2).
+    if (!valorBruto.trim()) {
       return {
         kind: 'discarded',
         items: [{
@@ -121,6 +115,11 @@ export const matcherTabular: Matcher = {
         }],
       }
     }
+
+    // Exigir um DÍGITO no valor descartava todo resultado por palavra —
+    // "Cor: INCOLOR", "Aspecto: LÍMPIDO", "Urobilinogênio: NORMAL". Exame
+    // conhecido com algo na coluna de valor É um resultado; o tipo do valor
+    // decide como representá-lo, e `text` é uma representação legítima.
 
     // R1 — nome fora do catálogo resolve para "não extraí", com registro.
     // Extrair com o nome cru criaria uma segunda linha no histórico do

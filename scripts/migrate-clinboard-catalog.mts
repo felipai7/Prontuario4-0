@@ -155,6 +155,16 @@ const QUALITATIVO: Record<string, string> = {
   'AUSÊNCIA DE FUNGOS': 'absent', 'AUSENCIA DE FUNGOS': 'absent',
   'AUSÊNCIA DE ESTRUTURAS FÚNGICAS': 'absent', 'AUSENCIA DE ESTRUTURAS FUNGICAS': 'absent',
   'PRESENÇA DE ESTRUTURAS FÚNGICAS': 'present', 'PRESENCA DE ESTRUTURAS FUNGICAS': 'present',
+  // Sedimento urinário: o contrato já previa rare/occasional/moderate/abundant,
+  // e o doador não tinha termo nenhum mapeado para eles. Vocabulário padrão do
+  // EAS, acrescentado a partir do corpus.
+  'RARAS': 'rare', 'RARA': 'rare', 'RAROS': 'rare', 'RARO': 'rare',
+  'ALGUMAS': 'occasional', 'ALGUNS': 'occasional', 'OCASIONAIS': 'occasional',
+  'MODERADA': 'moderate', 'MODERADAS': 'moderate', 'MODERADO': 'moderate',
+  'MODERADOS': 'moderate', 'REGULAR': 'moderate',
+  'NUMEROSAS': 'abundant', 'NUMEROSOS': 'abundant',
+  'ABUNDANTE': 'abundant', 'ABUNDANTES': 'abundant',
+  'AUSENTES': 'absent',
 }
 
 /** Termos de crescimento de cultura — vão para `CultureResult.growth`, não para valor. */
@@ -311,6 +321,14 @@ for (const nome of D.PARAM_WHITELIST as Set<string>) {
 // Regra: se o nome canônico tem sufixo de espécime, o sinônimo NU é ambíguo e
 // fica restrito ao escopo. Se não tem (densidade, cetonas, cilindros — que só
 // existem em urina), pode ser global sem risco.
+// Saídas do fallback por expressão regular dentro de _lcrName. Ficam num dado
+// nomeado, e não soltas, porque o teste do E2 precisa lê-las do catálogo —
+// uma lista repetida no teste provaria só que copiei certo.
+const SAIDAS_REGRA_LIQUOR = [
+  'Células Nucleadas (LCR)', 'Células (LCR)', 'Macrófagos (LCR)',
+  'Cloretos (LCR)', 'Proteínas (LCR)',
+]
+
 const sinonimosPorEspecime: Record<string, Record<string, string>> = {
   urine: {}, csf: {}, arterialBlood: {}, venousBlood: {},
 }
@@ -334,6 +352,20 @@ for (const [bruto, canonico] of Object.entries(D.LCR_RENAME as Record<string, st
   registrarPorEspecime('csf', bruto, canonico, 'LCR_RENAME')
 }
 
+// Os nomes que o fallback por expressão regular de `_lcrName` produz não estão
+// no LCR_RENAME: "Células Nucleadas", "Macrófagos", "Cloretos", "Proteínas"
+// aparecem NUS no laudo e só ganham o sufixo (LCR) pela regra. Sem registrá-los
+// no escopo de líquor, "Cloretos" dentro do líquor resolvia para o cloreto
+// SÉRICO — outro analito, outra linha no histórico do paciente.
+for (const nome of SAIDAS_REGRA_LIQUOR) {
+  const nu = nome.replace(/\s*\(LCR\)\s*$/, '')
+  registrarPorEspecime('csf', nu, nome, 'regra-liquor')
+}
+for (const nome of D.LCR_KEEP as Set<string>) {
+  const nu = nome.replace(/\s*\(LCR\)\s*$/, '')
+  if (nu !== nome) registrarPorEspecime('csf', nu, nome, 'LCR_KEEP')
+}
+
 // Gasometria: o mesmo parâmetro nu ("SODIO", "PH") significa arterial ou venoso
 // conforme a seção. Sem escopo, um sódio de gasometria viraria o sódio sérico.
 for (const [contexto, especime] of [['Arterial', 'arterialBlood'], ['Venosa', 'venousBlood']] as const) {
@@ -354,13 +386,6 @@ const geradosPorRegra: string[] = []
 
 for (const nome of D.LCR_KEEP as Set<string>) geradosPorRegra.push(nome)
 for (const nome of Object.values(D.LCR_RENAME as Record<string, string>)) geradosPorRegra.push(nome)
-// Saídas do fallback por expressão regular dentro de _lcrName. Ficam num dado
-// nomeado, e não soltas aqui, porque o teste do E2 precisa lê-las do catálogo —
-// uma lista repetida no teste provaria só que copiei certo.
-const SAIDAS_REGRA_LIQUOR = [
-  'Células Nucleadas (LCR)', 'Células (LCR)', 'Macrófagos (LCR)',
-  'Cloretos (LCR)', 'Proteínas (LCR)',
-]
 for (const nome of SAIDAS_REGRA_LIQUOR) geradosPorRegra.push(nome)
 // Saídas de _gasoRename: canônico + sufixo de contexto, e os nomes especiais.
 for (const ctx of ['Arterial', 'Venosa']) {

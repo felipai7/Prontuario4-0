@@ -170,6 +170,48 @@ describe('layout com dois-pontos e pontilhado (PIOX)', () => {
   })
 })
 
+describe('resultado por palavra não é descartado', () => {
+  // A F9 mostrou que exigir um DÍGITO no valor jogava fora todo resultado
+  // qualitativo — cor, aspecto, sedimento urinário. Exame conhecido com algo
+  // na coluna de valor É um resultado; o tipo do valor decide como
+  // representá-lo, e `text` é uma representação legítima (R3: sem opinião).
+  it('cor e aspecto viram resultado de texto, não descarte', async () => {
+    const r = await extrair([
+      'ELEMENTOS ANORMAIS',
+      'Coleta: 05/04/2026',
+      'Cor   :  AMARELO CITRINO',
+      'Aspecto   :  LÍMPIDO',
+    ])
+    const nomes = r.observations.map(o => o.canonicalName)
+    expect(nomes).toContain('Cor (U)')
+    expect(nomes).toContain('Aspecto (U)')
+    expect(r.discarded.map(d => d.reason)).not.toContain('noValueFound')
+  })
+
+  it('vocabulário de sedimento urinário resolve para código próprio', async () => {
+    const r = await extrair([
+      'ELEMENTOS ANORMAIS',
+      'Coleta: 05/04/2026',
+      'Cristais   :  RAROS',
+      'Leveduras   :  NUMEROSAS',
+      'Flora Bacteriana   :  MODERADA',
+    ])
+    const porNome = new Map(r.observations.map(o => [o.canonicalName, o.value]))
+    expect(porNome.get('Cristais')).toMatchObject({ kind: 'qualitative', code: 'rare' })
+    expect(porNome.get('Leveduras')).toMatchObject({ kind: 'qualitative', code: 'abundant' })
+    expect(porNome.get('Flora Bacteriana')).toMatchObject({ kind: 'qualitative', code: 'moderate' })
+  })
+
+  it('coluna de valor vazia continua sendo descarte com motivo', async () => {
+    const r = await extrair([
+      'BIOQUIMICA',
+      'Coleta: 05/04/2026',
+      'Creatinina          1,42     mg/dL      0,60 - 1,30',
+    ])
+    expect(r.observations).toHaveLength(1)
+  })
+})
+
 describe('metadado nunca é confundido com resultado', () => {
   it('rótulos de identificação, data e laboratório são reconhecidos como tal', () => {
     const rotulos = [

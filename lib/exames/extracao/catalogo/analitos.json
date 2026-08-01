@@ -241,6 +241,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_KEEP",
         "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
@@ -335,6 +336,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_KEEP",
         "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
@@ -657,8 +659,10 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_KEEP",
         "PARAM_WHITELIST",
-        "regra"
+        "regra",
+        "regra-liquor"
       ],
       "plausibleRange": null,
       "valueKind": "numeric"
@@ -672,8 +676,10 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_KEEP",
         "PARAM_WHITELIST",
-        "regra"
+        "regra",
+        "regra-liquor"
       ],
       "plausibleRange": null,
       "valueKind": "numeric"
@@ -859,9 +865,11 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_KEEP",
         "LCR_RENAME",
         "PARAM_WHITELIST",
-        "regra"
+        "regra",
+        "regra-liquor"
       ],
       "plausibleRange": null,
       "valueKind": "numeric"
@@ -935,6 +943,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_KEEP",
         "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
@@ -1008,6 +1017,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_KEEP",
         "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
@@ -1415,6 +1425,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_KEEP",
         "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
@@ -1751,6 +1762,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_KEEP",
         "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
@@ -1996,6 +2008,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_KEEP",
         "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
@@ -2295,6 +2308,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_KEEP",
         "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
@@ -2403,6 +2417,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_KEEP",
         "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
@@ -2495,6 +2510,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_KEEP",
         "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
@@ -2618,8 +2634,10 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_KEEP",
         "PARAM_WHITELIST",
-        "regra"
+        "regra",
+        "regra-liquor"
       ],
       "plausibleRange": null,
       "valueKind": "numeric"
@@ -2707,6 +2725,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_KEEP",
         "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
@@ -2752,6 +2771,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_KEEP",
         "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
@@ -3049,6 +3069,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_KEEP",
         "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
@@ -3142,6 +3163,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_KEEP",
         "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
@@ -3357,9 +3379,11 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_KEEP",
         "LCR_RENAME",
         "PARAM_WHITELIST",
-        "regra"
+        "regra",
+        "regra-liquor"
       ],
       "plausibleRange": null,
       "valueKind": "numeric"
@@ -4081,6 +4105,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_KEEP",
         "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
