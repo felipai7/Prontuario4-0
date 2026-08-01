@@ -23,7 +23,9 @@ import type {
   Warning,
 } from './contratos'
 import { ErroLeituraPdf, lerDocumento } from './texto/pdf'
+import { avaliarIntegridade } from './texto/integridade'
 import { extrairDoTexto } from './motor'
+import { extrairCulturas } from './culturas/extrair'
 import { carregarCatalogo } from './catalogo'
 import perfilBase from './perfis/generic/perfil.json'
 
@@ -138,6 +140,22 @@ export async function extrairExames(req: ExtractionRequest): Promise<ExtractionR
     warnings.push({ code: 'noTextLayer', page: null, lineIndex: null, detail: null })
   }
 
+  // A camada de texto existir não significa que ela seja confiável. Um laudo
+  // com fonte de codificação própria devolve "Sulfa-Trimetoprim" como
+  // "Svmgb-Tsjnfuprsjn" — com as MAIÚSCULAS intactas, então "ANTIBIOGRAMA" e
+  // as letras S/I/R saem certas e só o nome do antibiótico vem errado. R1:
+  // recusar, nunca extrair.
+  const integridade = avaliarIntegridade(texto)
+  if (!integridade.confiavel) {
+    warnings.push({
+      code: 'corruptedTextLayer',
+      page: null,
+      lineIndex: integridade.primeiraLinha,
+      detail: `${Math.round(integridade.proporcaoIlegivel * 100)}% do texto ilegível`,
+    })
+    texto = { ...texto, lines: [], hasTextLayer: false }
+  }
+
   // ── Camada 2 · detecção ────────────────────────────────────────────────
   const detection = detectarLaboratorio(texto)
   if (detection.profileId === null) {
@@ -168,6 +186,13 @@ export async function extrairExames(req: ExtractionRequest): Promise<ExtractionR
     })
   }
 
+  // ── Culturas e antibiograma ────────────────────────────────────────────
+  // Bloco, não linha: o isolado, a contagem e a tabela de sensibilidade moram
+  // em lugares diferentes do documento, às vezes em páginas diferentes.
+  const culturas = texto.hasTextLayer
+    ? extrairCulturas(texto, motor.documentDate ?? { iso: null, hasTime: false, source: 'absent', raw: '' }, opcoes, perfil.id)
+    : { cultures: [], discarded: [] }
+
   const catalogo = carregarCatalogo()
   const diagnostics: Diagnostics = {
     moduleVersion: MODULE_VERSION,
@@ -177,9 +202,9 @@ export async function extrairExames(req: ExtractionRequest): Promise<ExtractionR
     lineCount: texto.lines.length,
     counts: {
       observations: motor.observations.length,
-      cultures: 0,
+      cultures: culturas.cultures.length,
       imaging: 0,
-      discarded: motor.discarded.length,
+      discarded: motor.discarded.length + culturas.discarded.length,
       warnings: warnings.length,
       requiresReview: motor.observations.filter(o => o.requiresReview).length,
     },
@@ -187,12 +212,13 @@ export async function extrairExames(req: ExtractionRequest): Promise<ExtractionR
   }
 
   return {
-    documentKind: motor.observations.length > 0 ? 'laboratory' : 'unrecognized',
+    documentKind:
+      motor.observations.length > 0 || culturas.cultures.length > 0 ? 'laboratory' : 'unrecognized',
     detection,
     observations: motor.observations,
-    cultures: [],
+    cultures: culturas.cultures,
     imaging: [],
-    discarded: motor.discarded,
+    discarded: [...motor.discarded, ...culturas.discarded],
     warnings,
     diagnostics,
   }

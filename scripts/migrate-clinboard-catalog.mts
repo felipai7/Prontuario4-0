@@ -462,9 +462,23 @@ escrever('qualitativos.json', {
 })
 escrever('culturas.json', { version: VERSAO, materials: D.CULTURE_TYPES })
 escrever('descartes.json', { version: VERSAO, skipNames: [...(D.SKIP_NAMES as Set<string>)].sort() })
+// Marcadores acrescentados a partir do corpus de culturas, que o doador não
+// cobria: "Coletado em (20/07/2026 16:54)" e "Coleta...: 27/07/2026 - 08:40".
+const MARCADORES_EXTRA = [
+  String.raw`[Cc]oletad[oa]\s+em\s*\(?\s*(\d{2}\/\d{2}\/\d{4})(?:\s+(\d{2}:\d{2}))?`,
+  String.raw`[Cc]oleta[.\s]*:\s*(\d{2}\/\d{2}\/\d{4})\s*-\s*(\d{2}:\d{2})`,
+]
+
 escrever('marcadores-data.json', {
   version: VERSAO,
-  collectionPatterns: (D.COLLECTION_DATE_PATTERNS as RegExp[]).map(r => r.source),
+  // Os específicos vêm ANTES dos genéricos: "Coleta...: 27/07/2026 - 08:40"
+  // também casa com o padrão genérico de "Coleta:", que captura só a data e
+  // descarta a hora. Ordem errada = hora de coleta perdida em silêncio, que é
+  // o mesmo defeito que a camada de texto expôs no clinBoard.
+  collectionPatterns: [
+    ...MARCADORES_EXTRA,
+    ...(D.COLLECTION_DATE_PATTERNS as RegExp[]).map(r => r.source),
+  ],
 })
 escrever('imagem.json', {
   version: VERSAO,

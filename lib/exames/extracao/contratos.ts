@@ -254,17 +254,63 @@ export interface RawObservation {
 
 // ── Cultura e antibiograma ─────────────────────────────────────────────────
 
+/**
+ * Norma de interpretação do antibiograma.
+ *
+ * Importa clinicamente: em BrCAST/EUCAST, `I` significa "sensível com exposição
+ * aumentada" — o antibiótico FUNCIONA com dose maior. Em CLSI, `I` é
+ * "intermediário" — eficácia incerta, evitar. Mesma letra, condutas opostas.
+ *
+ * Fica por ANTIMICROBIANO, e não por laudo, porque um mesmo antibiograma pode
+ * misturar as duas: nos laudos do corpus, estreptomicina e gentamicina de alto
+ * nível e a caspofungina para Candida vêm interpretadas por CLSI, com o resto
+ * em BrCAST.
+ */
+export type SusceptibilityStandard = 'BrCAST' | 'CLSI'
+
+export interface Mic {
+  operator: 'eq' | 'lt' | 'lte' | 'gt' | 'gte'
+  /**
+   * `null` quando o MIC é de uma COMBINAÇÃO e vem como razão — "> 8/4" para
+   * ampicilina/sulbactam, "<= 2/38" para trimetoprima/sulfametoxazol. Um número
+   * só não representa isso, e inventar um representaria errado.
+   */
+  value: number | null
+  unit: string
+  raw: string
+}
+
 export interface Susceptibility {
   antimicrobial: string
-  interpretation: 'S' | 'I' | 'R' | 'SDD' | 'NS' | 'unknown'
-  mic: { operator: 'eq' | 'lte' | 'gte'; value: number; unit: string } | null
+  /** `NT` = não testado (o traço no laudo). É informação, não ausência dela. */
+  interpretation: 'S' | 'I' | 'R' | 'SDD' | 'NS' | 'NT' | 'unknown'
+  mic: Mic | null
   method: string | null
+  standard: SusceptibilityStandard
+  /**
+   * Decisão clínica de 31/07/2026: quando o laudo não declara a norma, assume
+   * BrCAST. `assumed` registra que foi assunção, para a origem continuar
+   * auditável mesmo com o valor preenchido.
+   */
+  standardSource: 'declared' | 'assumed'
 }
 
 export interface Isolate {
   organism: string
   /** O que separa contaminação de infecção urinária — precisa do operador. */
-  colonyCount: { value: number; operator: 'eq' | 'gte' | 'lte'; unit: 'CFU/mL' | 'CFU/g' } | null
+  /**
+   * O que separa contaminação de infecção urinária.
+   *
+   * O operador tem os quatro sentidos, e não três: ">100.000" e ">=100.000"
+   * são afirmações diferentes, e colapsá-las repetiria aqui o atalho que R5
+   * proíbe no valor de exame.
+   */
+  colonyCount: {
+    value: number
+    operator: 'eq' | 'lt' | 'lte' | 'gt' | 'gte'
+    unit: 'CFU/mL' | 'CFU/g'
+    raw: string
+  } | null
   susceptibilities: Susceptibility[]
 }
 
@@ -340,6 +386,8 @@ export type WarningCode =
   | 'multipleCollectionDates'
   | 'documentDateAbsent'
   | 'malformedDocument'
+  /** Camada de texto ilegível — ver `texto/integridade.ts`. */
+  | 'corruptedTextLayer'
 
 export interface Warning {
   code: WarningCode

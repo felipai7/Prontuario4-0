@@ -69,7 +69,7 @@ if (process.argv.includes('--calibrar')) {
 }
 
 // ── Execução normal ────────────────────────────────────────────────────────
-let totalObs = 0, totalDesc = 0, totalRev = 0
+let totalObs = 0, totalDesc = 0, totalRev = 0, totalCult = 0, totalIso = 0, totalAtb = 0
 const porMotivo = new Map<string, number>()
 const porNome = new Map<string, number>()
 const semNada: string[] = []
@@ -84,6 +84,11 @@ for (const arquivo of arquivos) {
   totalObs += r.observations.length
   totalDesc += r.discarded.length
   totalRev += r.observations.filter(o => o.requiresReview).length
+  totalCult += r.cultures.length
+  for (const c of r.cultures) {
+    totalIso += c.isolates.length
+    for (const i of c.isolates) totalAtb += i.susceptibilities.length
+  }
   for (const d of r.discarded) {
     porMotivo.set(d.reason, (porMotivo.get(d.reason) ?? 0) + 1)
     if (d.reason === 'unrecognizedAnalyte' && d.detail) {
@@ -92,11 +97,14 @@ for (const arquivo of arquivos) {
   }
 
   const rotulo = arquivo.replace(FIXTURES, '').replace(/^\//, '')
-  if (r.observations.length === 0) semNada.push(rotulo)
+  // Um laudo de cultura legitimamente não tem observação nenhuma: o resultado
+  // dele é a cultura. Contar só observações produzia alarme falso.
+  if (r.observations.length === 0 && r.cultures.length === 0) semNada.push(rotulo)
   console.log(
     `${rotulo.padEnd(34)} obs=${String(r.observations.length).padStart(3)}  ` +
     `desc=${String(r.discarded.length).padStart(3)}  ` +
     `rev=${String(r.observations.filter(o => o.requiresReview).length).padStart(3)}  ` +
+    `cult=${String(r.cultures.length).padStart(2)}  ` +
     `datas=${new Set(r.observations.map(o => o.collectedAt.iso?.slice(0, 10))).size}`,
   )
 }
@@ -105,6 +113,7 @@ console.log(`\n── Totais em ${arquivos.length} laudos ──`)
 console.log(`  observações:        ${totalObs}`)
 console.log(`  descartes:          ${totalDesc}`)
 console.log(`  pendentes revisão:  ${totalRev}`)
+console.log(`  culturas:           ${totalCult}  (${totalIso} isolados, ${totalAtb} antimicrobianos)`)
 console.log(`\n── Descartes por motivo ──`)
 for (const [motivo, n] of [...porMotivo].sort((a, b) => b[1] - a[1])) {
   console.log(`  ${motivo.padEnd(22)} ${n}`)
