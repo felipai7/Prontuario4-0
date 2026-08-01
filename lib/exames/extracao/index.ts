@@ -26,6 +26,7 @@ import { ErroLeituraPdf, lerDocumento } from './texto/pdf'
 import { avaliarIntegridade } from './texto/integridade'
 import { extrairDoTexto } from './motor'
 import { extrairCulturas } from './culturas/extrair'
+import { extrairImagem } from './imagem/extrair'
 import { carregarCatalogo } from './catalogo'
 import perfilBase from './perfis/generic/perfil.json'
 import { detectar, perfilPorId } from './deteccao/detectar'
@@ -69,6 +70,14 @@ export type {
   Warning,
   WarningCode,
 } from './contratos'
+
+/** Um documento pode trazer laboratório e imagem no mesmo arquivo. */
+function classificar(laboratorio: number, imagem: number): ExtractionResult['documentKind'] {
+  if (laboratorio > 0 && imagem > 0) return 'mixed'
+  if (imagem > 0) return 'imaging'
+  if (laboratorio > 0) return 'laboratory'
+  return 'unrecognized'
+}
 
 /** Muda quando o comportamento de extração muda — entra em `diagnostics`. */
 export const MODULE_VERSION = '0.1.0-f1'
@@ -212,6 +221,22 @@ export async function extrairExames(req: ExtractionRequest): Promise<ExtractionR
     ? extrairCulturas(texto, motor.documentDate ?? { iso: null, hasTime: false, source: 'absent', raw: '' }, opcoes, perfil.id)
     : { cultures: [], discarded: [] }
 
+  // ── Laudos de imagem ───────────────────────────────────────────────────
+  const imagens = texto.hasTextLayer
+    ? extrairImagem(texto, opcoes, perfil.id)
+    : { imaging: [], discarded: [] }
+
+  for (const laudo of imagens.imaging) {
+    if (laudo.sections.findings === null) {
+      warnings.push({
+        code: 'imagingSectionsIncomplete',
+        page: laudo.provenance.page,
+        lineIndex: laudo.provenance.lineIndex,
+        detail: 'sem cabeçalho de achados; a separação entre técnica e achados não é confiável',
+      })
+    }
+  }
+
   const catalogo = carregarCatalogo()
   const diagnostics: Diagnostics = {
     moduleVersion: MODULE_VERSION,
@@ -222,8 +247,8 @@ export async function extrairExames(req: ExtractionRequest): Promise<ExtractionR
     counts: {
       observations: motor.observations.length,
       cultures: culturas.cultures.length,
-      imaging: 0,
-      discarded: motor.discarded.length + culturas.discarded.length,
+      imaging: imagens.imaging.length,
+      discarded: motor.discarded.length + culturas.discarded.length + imagens.discarded.length,
       warnings: warnings.length,
       requiresReview: motor.observations.filter(o => o.requiresReview).length,
     },
@@ -231,13 +256,15 @@ export async function extrairExames(req: ExtractionRequest): Promise<ExtractionR
   }
 
   return {
-    documentKind:
-      motor.observations.length > 0 || culturas.cultures.length > 0 ? 'laboratory' : 'unrecognized',
+    documentKind: classificar(
+      motor.observations.length + culturas.cultures.length,
+      imagens.imaging.length,
+    ),
     detection,
     observations: motor.observations,
     cultures: culturas.cultures,
-    imaging: [],
-    discarded: [...motor.discarded, ...culturas.discarded],
+    imaging: imagens.imaging,
+    discarded: [...motor.discarded, ...culturas.discarded, ...imagens.discarded],
     warnings,
     diagnostics,
   }

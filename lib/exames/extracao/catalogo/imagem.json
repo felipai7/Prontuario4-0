@@ -3,46 +3,55 @@
     {
       "code": "PET",
       "flags": "i",
+      "legacyCode": "PET",
       "pattern": "\\bPET[-\\s]?CT\\b|PET[-\\s]?SCAN|TOMOGRAFIA\\s+POR\\s+EMISS"
     },
     {
-      "code": "ECO",
+      "code": "ECHO",
       "flags": "i",
+      "legacyCode": "ECO",
       "pattern": "ECOCARDIOGRA|ECODOPPLERCARDIOGRA"
     },
     {
-      "code": "COL",
+      "code": "ENDO",
       "flags": "i",
+      "legacyCode": "COL",
       "pattern": "COLONOSCOPIA"
     },
     {
-      "code": "END",
+      "code": "ENDO",
       "flags": "i",
+      "legacyCode": "END",
       "pattern": "ENDOSCOPIA|\\bEDA\\b"
     },
     {
-      "code": "CINT",
+      "code": "NM",
       "flags": "i",
+      "legacyCode": "CINT",
       "pattern": "CINTILOGRAFIA|CINTILOGR"
     },
     {
-      "code": "TC",
+      "code": "CT",
       "flags": "i",
+      "legacyCode": "TC",
       "pattern": "TOMOGRAFIA|ANGIOTOMOGRAFIA|\\bTC\\b"
     },
     {
-      "code": "RNM",
+      "code": "MR",
       "flags": "i",
+      "legacyCode": "RNM",
       "pattern": "RESS?ON[ÂA]NCIA|ANGIORR?ESS?ON|\\bRNM\\b|\\bRM\\b"
     },
     {
-      "code": "USG",
+      "code": "US",
       "flags": "i",
+      "legacyCode": "USG",
       "pattern": "ULTRASSON|ULTRA[-\\s]?SOM|D[ÚU]PLEX|ECO[-\\s]?DOPPLER|DOPPLER|MAPEAMENTO"
     },
     {
-      "code": "RX",
+      "code": "XR",
       "flags": "i",
+      "legacyCode": "RX",
       "pattern": "RADIOGRAFIA|RAIO[-\\s]?X|ESCANOMETRIA|\\bRX\\b"
     }
   ],

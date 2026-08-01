@@ -388,6 +388,15 @@ export type WarningCode =
   | 'malformedDocument'
   /** Camada de texto ilegível — ver `texto/integridade.ts`. */
   | 'corruptedTextLayer'
+  /**
+   * Laudo de imagem sem cabeçalho de achados.
+   *
+   * Alguns laudos passam da técnica direto para a descrição, sem marcador. Não
+   * há como saber onde uma acaba e a outra começa, e chutar arquivaria achado
+   * clínico como técnica. O texto fica onde está, íntegro, e o consumidor é
+   * avisado de que a separação não é confiável neste documento.
+   */
+  | 'imagingSectionsIncomplete'
 
 export interface Warning {
   code: WarningCode

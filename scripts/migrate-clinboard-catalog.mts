@@ -480,12 +480,22 @@ escrever('marcadores-data.json', {
     ...(D.COLLECTION_DATE_PATTERNS as RegExp[]).map(r => r.source),
   ],
 })
+// O doador usa códigos em português (TC, RNM, USG, RX, ECO, CINT, COL, END);
+// o contrato usa os códigos do padrão internacional. A tradução fica aqui, num
+// lugar só, para não haver dois vocabulários de modalidade circulando.
+const MODALIDADE_CONTRATO: Record<string, string> = {
+  PET: 'PET', ECO: 'ECHO', COL: 'ENDO', END: 'ENDO',
+  CINT: 'NM', TC: 'CT', RNM: 'MR', USG: 'US', RX: 'XR',
+}
+
 escrever('imagem.json', {
   version: VERSAO,
   // A ORDEM é significativa: PET e ECO antes de TC e USG, porque suas
-  // descrições contêm as palavras dos outros.
+  // descrições contêm as palavras dos outros — "TOMOGRAFIA POR EMISSÃO" é PET,
+  // e "ECODOPPLERCARDIOGRAMA" contém DOPPLER mas é ecocardiograma.
   modalities: (D.IMG_MODALITIES as [string, RegExp][]).map(([codigo, re]) => ({
-    code: codigo,
+    code: MODALIDADE_CONTRATO[codigo] ?? 'other',
+    legacyCode: codigo,
     pattern: re.source,
     flags: re.flags,
   })),
