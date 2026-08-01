@@ -156,7 +156,7 @@ describe('A3 · regra de espécime é dado do perfil', () => {
     // líquor — a glicose ali é do líquor, não glicemia. Num laudo de líquor do
     // IMEC ela é SÉRICA, porque aquele arquivo mistura os dois materiais.
     //
-    // Medido sobre o corpus, com seis combinações:
+    // Medido sobre o corpus. Primeira rodada, seis combinações:
     //   base                        64 regressões · 609 idênticos
     //   HOC herda                   56 regressões · 616 idênticos  ← escolhido
     //   IMEC pela linha "Material" 102 regressões · 567 idênticos
@@ -164,9 +164,22 @@ describe('A3 · regra de espécime é dado do perfil', () => {
     //   todos herdam                67 regressões · 607 idênticos
     //   todos pela linha Material  122 regressões · 553 idênticos
     //
-    // A "prova pela linha Material:", que eu tinha tentado antes por intuição,
-    // é prejudicial em TODOS os cenários. Fica no contrato, desligada, com a
-    // medição registrada — para ninguém tentar de novo achando que é óbvia.
+    // Segunda rodada, já com o extrator bem melhor, tentando fechar os quatro
+    // itens do líquor do IMEC:
+    //   base                        17 regressões · 655 idênticos  ← mantido
+    //   IMEC herda csf + urine      28 regressões · 646 idênticos
+    //   IMEC herda só csf           28 regressões · 646 idênticos
+    //   HOC e IMEC herdam só csf    28 regressões · 646 idênticos
+    //
+    // A conclusão não mudou, e agora está medida duas vezes: o laudo de líquor
+    // do IMEC MISTURA líquor e sangue no mesmo arquivo — há um bloco de 22
+    // linhas de bioquímica sérica depois da parte do líquor. Qualquer regra
+    // posicional que estenda o contexto de líquor engole essa parte, e troca
+    // quatro exames por onze.
+    //
+    // A "prova pela linha Material:", tentada por intuição, é prejudicial em
+    // TODOS os cenários. Fica no contrato, desligada, com a medição registrada
+    // — para ninguém tentar de novo achando que é óbvia.
     const herdam = PERFIS.filter(p => p.specimen.inherit.length > 0).map(p => p.id)
     expect(herdam).toEqual(['hoc'])
   })
