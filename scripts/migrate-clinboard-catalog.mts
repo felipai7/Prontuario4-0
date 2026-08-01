@@ -413,6 +413,15 @@ for (const [contexto, especime] of [['Arterial', 'arterialBlood'], ['Venosa', 'v
   for (const [bruto, canonico] of Object.entries(D.GASO_PARAMS as Record<string, string | null>)) {
     if (!canonico) continue
     registrarPorEspecime(especime, bruto, `${canonico} (${contexto})`, 'GASO_PARAMS')
+    // O analisador escreve o ÍON, com a carga: "K+", "NA+", "CL-". O catálogo
+    // herdado tem só "K", "NA", "CL". Sem estas variantes, o sódio de uma
+    // gasometria arterial resolvia para o sódio SÉRICO — outro analito, outra
+    // linha no histórico do paciente.
+    if (bruto.length <= 3) {
+      for (const carga of ['+', '++', '-']) {
+        registrarPorEspecime(especime, `${bruto}${carga}`, `${canonico} (${contexto})`, 'GASO_PARAMS')
+      }
+    }
   }
   for (const [bruto, canonico] of Object.entries((D.GASO_SPECIAL_NAMES as any)[contexto] ?? {})) {
     registrarPorEspecime(especime, bruto, canonico as string, 'GASO_SPECIAL_NAMES')

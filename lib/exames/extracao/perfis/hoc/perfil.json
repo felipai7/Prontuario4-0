@@ -49,7 +49,7 @@
   },
   "referenceBlocks": [
     {
-      "open": "^\\s*Valor(?:es)?\\s+de\\s+Refer[êe]ncia\\s*:?\\s*$",
+      "open": "^\\s*Valor(?:es)?\\s+de\\s+Refer[êe]ncias?\\s*:?\\s*$",
       "close": "^\\s*\\[\\s*Coleta\\s*:"
     }
   ],

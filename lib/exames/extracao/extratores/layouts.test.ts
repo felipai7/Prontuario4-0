@@ -243,6 +243,46 @@ describe('R6 · o espécime não vaza de uma seção para a seguinte', () => {
   })
 })
 
+describe('gasometria: o analisador escreve o íon com a carga', () => {
+  // Achado ao subir um laudo pela TELA, não na suíte. O analisador do HOC
+  // escreve "K+", "NA+" e "CA++"; o catálogo herdado tem só "K", "NA", "CA".
+  // Sem as variantes, o sódio de uma gasometria ARTERIAL resolvia para o sódio
+  // SÉRICO — outro analito, outra linha no histórico do paciente, e um valor
+  // que parece certo.
+  const LAUDO = [
+    'GASOMETRIA ARTERIAL',
+    'Coleta: 06/04/2026',
+    'PH   :  7,34   7,35 A 7,45',
+    'K+   :  4,7   mEq/L   3,5 A 5,5 mEq/L',
+    'NA+   :  133,0   mEq/L   135,0 A 150,0 mEq/L',
+  ]
+
+  it('K+ e NA+ ficam no escopo arterial, não no sérico', async () => {
+    const nomes = (await extrair(LAUDO)).observations.map(o => o.canonicalName)
+    expect(nomes).toContain('Potássio (Arterial)')
+    expect(nomes).toContain('Sódio (Arterial)')
+    expect(nomes).not.toContain('Sódio')
+  })
+
+  it('numa gasometria venosa, os mesmos rótulos vão para o escopo venoso', async () => {
+    const r = await extrair([
+      'GASOMETRIA VENOSA',
+      'Coleta: 06/04/2026',
+      'NA+   :  133,0   mEq/L   135,0 A 150,0 mEq/L',
+    ])
+    expect(r.observations[0]?.canonicalName).toBe('Sódio (Venosa)')
+  })
+
+  it('fora de gasometria, "Sódio" continua sendo o sérico', async () => {
+    const r = await extrair([
+      'BIOQUIMICA',
+      'Coleta: 06/04/2026',
+      'Sódio   :  140   mEq/L   135 - 145',
+    ])
+    expect(r.observations[0]?.canonicalName).toBe('Sódio')
+  })
+})
+
 describe('resultado por palavra não é descartado', () => {
   // A F9 mostrou que exigir um DÍGITO no valor jogava fora todo resultado
   // qualitativo — cor, aspecto, sedimento urinário. Exame conhecido com algo
