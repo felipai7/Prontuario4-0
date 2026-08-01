@@ -1,0 +1,50 @@
+{
+  "id": "hugo",
+  "displayName": "Hospital de Urgências de Goiás",
+  "fingerprint": {
+    "threshold": 10,
+    "signals": [
+      {
+        "id": "cnes",
+        "pattern": "CNES[\\s.:]*0697699",
+        "weight": 10,
+        "kind": "institutional"
+      },
+      {
+        "id": "anvisa",
+        "pattern": "ANVISA\\s*35\\d{4}",
+        "weight": 6,
+        "kind": "institutional"
+      },
+      {
+        "id": "setor",
+        "pattern": "HUGO\\s*-\\s*\\w",
+        "weight": 6,
+        "kind": "institutional"
+      },
+      {
+        "id": "rotulo-servico-solicitante",
+        "pattern": "Servi[çc]o\\s+Solicitante\\s*:",
+        "weight": 4,
+        "kind": "layout"
+      },
+      {
+        "id": "rotulo-coletado",
+        "pattern": "Coletado\\s*\\(",
+        "weight": 3,
+        "kind": "layout"
+      },
+      {
+        "id": "rotulo-dosagem",
+        "pattern": "DOSAGEM DE (CREATININA|S[ÓO]DIO|POT[ÁA]SSIO|UR[ÉE]IA)",
+        "weight": 3,
+        "kind": "layout"
+      }
+    ]
+  },
+  "preprocess": [],
+  "matchers": {
+    "enable": [],
+    "disable": []
+  }
+}

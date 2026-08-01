@@ -28,6 +28,7 @@ import { extrairDoTexto } from './motor'
 import { extrairCulturas } from './culturas/extrair'
 import { carregarCatalogo } from './catalogo'
 import perfilBase from './perfis/generic/perfil.json'
+import { detectar, perfilPorId } from './deteccao/detectar'
 
 export type {
   Analyte,
@@ -100,10 +101,8 @@ export function hashDocumento(bytes: Uint8Array): string {
  * Função pura sobre texto, exposta na fronteira de propósito: é o que permite
  * testar roteamento sem nenhum PDF em disco (7.B-12).
  */
-export function detectarLaboratorio(_texto: DocumentText): LabDetection {
-  // F2/F8 implementam. Enquanto não implementado, nada é reconhecido — e o
-  // resultado é `null`, não um perfil genérico silencioso (A4).
-  return { profileId: null, confidence: 0, evidence: [], tiedWith: [] }
+export function detectarLaboratorio(texto: DocumentText): LabDetection {
+  return detectar(texto)
 }
 
 /**
@@ -157,16 +156,36 @@ export async function extrairExames(req: ExtractionRequest): Promise<ExtractionR
   }
 
   // ── Camada 2 · detecção ────────────────────────────────────────────────
-  const detection = detectarLaboratorio(texto)
+  const forcado = req.hints?.labProfileId ?? null
+  const detection: LabDetection = forcado
+    ? { profileId: forcado, confidence: 1, evidence: [], tiedWith: [] }
+    : detectarLaboratorio(texto)
+
+  if (detection.tiedWith.length > 1) {
+    warnings.push({
+      code: 'detectionTie',
+      page: null,
+      lineIndex: null,
+      detail: detection.tiedWith.join(', '),
+    })
+  }
   if (detection.profileId === null) {
     warnings.push({ code: 'unrecognizedDocument', page: null, lineIndex: null, detail: null })
+  } else if (detection.confidence < opcoes.minDetectionConfidence) {
+    warnings.push({
+      code: 'lowDetectionConfidence',
+      page: null,
+      lineIndex: null,
+      detail: detection.confidence.toFixed(2),
+    })
   }
 
   // ── Camadas 3–7 ────────────────────────────────────────────────────────
   // Sem perfil reconhecido, roda o perfil BASE — mas com o aviso já emitido
   // acima, nunca em silêncio (A4). O que A4 proíbe é o fallback calado, não a
   // extração.
-  const perfil = perfilBase as LabProfile
+  const perfil =
+    (detection.profileId ? perfilPorId(detection.profileId) : null) ?? (perfilBase as LabProfile)
   const motor = texto.hasTextLayer
     ? extrairDoTexto(texto, perfil, opcoes)
     : { observations: [], discarded: [], matcherHits: {}, documentDate: null }

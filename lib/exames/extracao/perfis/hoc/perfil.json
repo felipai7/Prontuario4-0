@@ -1,0 +1,50 @@
+{
+  "id": "hoc",
+  "displayName": "Hospital Ortopédico de Ceres",
+  "fingerprint": {
+    "threshold": 10,
+    "signals": [
+      {
+        "id": "convenio-cre-hoc",
+        "pattern": "CRE\\s*-\\s*HOC",
+        "weight": 8,
+        "kind": "institutional"
+      },
+      {
+        "id": "eritograma-sem-r",
+        "pattern": "\\bERITOGRAMA\\b",
+        "weight": 6,
+        "kind": "layout"
+      },
+      {
+        "id": "valor-critico",
+        "pattern": "VALOR\\s+CR[ÍI]TICO\\s+(BAIXO|ALTO)",
+        "weight": 5,
+        "kind": "layout"
+      },
+      {
+        "id": "cabecalho-dt-nasc",
+        "pattern": "Dt\\. Nasc\\.\\s+:",
+        "weight": 5,
+        "kind": "layout"
+      },
+      {
+        "id": "cabecalho-pedido",
+        "pattern": "Pedido\\s{2,}:",
+        "weight": 4,
+        "kind": "layout"
+      },
+      {
+        "id": "cabecalho-convenio",
+        "pattern": "Conv[êe]nio\\s+:",
+        "weight": 3,
+        "kind": "layout"
+      }
+    ]
+  },
+  "preprocess": [],
+  "matchers": {
+    "enable": [],
+    "disable": []
+  }
+}

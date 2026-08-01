@@ -68,6 +68,36 @@ if (process.argv.includes('--calibrar')) {
   process.exit(0)
 }
 
+// ── Assertiva de roteamento (10.4, D11) ────────────────────────────────────
+// No clinBoard o roteamento era registrado e nunca comparado: os fingerprints
+// podiam apodrecer sem que nada falhasse. Aqui a pasta do fixture DECLARA qual
+// perfil deve ser detectado, e a divergência é relatada.
+const ROTEAMENTO_ESPERADO: Record<string, string | null> = {
+  hoc: 'hoc', hugo: 'hugo', imec: 'imec', nucleo: 'nucleo', piox: 'piox',
+  culturas: null,
+  generic: null,
+}
+
+/**
+ * Exceções por ARQUIVO, quando a pasta não basta.
+ *
+ * As culturas 03 a 06 são do Hospital IMEC (o cabeçalho diz "Local: Hospital
+ * IMEC") — detectá-las como `imec` está CERTO, e a expectativa por pasta é que
+ * estava errada. As 07 e 08 vêm de um laboratório de apoio sem perfil, e as 01
+ * e 02 têm a camada de texto corrompida: nas quatro, `null` é o resultado
+ * correto. O atb.pdf é um receituário, não um laudo.
+ */
+const EXCECOES: Record<string, string | null> = {
+  'culturas/cultura-03/source.pdf': 'imec',
+  'culturas/cultura-04/source.pdf': 'imec',
+  'culturas/cultura-05/source.pdf': 'imec',
+  'culturas/cultura-06/source.pdf': 'imec',
+  'hugo/HUGO2/atb.pdf': null,
+}
+
+let roteamentoOk = 0
+const roteamentoErrado: string[] = []
+
 // ── Execução normal ────────────────────────────────────────────────────────
 let totalObs = 0, totalDesc = 0, totalRev = 0, totalCult = 0, totalIso = 0, totalAtb = 0
 const porMotivo = new Map<string, number>()
@@ -97,6 +127,12 @@ for (const arquivo of arquivos) {
   }
 
   const rotulo = arquivo.replace(FIXTURES, '').replace(/^\//, '')
+  const pasta = rotulo.split('/')[0] ?? ''
+  if (rotulo in EXCECOES || pasta in ROTEAMENTO_ESPERADO) {
+    const esperado = rotulo in EXCECOES ? EXCECOES[rotulo]! : ROTEAMENTO_ESPERADO[pasta]!
+    if (r.detection.profileId === esperado) roteamentoOk++
+    else roteamentoErrado.push(`${rotulo}: esperado ${esperado ?? 'null'}, detectado ${r.detection.profileId ?? 'null'}`)
+  }
   // Um laudo de cultura legitimamente não tem observação nenhuma: o resultado
   // dele é a cultura. Contar só observações produzia alarme falso.
   if (r.observations.length === 0 && r.cultures.length === 0) semNada.push(rotulo)
@@ -114,6 +150,10 @@ console.log(`  observações:        ${totalObs}`)
 console.log(`  descartes:          ${totalDesc}`)
 console.log(`  pendentes revisão:  ${totalRev}`)
 console.log(`  culturas:           ${totalCult}  (${totalIso} isolados, ${totalAtb} antimicrobianos)`)
+console.log(`\n── Roteamento ──`)
+console.log(`  corretos:   ${roteamentoOk}/${roteamentoOk + roteamentoErrado.length}`)
+for (const e of roteamentoErrado) console.log(`  ✗ ${e}`)
+
 console.log(`\n── Descartes por motivo ──`)
 for (const [motivo, n] of [...porMotivo].sort((a, b) => b[1] - a[1])) {
   console.log(`  ${motivo.padEnd(22)} ${n}`)

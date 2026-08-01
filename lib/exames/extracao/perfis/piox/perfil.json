@@ -1,0 +1,38 @@
+{
+  "id": "piox",
+  "displayName": "Hospital Pio X",
+  "fingerprint": {
+    "threshold": 10,
+    "signals": [
+      {
+        "id": "analisador",
+        "pattern": "MINDRAY\\s+BC-\\d",
+        "weight": 5,
+        "kind": "vendor"
+      },
+      {
+        "id": "pontilhado",
+        "pattern": "[A-Za-zÀ-ÿ]\\.{2,}\\s*:",
+        "weight": 5,
+        "kind": "layout"
+      },
+      {
+        "id": "cabecalho-valor-referencial",
+        "pattern": "Resultado\\s+Valor\\s+Referencial",
+        "weight": 5,
+        "kind": "layout"
+      },
+      {
+        "id": "nomenclatura-transaminase",
+        "pattern": "TG[OP]\\s*-\\s*TRANSAMINASE",
+        "weight": 4,
+        "kind": "layout"
+      }
+    ]
+  },
+  "preprocess": [],
+  "matchers": {
+    "enable": [],
+    "disable": []
+  }
+}
