@@ -4,12 +4,36 @@
   "fingerprint": {
     "threshold": 10,
     "signals": [
-      { "id": "lis", "pattern": "SGL\\s+PCLAB\\s+ONLINE", "weight": 6, "kind": "vendor" },
-      { "id": "lis-dominio", "pattern": "pclabonline\\.com\\.br", "weight": 5, "kind": "vendor" },
-      { "id": "analisador", "pattern": "ABX-MICROS\\s*60", "weight": 3, "kind": "vendor" },
-      { "id": "secao-bioquimica-interna", "pattern": "BIOQUIMICA INTERNA", "weight": 4, "kind": "layout" }
+      {
+        "id": "lis",
+        "pattern": "SGL\\s+PCLAB\\s+ONLINE",
+        "weight": 6,
+        "kind": "vendor"
+      },
+      {
+        "id": "lis-dominio",
+        "pattern": "pclabonline\\.com\\.br",
+        "weight": 5,
+        "kind": "vendor"
+      },
+      {
+        "id": "analisador",
+        "pattern": "ABX-MICROS\\s*60",
+        "weight": 3,
+        "kind": "vendor"
+      },
+      {
+        "id": "secao-bioquimica-interna",
+        "pattern": "BIOQUIMICA INTERNA",
+        "weight": 4,
+        "kind": "layout"
+      }
     ]
   },
   "preprocess": [],
-  "matchers": { "enable": [], "disable": [] }
+  "matchers": {
+    "enable": [],
+    "disable": []
+  },
+  "referenceBlocks": []
 }

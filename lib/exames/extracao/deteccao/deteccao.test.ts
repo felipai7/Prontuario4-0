@@ -116,6 +116,37 @@ describe('6.3 · dado pessoal nunca é fingerprint', () => {
   })
 })
 
+describe('A3 · regra de bloco de referência é dado do perfil', () => {
+  it('só o HOC declara bloco de referência, e é intencional', () => {
+    // A mesma marca textual tem função diferente em cada LIS: no HOC
+    // "VALOR DE REFERÊNCIA:" sozinho abre a tabela de faixas; no IMEC
+    // "Valores de Referência" aparece exame a exame e não abre nada.
+    //
+    // Medido sobre o corpus, com as quatro combinações:
+    //   nenhum   62 regressões · 129 não classificadas · 577 idênticos
+    //   só HOC   62 regressões · 123 não classificadas · 583 idênticos  ← ganho puro
+    //   só PIOX  75 regressões · 102 não classificadas · 591 idênticos
+    //   os dois  75 regressões ·  96 não classificadas · 597 idênticos
+    //
+    // O PIOX fica de fora porque o seu marcador de FECHAMENTO não é confiável:
+    // o laudo nem sempre traz "Data de Coleta" entre um bloco e o seguinte, e
+    // o bloco engole 55 linhas, inclusive títulos de exame.
+    const comBloco = PERFIS.filter(p => p.referenceBlocks.length > 0).map(p => p.id)
+    expect(comBloco).toEqual(['hoc'])
+  })
+
+  it('todo bloco declara abertura E fechamento', () => {
+    for (const perfil of PERFIS) {
+      for (const b of perfil.referenceBlocks) {
+        expect(b.open, perfil.id).toBeTruthy()
+        expect(b.close, perfil.id).toBeTruthy()
+        expect(() => new RegExp(b.open)).not.toThrow()
+        expect(() => new RegExp(b.close)).not.toThrow()
+      }
+    }
+  })
+})
+
 describe('empate', () => {
   it('empate sem desempate resolve para null, com os candidatos listados', () => {
     // Construído de propósito: um texto que casa dois perfis com o mesmo peso.

@@ -14,7 +14,7 @@
 // funcionalidade sem risco de regressão em massa.
 // ══════════════════════════════════════════════════════════════════════════
 
-import type { DocumentText, Segment, SpecimenContext, TemporalRef, TextLine } from '../contratos'
+import type { DocumentText, LabProfile, Segment, SpecimenContext, TemporalRef, TextLine } from '../contratos'
 import { diaDe, marcadorDeColeta, SEM_DATA } from '../normalizadores/data'
 
 /** Cabeçalhos que provam o espécime da seção que se inicia. */
@@ -53,7 +53,17 @@ function cabecalhoDe(linha: TextLine): { specimen: SpecimenContext | null; kind:
  * A data do documento é a PRIMEIRA marcada como coleta; quando há duas ou mais
  * datas distintas, cada segmento passa a carregar a sua.
  */
-export function segmentar(texto: DocumentText): { segments: Segment[]; documentDate: TemporalRef } {
+export function segmentar(
+  texto: DocumentText,
+  perfil: LabProfile | null = null,
+): { segments: Segment[]; documentDate: TemporalRef } {
+  // Regras de bloco de referência vêm do PERFIL (A3). Sem perfil reconhecido,
+  // nenhuma se aplica — que é o comportamento seguro: ler a mais e depois
+  // descartar é reversível; deixar de ler não é.
+  const blocos = (perfil?.referenceBlocks ?? []).map(r => ({
+    abre: new RegExp(r.open, 'i'),
+    fecha: new RegExp(r.close, 'i'),
+  }))
   // ── Primeira passada: todas as datas de coleta e onde elas aparecem ──────
   const marcasPorLinha = new Map<number, TemporalRef>()
   const diasDistintos = new Set<string>()
@@ -88,7 +98,19 @@ export function segmentar(texto: DocumentText): { segments: Segment[]; documentD
     return novo
   }
 
+  // Local à função, como a correção D1 exige do contexto de gasometria: não
+  // existe onde vazar para a próxima extração.
+  let emBlocoDeReferencia = false
+
   for (const linha of texto.lines) {
+    if (emBlocoDeReferencia) {
+      if (blocos.some(b => b.fecha.test(linha.text))) emBlocoDeReferencia = false
+      else continue
+    } else if (blocos.some(b => b.abre.test(linha.text))) {
+      emBlocoDeReferencia = true
+      continue
+    }
+
     // Marcador de data vale a partir daqui — inclusive para a seção ABERTA,
     // porque em vários laudos o "Coleta:" da urina vem DEPOIS do cabeçalho da
     // própria seção. Sem isso o EAS herdava a data da seção anterior e os

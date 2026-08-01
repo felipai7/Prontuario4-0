@@ -46,7 +46,7 @@ export function extrairDoTexto(
   opcoes: ParseContext['options'],
 ): ResultadoMotor {
   const catalogo = carregarCatalogo()
-  const { segments, documentDate } = segmentar(texto)
+  const { segments, documentDate } = segmentar(texto, perfil)
 
   const observations: Observation[] = []
   const discarded: DiscardedItem[] = []

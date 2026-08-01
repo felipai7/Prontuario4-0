@@ -4,12 +4,36 @@
   "fingerprint": {
     "threshold": 10,
     "signals": [
-      { "id": "cnes", "pattern": "CNES[\\s.:]*0929646", "weight": 10, "kind": "institutional" },
-      { "id": "nome-instituicao", "pattern": "\\bHospital\\s+IMEC\\b", "weight": 10, "kind": "institutional" },
-      { "id": "analisador", "pattern": "Sysmex\\s+XN-550", "weight": 3, "kind": "vendor" },
-      { "id": "rotulo-nome-social", "pattern": "^Nome social\\s*:", "weight": 3, "kind": "layout" }
+      {
+        "id": "cnes",
+        "pattern": "CNES[\\s.:]*0929646",
+        "weight": 10,
+        "kind": "institutional"
+      },
+      {
+        "id": "nome-instituicao",
+        "pattern": "\\bHospital\\s+IMEC\\b",
+        "weight": 10,
+        "kind": "institutional"
+      },
+      {
+        "id": "analisador",
+        "pattern": "Sysmex\\s+XN-550",
+        "weight": 3,
+        "kind": "vendor"
+      },
+      {
+        "id": "rotulo-nome-social",
+        "pattern": "^Nome social\\s*:",
+        "weight": 3,
+        "kind": "layout"
+      }
     ]
   },
   "preprocess": [],
-  "matchers": { "enable": [], "disable": [] }
+  "matchers": {
+    "enable": [],
+    "disable": []
+  },
+  "referenceBlocks": []
 }

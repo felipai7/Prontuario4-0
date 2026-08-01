@@ -34,5 +34,6 @@
   "matchers": {
     "enable": [],
     "disable": []
-  }
+  },
+  "referenceBlocks": []
 }

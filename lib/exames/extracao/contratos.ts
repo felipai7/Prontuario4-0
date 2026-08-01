@@ -95,6 +95,22 @@ export interface PreprocessRule {
   discardReason: DiscardReason | null
 }
 
+/**
+ * Bloco de faixas de referência que repete os nomes dos exames.
+ *
+ * Existe por laboratório, e não globalmente, porque a MESMA marca textual tem
+ * função diferente em cada LIS: no HOC "VALOR DE REFERÊNCIA:" sozinho abre a
+ * tabela, enquanto no IMEC "Valores de Referência" aparece exame a exame e não
+ * abre nada. Tratar isso como regra global consertava dois laboratórios e
+ * destruía um terceiro (64 regressões viraram 142 na tentativa).
+ */
+export interface ReferenceBlockRule {
+  /** Abre o bloco: daqui em diante nada é lido como resultado. */
+  open: string
+  /** Fecha o bloco: a leitura de resultados recomeça. */
+  close: string
+}
+
 export interface LabProfile {
   id: string
   displayName: string
@@ -107,6 +123,8 @@ export interface LabProfile {
     enable: string[]
     disable: string[]
   }
+  /** Vazio quando o laboratório não tem bloco de referências identificável. */
+  referenceBlocks: ReferenceBlockRule[]
 }
 
 // ── Valor ──────────────────────────────────────────────────────────────────
