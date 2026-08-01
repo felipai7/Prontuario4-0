@@ -39,9 +39,6 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
 
-  const apiKey = process.env.GOOGLEAISTUDIO_API_KEY
-  if (!apiKey) return NextResponse.json({ error: 'Google AI API Key não configurada' }, { status: 500 })
-
   try {
     const body = await request.json()
     const { base64, mediaType, rawText, images } = body
@@ -63,6 +60,19 @@ export async function POST(request: NextRequest) {
         })
       }
       // Não reconhecido: segue para a IA, e o resultado nasce para revisão.
+    }
+
+    // A chave da IA só é exigida AQUI, e não na entrada da rota.
+    //
+    // Exigi-la logo no começo fazia a extração LOCAL — que não usa IA nenhuma,
+    // que é o ponto da decisão Q6 — ser recusada em qualquer ambiente sem a
+    // chave configurada. Apareceu na primeira vez que um PDF passou pela tela.
+    if (!process.env.GOOGLEAISTUDIO_API_KEY) {
+      return NextResponse.json({
+        error: featureFlags.extracaoLocal
+          ? 'Laboratório não reconhecido pela extração local, e a chave da IA não está configurada para o caminho alternativo.'
+          : 'Google AI API Key não configurada',
+      }, { status: 500 })
     }
 
     const ai = getAI()
