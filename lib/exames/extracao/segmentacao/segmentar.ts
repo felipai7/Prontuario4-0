@@ -32,8 +32,23 @@ const CABECALHOS: [RegExp, SpecimenContext | null, Segment['kind']][] = [
   [/UROCULTURA|HEMOCULTURA|CULTURA\s+DE/i, 'unknown', 'culture'],
   [/ANTIBIOGRAMA|TESTE\s+DE\s+SENSIBILIDADE/i, 'unknown', 'antibiogram'],
   [/HEMOGRAMA|ERITROGRAMA|ERITOGRAMA|LEUCOGRAMA|PLAQUETOGRAMA/i, 'blood', 'examSection'],
-  [/COAGULOGRAMA|BIOQU[IÍ]MICA|SOROLOGIA|IMUNOLOGIA/i, 'blood', 'examSection'],
+  // Subseções NEUTRAS: não provam espécime. O que fazer com elas — voltar a
+  // sangue ou manter o material vigente — é decisão do perfil.
+  [/COAGULOGRAMA|BIOQU[IÍ]MICA|SOROLOGIA|IMUNOLOGIA|CITOMETRIA|CITOLOGIA|EXAME\s+(MICROSC[ÓO]PICO|QU[IÍ]MICO|F[IÍ]SICO|BIOQU[IÍ]MICO)|CARACTERES\s+F[IÍ]SICOS/i, null, 'examSection'],
 ]
+
+/** Espécime declarado pelo próprio laudo — a prova que R6 aceita sem ressalva. */
+function especimeDeclarado(texto: string): SpecimenContext | null {
+  const m = texto.match(/Material(?:\s+biol[óo]gico)?[.\s]*:\s*([^|/]{2,40})/i)
+  if (!m) return null
+  const alvo = m[1]!.toUpperCase()
+  if (/L[IÍ]QUOR|LCR|L[IÍ]QUIDO\s+C[EÉ]FALO/.test(alvo)) return 'csf'
+  if (/URINA/.test(alvo)) return 'urine'
+  if (/SANGUE\s+ARTERIAL/.test(alvo)) return 'arterialBlood'
+  if (/SORO|PLASMA|SANGUE/.test(alvo)) return 'blood'
+  if (/FEZES/.test(alvo)) return 'stool'
+  return null
+}
 
 /** Uma linha é cabeçalho de seção quando casa e não traz valor junto. */
 function cabecalhoDe(linha: TextLine): { specimen: SpecimenContext | null; kind: Segment['kind'] } | null {
@@ -64,6 +79,8 @@ export function segmentar(
     abre: new RegExp(r.open, 'i'),
     fecha: new RegExp(r.close, 'i'),
   }))
+  const herdam = new Set<SpecimenContext>(perfil?.specimen?.inherit ?? [])
+  const usaMaterial = perfil?.specimen?.fromMaterialLine ?? false
   // ── Primeira passada: todas as datas de coleta e onde elas aparecem ──────
   const marcasPorLinha = new Map<number, TemporalRef>()
   const diasDistintos = new Set<string>()
@@ -111,6 +128,14 @@ export function segmentar(
       continue
     }
 
+    if (usaMaterial) {
+      const declarado = especimeDeclarado(linha.text)
+      if (declarado) {
+        especimeCorrente = declarado
+        if (atual) atual.specimen = declarado
+      }
+    }
+
     // Marcador de data vale a partir daqui — inclusive para a seção ABERTA,
     // porque em vários laudos o "Coleta:" da urina vem DEPOIS do cabeçalho da
     // própria seção. Sem isso o EAS herdava a data da seção anterior e os
@@ -125,9 +150,13 @@ export function segmentar(
 
     const cabecalho = cabecalhoDe(linha)
     if (cabecalho) {
-      // `null` mantém o espécime vigente: um bloco de referências não muda o
-      // material do laudo, só interrompe a leitura de resultados.
-      if (cabecalho.specimen !== null) especimeCorrente = cabecalho.specimen
+      if (cabecalho.specimen !== null) {
+        especimeCorrente = cabecalho.specimen
+      } else if (!herdam.has(especimeCorrente)) {
+        // Subseção neutra num laboratório que não declara herança: volta ao
+        // padrão, que é o comportamento conservador.
+        especimeCorrente = 'blood'
+      }
       atual = abrir(linha.text.trim(), especimeCorrente, cabecalho.kind)
       continue
     }

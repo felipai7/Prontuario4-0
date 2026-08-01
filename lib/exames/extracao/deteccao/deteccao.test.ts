@@ -147,6 +147,32 @@ describe('A3 · regra de bloco de referência é dado do perfil', () => {
   })
 })
 
+describe('A3 · regra de espécime é dado do perfil', () => {
+  it('só o HOC herda o espécime através de subseção neutra', () => {
+    // Num laudo de líquor do HOC, a subseção "BIOQUÍMICA" continua sendo
+    // líquor — a glicose ali é do líquor, não glicemia. Num laudo de líquor do
+    // IMEC ela é SÉRICA, porque aquele arquivo mistura os dois materiais.
+    //
+    // Medido sobre o corpus, com seis combinações:
+    //   base                        64 regressões · 609 idênticos
+    //   HOC herda                   56 regressões · 616 idênticos  ← escolhido
+    //   IMEC pela linha "Material" 102 regressões · 567 idênticos
+    //   HOC herda + IMEC material   94 regressões · 574 idênticos
+    //   todos herdam                67 regressões · 607 idênticos
+    //   todos pela linha Material  122 regressões · 553 idênticos
+    //
+    // A "prova pela linha Material:", que eu tinha tentado antes por intuição,
+    // é prejudicial em TODOS os cenários. Fica no contrato, desligada, com a
+    // medição registrada — para ninguém tentar de novo achando que é óbvia.
+    const herdam = PERFIS.filter(p => p.specimen.inherit.length > 0).map(p => p.id)
+    expect(herdam).toEqual(['hoc'])
+  })
+
+  it('nenhum perfil usa a linha "Material:" como prova de espécime', () => {
+    expect(PERFIS.filter(p => p.specimen.fromMaterialLine).map(p => p.id)).toEqual([])
+  })
+})
+
 describe('empate', () => {
   it('empate sem desempate resolve para null, com os candidatos listados', () => {
     // Construído de propósito: um texto que casa dois perfis com o mesmo peso.

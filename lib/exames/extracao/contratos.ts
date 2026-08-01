@@ -125,6 +125,21 @@ export interface LabProfile {
   }
   /** Vazio quando o laboratório não tem bloco de referências identificável. */
   referenceBlocks: ReferenceBlockRule[]
+  /**
+   * Como este laboratório prova o espécime — R6 por perfil (A3).
+   *
+   * Existe porque a mesma estrutura significa coisas opostas em labs
+   * diferentes. Num laudo de líquor do HOC a subseção "BIOQUÍMICA" continua
+   * sendo líquor; num do IMEC ela é SÉRICA, porque aquele laudo mistura os dois
+   * materiais no mesmo arquivo. Tratar isso como regra global consertava um e
+   * quebrava o outro — medido duas vezes, revertido duas vezes.
+   */
+  specimen: {
+    /** Espécimes que atravessam uma subseção neutra ("BIOQUÍMICA", "CITOLOGIA"). */
+    inherit: SpecimenContext[]
+    /** Usa a linha "Material: X" do laudo como prova do espécime. */
+    fromMaterialLine: boolean
+  }
 }
 
 // ── Valor ──────────────────────────────────────────────────────────────────

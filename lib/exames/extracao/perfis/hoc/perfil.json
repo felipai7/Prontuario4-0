@@ -52,5 +52,12 @@
       "open": "^\\s*Valor(?:es)?\\s+de\\s+Refer[êe]ncia\\s*:?\\s*$",
       "close": "^\\s*\\[\\s*Coleta\\s*:"
     }
-  ]
+  ],
+  "specimen": {
+    "inherit": [
+      "csf",
+      "urine"
+    ],
+    "fromMaterialLine": false
+  }
 }

@@ -47,5 +47,9 @@
     "enable": [],
     "disable": []
   },
-  "referenceBlocks": []
+  "referenceBlocks": [],
+  "specimen": {
+    "inherit": [],
+    "fromMaterialLine": false
+  }
 }
