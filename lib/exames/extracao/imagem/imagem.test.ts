@@ -170,6 +170,20 @@ describe('seção 9 · sem OCR nesta fase', () => {
     expect(r.warnings.map(w => w.code)).toContain('noTextLayer')
   })
 
+  it('"REPETIDO" não vira laudo de PET', async () => {
+    // Sem fronteira de palavra, "PET" casa dentro de "re-PET-ido", e a nota
+    // "EXAME REPETIDO E CONFIRMADO." de um laudo laboratorial virava um laudo
+    // de imagem inteiro. Apareceu ao rodar o app de verdade, não nos testes.
+    const r = await extrair([
+      'BIOQUIMICA',
+      'Coleta: 12/05/2026',
+      'Creatinina          1,42     mg/dL      0,60 - 1,30',
+      'Nota: EXAME REPETIDO E CONFIRMADO.',
+    ])
+    expect(r.imaging).toEqual([])
+    expect(r.documentKind).toBe('laboratory')
+  })
+
   it('laudo laboratorial não é confundido com laudo de imagem', async () => {
     const r = await extrair([
       'BIOQUIMICA',
