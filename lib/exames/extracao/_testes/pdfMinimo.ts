@@ -91,6 +91,30 @@ export function construirPdf(paginas: PaginaPdf[]): Uint8Array {
   return new Uint8Array(Buffer.from(pdf, 'latin1'))
 }
 
+/**
+ * Página tabular com colunas em posições X explícitas.
+ *
+ * Existe porque `pdfDeLinhas` separa colunas com espaços literais, e um laudo
+ * real separa com POSIÇÃO. Duas vezes neste projeto um teste sintético passou
+ * (ou falhou) por um motivo que não existia no documento de verdade, só porque
+ * o vão gerado era mais estreito que o real. Aqui a coluna é geometria, como
+ * no papel.
+ */
+export function pdfTabular(linhas: string[][], xs: number[], tamanho = 10): Uint8Array {
+  return construirPdf([
+    {
+      linhas: linhas.flatMap((celulas, i) =>
+        celulas.map((texto, c) => ({
+          texto,
+          x: xs[c] ?? (50 + c * 90),
+          y: ALTURA - 60 - i * (tamanho + 6),
+          tamanho,
+        })),
+      ),
+    },
+  ])
+}
+
 /** Atalho: uma página, linhas empilhadas de cima para baixo. */
 export function pdfDeLinhas(linhas: string[], tamanho = 11): Uint8Array {
   return construirPdf([

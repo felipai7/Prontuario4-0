@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { extrairExames } from '../index'
-import { pdfDeLinhas } from '../_testes/pdfMinimo'
+import { pdfDeLinhas, pdfTabular } from '../_testes/pdfMinimo'
 import { ehRotuloDeMetadado } from './metadados'
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -80,6 +80,61 @@ describe('layout em bloco (HOC)', () => {
     const r = await extrair(['BIOQUIMICA', 'Coleta: 12/05/2026', 'Resultado   :  9,9   mg/dL'])
     expect(r.observations).toHaveLength(0)
     expect(r.discarded.some(d => /sem exame identific/.test(d.detail ?? ''))).toBe(true)
+  })
+})
+
+describe('tabela multiparâmetro com dois-pontos em coluna própria (HOC)', () => {
+  // Este bloco existe por causa da F9: a paridade mostrou 115 exames perdidos
+  // em quatro laudos do HOC porque os dois-pontos ficam numa COLUNA separada
+  // ("Hemácias   :   3,10   /mm³") e o matcher tabular lia ":" como o valor.
+  // A suíte estava verde com 341 testes enquanto isso acontecia.
+  // Colunas em posições X reais, como o laudo as diagrama — não com espaços.
+  const COLUNAS = [50, 150, 175, 235, 300, 380, 460]
+  const bytes = pdfTabular([
+    ['HEMOGRAMA COMPLETO'],
+    ['[Coleta: 05/04/2026 13:48 ]'],
+    ['ERITOGRAMA', '', 'Resultado', '', 'VALORES DE REFERÊNCIA'],
+    ['Hemácias', ':', '3,10', '/mm³', '4,00 a 5,50 /mm³'],
+    ['Hematócrito', ':', '27,9', '%', '37,0 a 47,0 %'],
+    ['Hemoglobina', ':', '9,3', 'g/dL', '12,0 a 16,0 g/dL'],
+    ['LEUCOGRAMA'],
+    ['Leucócitos', ':', '12.500', '/mm³', '4.500 a 10.000'],
+    ['Bastonetes', ':', '1', '%', '125', '/mm³', '1 a 5'],
+  ], COLUNAS)
+
+  async function extrairHemograma() {
+    return extrairExames({ document: { bytes, filename: null }, hints: null, options: null })
+  }
+
+  it('os dois-pontos em coluna própria não são confundidos com o valor', async () => {
+    const r = await extrairHemograma()
+    const nomes = r.observations.map(o => o.canonicalName)
+    expect(nomes).toContain('Hemácias')
+    expect(nomes).toContain('Hematócrito')
+    expect(nomes).toContain('Hemoglobina')
+    expect(nomes).toContain('Leucócitos')
+  })
+
+  it('valor, unidade e referência caem nas colunas certas', async () => {
+    const r = await extrairHemograma()
+    const hb = r.observations.find(o => o.canonicalName === 'Hemoglobina')!
+    expect(hb.value).toMatchObject({ kind: 'numeric', value: 9.3 })
+    expect(hb.unit.canonical).toBe('g/dL')
+    expect(hb.reference).toMatchObject({ kind: 'range', min: 12, max: 16 })
+  })
+
+  it('contagem com ponto de milhar é lida como milhar, não decimal', async () => {
+    const r = await extrairHemograma()
+    const leuco = r.observations.find(o => o.canonicalName === 'Leucócitos')!
+    expect(leuco.value).toMatchObject({ kind: 'numeric', value: 12500 })
+  })
+
+  it('no diferencial, o percentual é o valor e o absoluto não vira exame novo', async () => {
+    const r = await extrairHemograma()
+    const bast = r.observations.filter(o => o.canonicalName === 'Bastonetes')
+    expect(bast).toHaveLength(1)
+    expect(bast[0]!.value).toMatchObject({ kind: 'numeric', value: 1 })
+    expect(bast[0]!.unit.canonical).toBe('%')
   })
 })
 

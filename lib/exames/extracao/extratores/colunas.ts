@@ -90,10 +90,23 @@ export function separarColunas(linha: TextLine, limite?: number): Coluna[] {
   // não desfaz o trabalho da medição quando ela existe.
   return colunas
     .flatMap(c => c.texto.split(/\s{2,}/).map(t => ({
-      texto: t.replace(/\s+/g, ' ').trim(),
+      // Dois-pontos no INÍCIO da coluna é alinhamento: conforme a largura do
+      // vão, "Hemoglobina   :   9,3" sai com o ":" em coluna própria ou colado
+      // no valor (": 9,3"). As duas formas aparecem no corpus.
+      //
+      // O traço NUNCA é removido daqui: "- 6,0" é um base excess legítimo, e o
+      // "-" sozinho no antibiograma significa "não testado".
+      texto: t.replace(/\s+/g, ' ').replace(/^[:;·|]+\s*/, '').trim(),
       inicio: c.inicio,
     })))
-    .filter(c => c.texto.length > 0)
+    // Uma coluna só com pontuação é alinhamento, não dado. No hemograma do HOC
+    // os dois-pontos ficam numa coluna PRÓPRIA, separados por vãos largos
+    // ("Hemácias   :   3,10   /mm³"), e mantê-la fazia o matcher tabular ler
+    // ":" como se fosse o valor — 115 exames perdidos em quatro laudos.
+    // O traço NÃO entra nesta lista: no antibiograma "-" significa "não
+    // testado", que é informação. Filtrá-lo custou 9 antimicrobianos na
+    // primeira tentativa desta correção.
+    .filter(c => c.texto.length > 0 && !/^[:.;,·|]+$/.test(c.texto))
 }
 
 const RE_VALOR_E_UNIDADE =
