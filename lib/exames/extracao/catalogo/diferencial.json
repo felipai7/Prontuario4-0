@@ -1,0 +1,20 @@
+{
+  "absoluteSuffix": " (absoluto)",
+  "absoluteUnit": "/mm³",
+  "cells": [
+    "Promielócitos",
+    "Mielócitos",
+    "Metamielócitos",
+    "Bastonetes",
+    "Segmentados",
+    "Neutrófilos",
+    "Eosinófilos",
+    "Basófilos",
+    "Linfócitos",
+    "Linfócitos Atípicos",
+    "Monócitos",
+    "Plasmócitos",
+    "Blastos"
+  ],
+  "version": "1.0.0"
+}

@@ -129,12 +129,29 @@ describe('tabela multiparâmetro com dois-pontos em coluna própria (HOC)', () =
     expect(leuco.value).toMatchObject({ kind: 'numeric', value: 12500 })
   })
 
-  it('no diferencial, o percentual é o valor e o absoluto não vira exame novo', async () => {
+  it('no diferencial, percentual E absoluto viram observações distintas', async () => {
+    // Decisão clínica de 31/07/2026: o laudo traz os dois na mesma linha e os
+    // dois são usados — o percentual na fórmula leucocitária, o absoluto para
+    // decidir neutropenia. O clinBoard guarda só o absoluto; guardar só um
+    // joga fora um número que está no papel.
     const r = await extrairHemograma()
-    const bast = r.observations.filter(o => o.canonicalName === 'Bastonetes')
-    expect(bast).toHaveLength(1)
-    expect(bast[0]!.value).toMatchObject({ kind: 'numeric', value: 1 })
-    expect(bast[0]!.unit.canonical).toBe('%')
+    const pct = r.observations.find(o => o.canonicalName === 'Bastonetes')!
+    const abs = r.observations.find(o => o.canonicalName === 'Bastonetes (absoluto)')!
+    expect(pct.value).toMatchObject({ kind: 'numeric', value: 1 })
+    expect(pct.unit.canonical).toBe('%')
+    expect(abs.value).toMatchObject({ kind: 'numeric', value: 125 })
+    expect(abs.unit.canonical).toBe('/mm³')
+  })
+
+  it('cada um leva a SUA faixa de referência', async () => {
+    const r = await extrairHemograma()
+    const pct = r.observations.find(o => o.canonicalName === 'Bastonetes')!
+    expect(pct.reference).toMatchObject({ kind: 'range', min: 1, max: 5 })
+  })
+
+  it('só o diferencial é desdobrado: hemoglobina continua sendo uma observação', async () => {
+    const r = await extrairHemograma()
+    expect(r.observations.filter(o => /^Hemoglobina/.test(o.canonicalName ?? ''))).toHaveLength(1)
   })
 })
 

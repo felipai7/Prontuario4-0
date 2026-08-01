@@ -16,6 +16,36 @@ import { interpretarValor, ehNaoUsadoClinicamente } from '../normalizadores/valo
 import { resolverAnalito } from '../catalogo'
 import especimes from '../catalogo/especimes.json'
 import { ehRotuloDeMetadado } from './metadados'
+import diferencial from '../catalogo/diferencial.json'
+
+const CELULAS_DIFERENCIAL = new Set(
+  (diferencial.cells as string[]).map(c => c.toUpperCase().replace(/\s+/g, ' ')),
+)
+
+/**
+ * Diferencial leucocitário: o laudo traz percentual E absoluto na mesma linha.
+ *
+ *   Neutrófilos   :  69   %   8.625   /mm³   51 a 65   2.295 a 6.500
+ *
+ * O clinBoard guarda só o absoluto. Guardar só um dos dois joga fora um número
+ * que está no papel e que é usado — o percentual entra na fórmula, o absoluto
+ * decide neutropenia. Decisão clínica de 31/07/2026: extrair os dois.
+ */
+function paresDoDiferencial(
+  nome: string,
+  campos: string[],
+): { valor: string; unidade: string; referencia: string }[] | null {
+  if (!CELULAS_DIFERENCIAL.has(nome.toUpperCase().replace(/\s+/g, ' '))) return null
+  const [v1, u1, v2, u2, r1, r2] = campos
+  const numero = /^[\d.,]+$/
+  if (!v1 || !u1 || !v2 || !u2) return null
+  if (!numero.test(v1) || !numero.test(v2)) return null
+  if (u1 !== '%' || !/\/\s*(mm3|mm³|µL|uL)/i.test(u2)) return null
+  return [
+    { valor: v1, unidade: u1, referencia: r1 ?? '' },
+    { valor: v2, unidade: u2, referencia: r2 ?? '' },
+  ]
+}
 
 /** Parâmetros descartados de propósito dentro da gasometria, por redundância. */
 const DESCARTE_GASO = new Set(
@@ -135,6 +165,25 @@ export const matcherTabular: Matcher = {
           detail: nome,
         }],
       }
+    }
+
+    const pares = paresDoDiferencial(nome, resto)
+    if (pares) {
+      const sufixo = diferencial.absoluteSuffix
+      const observacoes = pares.map((par, i) => {
+        const nomeAlvo = i === 0 ? nome : `${nome}${sufixo}`
+        const alvo = resolverAnalito(nomeAlvo, segment.specimen)
+        return {
+          rawName: nomeAlvo,
+          rawValue: par.valor,
+          rawUnit: par.unidade,
+          rawReference: par.referencia,
+          specimen: alvo?.defaultSpecimen ?? analito.defaultSpecimen,
+          date: segment.date,
+          provenance: proveniencia(linha, ctx, matcherTabular.id),
+        }
+      })
+      return { kind: 'observations', observations: observacoes }
     }
 
     const observacao: RawObservation = {

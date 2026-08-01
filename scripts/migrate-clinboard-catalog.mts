@@ -190,6 +190,22 @@ const DESCRICAO_FISICA = [
  */
 const NAO_USADOS = ['IMUNE', 'NÃO IMUNE', 'NAO IMUNE']
 
+// ── Diferencial: percentual E absoluto (decisão clínica de 31/07/2026) ──────
+//
+// O laudo traz os dois na MESMA linha:
+//
+//   Neutrófilos   :  69   %   8.625   /mm³   51 a 65   2.295 a 6.500
+//
+// O clinBoard guarda só o absoluto. Guardar só um dos dois é jogar fora um
+// número que está no papel e que é usado: o percentual entra na fórmula
+// leucocitária, o absoluto decide neutropenia. Cada célula do diferencial
+// ganha um analito gêmeo "(absoluto)", em /mm³.
+const CELULAS_DIFERENCIAL = [
+  'Promielócitos', 'Mielócitos', 'Metamielócitos', 'Bastonetes', 'Segmentados',
+  'Neutrófilos', 'Eosinófilos', 'Basófilos', 'Linfócitos', 'Linfócitos Atípicos',
+  'Monócitos', 'Plasmócitos', 'Blastos',
+]
+
 // ── Faixas de plausibilidade (decisão clínica de 31/07/2026) ────────────────
 //
 // NÃO são faixas de normalidade. São o intervalo FISICAMENTE POSSÍVEL, usado
@@ -403,6 +419,16 @@ for (const nome of geradosPorRegra) {
   sinonimos[chaveSinonimo(nome)] = id
 }
 
+// 3b) Gêmeos absolutos do diferencial. O nome canônico é derivado, e por isso
+//     entra também na lista do teste do E2: nome que uma regra produz tem que
+//     existir no catálogo.
+for (const celula of CELULAS_DIFERENCIAL) {
+  const absoluto = `${celula} (absoluto)`
+  geradosPorRegra.push(absoluto)
+  const id = registrarAnalito(absoluto, 'diferencial-absoluto')
+  sinonimos[chaveSinonimo(absoluto)] = id
+}
+
 // 4) Quase-duplicatas: nomes canônicos que diferem só por acento, caixa ou espaço.
 const porChaveFrouxa = new Map<string, Set<string>>()
 for (const a of Object.values(analitos)) {
@@ -429,8 +455,14 @@ for (const [, nomes] of porChaveFrouxa) {
 // Esperado hoje: zero. Se um dia aparecer item aqui, é uma regra nova emitindo
 // nome que ninguém cadastrou — a família exata do E2.
 const vocabularioDoador = new Set([...(D.PARAM_WHITELIST as Set<string>)].map(chaveSinonimo))
+// Os gêmeos absolutos do diferencial são vocabulário NOVO, autorado aqui por
+// decisão clínica — não estarem no doador é o esperado, não um conflito.
+const autoradosAqui = new Set(
+  CELULAS_DIFERENCIAL.map(c => chaveSinonimo(`${c} (absoluto)`)),
+)
 for (const nome of [...new Set(geradosPorRegra)].sort()) {
-  if (!vocabularioDoador.has(chaveSinonimo(nome))) {
+  const k = chaveSinonimo(nome)
+  if (!vocabularioDoador.has(k) && !autoradosAqui.has(k)) {
     conflitos.push({ tipo: 'geradoPorRegraForaDoVocabulario', detalhe: `"${nome}"` })
   }
 }
@@ -525,6 +557,14 @@ escrever('imagem.json', {
     flags: re.flags,
   })),
 })
+escrever('diferencial.json', {
+  version: VERSAO,
+  // Células cujo laudo traz percentual e absoluto lado a lado.
+  cells: CELULAS_DIFERENCIAL,
+  absoluteSuffix: ' (absoluto)',
+  absoluteUnit: '/mm³',
+})
+
 escrever('especimes.json', {
   version: VERSAO,
   gasometry: {
