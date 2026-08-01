@@ -129,24 +129,15 @@ describe('tabela multiparâmetro com dois-pontos em coluna própria (HOC)', () =
     expect(leuco.value).toMatchObject({ kind: 'numeric', value: 12500 })
   })
 
-  it('no diferencial, percentual E absoluto viram observações distintas', async () => {
-    // Decisão clínica de 31/07/2026: o laudo traz os dois na mesma linha e os
-    // dois são usados — o percentual na fórmula leucocitária, o absoluto para
-    // decidir neutropenia. O clinBoard guarda só o absoluto; guardar só um
-    // joga fora um número que está no papel.
+  it('no diferencial vale o ABSOLUTO, não o percentual que vem primeiro', async () => {
+    // Decisão clínica de 31/07/2026, na revisão de paridade. A linha traz
+    // "1 % 125 /mm³": sem regra, o percentual venceria por posição e o exame
+    // ficaria com o número errado sem nenhum sinal de perda.
     const r = await extrairHemograma()
-    const pct = r.observations.find(o => o.canonicalName === 'Bastonetes')!
-    const abs = r.observations.find(o => o.canonicalName === 'Bastonetes (absoluto)')!
-    expect(pct.value).toMatchObject({ kind: 'numeric', value: 1 })
-    expect(pct.unit.canonical).toBe('%')
-    expect(abs.value).toMatchObject({ kind: 'numeric', value: 125 })
-    expect(abs.unit.canonical).toBe('/mm³')
-  })
-
-  it('cada um leva a SUA faixa de referência', async () => {
-    const r = await extrairHemograma()
-    const pct = r.observations.find(o => o.canonicalName === 'Bastonetes')!
-    expect(pct.reference).toMatchObject({ kind: 'range', min: 1, max: 5 })
+    const bast = r.observations.filter(o => /^Bastonetes/.test(o.canonicalName ?? ''))
+    expect(bast).toHaveLength(1)
+    expect(bast[0]!.value).toMatchObject({ kind: 'numeric', value: 125 })
+    expect(bast[0]!.unit.canonical).toBe('/mm³')
   })
 
   it('só o diferencial é desdobrado: hemoglobina continua sendo uma observação', async () => {
@@ -184,6 +175,35 @@ describe('layout com dois-pontos e pontilhado (PIOX)', () => {
   it('o cabeçalho "Resultado   Valor Referencial" não vira exame', async () => {
     const r = await extrair(LAUDO)
     expect(r.observations.map(o => o.rawName)).not.toContain('Resultado')
+  })
+})
+
+describe('R6 · o espécime não vaza de uma seção para a seguinte', () => {
+  it('pH urinário depois de uma gasometria venosa NÃO vira pH venoso', async () => {
+    // O defeito mais grave encontrado na revisão de paridade: "URINA PARCIAL"
+    // não estava na lista de cabeçalhos de urina, então a seção não abria e o
+    // pH de 6,0 da urina continuava no escopo da gasometria venosa — gravado
+    // como pH venoso, que seria acidose grave num paciente com gasometria
+    // normal. Parecia certo e geraria conduta.
+    const r = await extrair([
+      'GASOMETRIA VENOSA',
+      'Coleta: 05/04/2026',
+      'pH   :  7,40   7,32 a 7,42',
+      'URINA PARCIAL',
+      'pH   :  6,0   5,0 a 8,0',
+      'Densidade   :  1.015   1.005 a 1.035',
+    ])
+    const porNome = new Map(r.observations.map(o => [o.canonicalName, o]))
+    expect(porNome.get('pH (Venosa)')?.value).toMatchObject({ value: 7.4 })
+    expect(porNome.get('pH (U)')?.value).toMatchObject({ value: 6 })
+    expect(porNome.get('pH (U)')?.specimen).toBe('urine')
+  })
+
+  it('as várias grafias de seção de urina abrem o escopo', async () => {
+    for (const cabecalho of ['URINA PARCIAL', 'PARCIAL DE URINA', 'ROTINA DE URINA', 'EAS']) {
+      const r = await extrair([cabecalho, 'Coleta: 05/04/2026', 'pH   :  6,0   5,0 a 8,0'])
+      expect(r.observations[0]?.canonicalName, cabecalho).toBe('pH (U)')
+    }
   })
 })
 

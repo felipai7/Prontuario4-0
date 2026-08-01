@@ -23,28 +23,28 @@ const CELULAS_DIFERENCIAL = new Set(
 )
 
 /**
- * Diferencial leucocitário: o laudo traz percentual E absoluto na mesma linha.
+ * Diferencial leucocitário: a linha traz DOIS números.
  *
  *   Neutrófilos   :  69   %   8.625   /mm³   51 a 65   2.295 a 6.500
+ *                    └ percentual      └ absoluto
  *
- * O clinBoard guarda só o absoluto. Guardar só um dos dois joga fora um número
- * que está no papel e que é usado — o percentual entra na fórmula, o absoluto
- * decide neutropenia. Decisão clínica de 31/07/2026: extrair os dois.
+ * Decisão clínica de 31/07/2026: vale o ABSOLUTO, em /mm³. Sem esta função o
+ * percentual venceria por posição — ele vem primeiro na linha —, e o exame
+ * ficaria com o número errado sem nenhum sinal de que algo se perdeu.
  */
-function paresDoDiferencial(
+function absolutoDoDiferencial(
   nome: string,
   campos: string[],
-): { valor: string; unidade: string; referencia: string }[] | null {
+): { valor: string; unidade: string; referencia: string } | null {
   if (!CELULAS_DIFERENCIAL.has(nome.toUpperCase().replace(/\s+/g, ' '))) return null
   const [v1, u1, v2, u2, r1, r2] = campos
   const numero = /^[\d.,]+$/
   if (!v1 || !u1 || !v2 || !u2) return null
   if (!numero.test(v1) || !numero.test(v2)) return null
   if (u1 !== '%' || !/\/\s*(mm3|mm³|µL|uL)/i.test(u2)) return null
-  return [
-    { valor: v1, unidade: u1, referencia: r1 ?? '' },
-    { valor: v2, unidade: u2, referencia: r2 ?? '' },
-  ]
+  // r1 é a faixa do percentual e r2 a do absoluto; com o absoluto vem r2.
+  void r1
+  return { valor: v2, unidade: u2, referencia: r2 ?? '' }
 }
 
 /** Parâmetros descartados de propósito dentro da gasometria, por redundância. */
@@ -167,30 +167,12 @@ export const matcherTabular: Matcher = {
       }
     }
 
-    const pares = paresDoDiferencial(nome, resto)
-    if (pares) {
-      const sufixo = diferencial.absoluteSuffix
-      const observacoes = pares.map((par, i) => {
-        const nomeAlvo = i === 0 ? nome : `${nome}${sufixo}`
-        const alvo = resolverAnalito(nomeAlvo, segment.specimen)
-        return {
-          rawName: nomeAlvo,
-          rawValue: par.valor,
-          rawUnit: par.unidade,
-          rawReference: par.referencia,
-          specimen: alvo?.defaultSpecimen ?? analito.defaultSpecimen,
-          date: segment.date,
-          provenance: proveniencia(linha, ctx, matcherTabular.id),
-        }
-      })
-      return { kind: 'observations', observations: observacoes }
-    }
-
+    const absoluto = absolutoDoDiferencial(nome, resto)
     const observacao: RawObservation = {
       rawName: nome,
-      rawValue: valorBruto,
-      rawUnit: unidadeBruta,
-      rawReference: referenciaBruta,
+      rawValue: absoluto?.valor ?? valorBruto,
+      rawUnit: absoluto?.unidade ?? unidadeBruta,
+      rawReference: absoluto?.referencia ?? referenciaBruta,
       specimen: analito.defaultSpecimen,
       date: segment.date,
       provenance: proveniencia(linha, ctx, matcherTabular.id),

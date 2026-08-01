@@ -18,12 +18,17 @@ import type { DocumentText, Segment, SpecimenContext, TemporalRef, TextLine } fr
 import { diaDe, marcadorDeColeta, SEM_DATA } from '../normalizadores/data'
 
 /** Cabeçalhos que provam o espécime da seção que se inicia. */
-const CABECALHOS: [RegExp, SpecimenContext, Segment['kind']][] = [
+const CABECALHOS: [RegExp, SpecimenContext | null, Segment['kind']][] = [
   [/GASOMETRIA\s+ARTERIAL/i, 'arterialBlood', 'examSection'],
   [/GASOMETRIA\s+VENOSA/i, 'venousBlood', 'examSection'],
   [/\bGASOMETRIA\b/i, 'arterialBlood', 'examSection'],
   [/ROTINA\s+DE\s+L[IÍ]QUOR|L[IÍ]QUOR|\bLCR\b/i, 'csf', 'examSection'],
-  [/\bEAS\b|ROTINA\s+DE\s+URINA|URIN[AÁ]LISE|ELEMENTOS\s+ANORMAIS/i, 'urine', 'eas'],
+  // "URINA PARCIAL" faltava, e a consequência foi a pior encontrada no
+  // projeto: sem abrir a seção de urina, o pH URINÁRIO de 6,0 continuava no
+  // escopo da gasometria venosa aberta antes e era gravado como pH venoso —
+  // que seria acidose grave num paciente com gasometria normal. R6 depende
+  // desta lista estar completa.
+  [/\bEAS\b|ROTINA\s+DE\s+URINA|URIN[AÁ]LISE|ELEMENTOS\s+ANORMAIS|URINA\s+(PARCIAL|ROTINA|TIPO\s*I)|PARCIAL\s+DE\s+URINA|SUMARIO\s+DE\s+URINA|SEDIMENTOSCOPIA/i, 'urine', 'eas'],
   [/UROCULTURA|HEMOCULTURA|CULTURA\s+DE/i, 'unknown', 'culture'],
   [/ANTIBIOGRAMA|TESTE\s+DE\s+SENSIBILIDADE/i, 'unknown', 'antibiogram'],
   [/HEMOGRAMA|ERITROGRAMA|ERITOGRAMA|LEUCOGRAMA|PLAQUETOGRAMA/i, 'blood', 'examSection'],
@@ -31,7 +36,7 @@ const CABECALHOS: [RegExp, SpecimenContext, Segment['kind']][] = [
 ]
 
 /** Uma linha é cabeçalho de seção quando casa e não traz valor junto. */
-function cabecalhoDe(linha: TextLine): { specimen: SpecimenContext; kind: Segment['kind'] } | null {
+function cabecalhoDe(linha: TextLine): { specimen: SpecimenContext | null; kind: Segment['kind'] } | null {
   const texto = linha.text.trim()
   // Um cabeçalho não tem número de resultado colado nele. "Glicose 92" não é
   // cabeçalho de bioquímica só por conter a palavra.
@@ -98,8 +103,10 @@ export function segmentar(texto: DocumentText): { segments: Segment[]; documentD
 
     const cabecalho = cabecalhoDe(linha)
     if (cabecalho) {
-      especimeCorrente = cabecalho.specimen
-      atual = abrir(linha.text.trim(), cabecalho.specimen, cabecalho.kind)
+      // `null` mantém o espécime vigente: um bloco de referências não muda o
+      // material do laudo, só interrompe a leitura de resultados.
+      if (cabecalho.specimen !== null) especimeCorrente = cabecalho.specimen
+      atual = abrir(linha.text.trim(), especimeCorrente, cabecalho.kind)
       continue
     }
 

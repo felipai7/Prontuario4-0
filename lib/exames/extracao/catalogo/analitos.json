@@ -327,20 +327,6 @@
       "plausibleRange": null,
       "valueKind": "numeric"
     },
-    "basofilos.absoluto.serum": {
-      "canonicalName": "Basófilos (absoluto)",
-      "category": null,
-      "defaultSpecimen": "blood",
-      "defaultUnit": null,
-      "id": "basofilos.absoluto.serum",
-      "loinc": null,
-      "needsClinicalReview": true,
-      "origem": [
-        "diferencial-absoluto"
-      ],
-      "plausibleRange": null,
-      "valueKind": "numeric"
-    },
     "basofilos.csf": {
       "canonicalName": "Basófilos (LCR)",
       "category": null,
@@ -368,20 +354,6 @@
       "needsClinicalReview": true,
       "origem": [
         "NAME_MAP"
-      ],
-      "plausibleRange": null,
-      "valueKind": "numeric"
-    },
-    "bastonetes.absoluto.serum": {
-      "canonicalName": "Bastonetes (absoluto)",
-      "category": null,
-      "defaultSpecimen": "blood",
-      "defaultUnit": null,
-      "id": "bastonetes.absoluto.serum",
-      "loinc": null,
-      "needsClinicalReview": true,
-      "origem": [
-        "diferencial-absoluto"
       ],
       "plausibleRange": null,
       "valueKind": "numeric"
@@ -507,20 +479,6 @@
       "origem": [
         "EAS_NAME_MAP",
         "NAME_MAP"
-      ],
-      "plausibleRange": null,
-      "valueKind": "numeric"
-    },
-    "blastos.absoluto.serum": {
-      "canonicalName": "Blastos (absoluto)",
-      "category": null,
-      "defaultSpecimen": "blood",
-      "defaultUnit": null,
-      "id": "blastos.absoluto.serum",
-      "loinc": null,
-      "needsClinicalReview": true,
-      "origem": [
-        "diferencial-absoluto"
       ],
       "plausibleRange": null,
       "valueKind": "numeric"
@@ -1454,20 +1412,6 @@
       "needsClinicalReview": true,
       "origem": [
         "NAME_MAP"
-      ],
-      "plausibleRange": null,
-      "valueKind": "numeric"
-    },
-    "eosinofilos.absoluto.serum": {
-      "canonicalName": "Eosinófilos (absoluto)",
-      "category": null,
-      "defaultSpecimen": "blood",
-      "defaultUnit": null,
-      "id": "eosinofilos.absoluto.serum",
-      "loinc": null,
-      "needsClinicalReview": true,
-      "origem": [
-        "diferencial-absoluto"
       ],
       "plausibleRange": null,
       "valueKind": "numeric"
@@ -2543,34 +2487,6 @@
       "plausibleRange": null,
       "valueKind": "numeric"
     },
-    "linfocitos.absoluto.serum": {
-      "canonicalName": "Linfócitos (absoluto)",
-      "category": null,
-      "defaultSpecimen": "blood",
-      "defaultUnit": null,
-      "id": "linfocitos.absoluto.serum",
-      "loinc": null,
-      "needsClinicalReview": true,
-      "origem": [
-        "diferencial-absoluto"
-      ],
-      "plausibleRange": null,
-      "valueKind": "numeric"
-    },
-    "linfocitos.atipicos.absoluto.serum": {
-      "canonicalName": "Linfócitos Atípicos (absoluto)",
-      "category": null,
-      "defaultSpecimen": "blood",
-      "defaultUnit": null,
-      "id": "linfocitos.atipicos.absoluto.serum",
-      "loinc": null,
-      "needsClinicalReview": true,
-      "origem": [
-        "diferencial-absoluto"
-      ],
-      "plausibleRange": null,
-      "valueKind": "numeric"
-    },
     "linfocitos.atipicos.serum": {
       "canonicalName": "Linfócitos Atípicos",
       "category": null,
@@ -2758,20 +2674,6 @@
       },
       "valueKind": "numeric"
     },
-    "metamielocitos.absoluto.serum": {
-      "canonicalName": "Metamielócitos (absoluto)",
-      "category": null,
-      "defaultSpecimen": "blood",
-      "defaultUnit": null,
-      "id": "metamielocitos.absoluto.serum",
-      "loinc": null,
-      "needsClinicalReview": true,
-      "origem": [
-        "diferencial-absoluto"
-      ],
-      "plausibleRange": null,
-      "valueKind": "numeric"
-    },
     "metamielocitos.serum": {
       "canonicalName": "Metamielócitos",
       "category": null,
@@ -2800,20 +2702,6 @@
       "plausibleRange": null,
       "valueKind": "numeric"
     },
-    "mielocitos.absoluto.serum": {
-      "canonicalName": "Mielócitos (absoluto)",
-      "category": null,
-      "defaultSpecimen": "blood",
-      "defaultUnit": null,
-      "id": "mielocitos.absoluto.serum",
-      "loinc": null,
-      "needsClinicalReview": true,
-      "origem": [
-        "diferencial-absoluto"
-      ],
-      "plausibleRange": null,
-      "valueKind": "numeric"
-    },
     "mielocitos.serum": {
       "canonicalName": "Mielócitos",
       "category": null,
@@ -2824,20 +2712,6 @@
       "needsClinicalReview": true,
       "origem": [
         "NAME_MAP"
-      ],
-      "plausibleRange": null,
-      "valueKind": "numeric"
-    },
-    "monocitos.absoluto.serum": {
-      "canonicalName": "Monócitos (absoluto)",
-      "category": null,
-      "defaultSpecimen": "blood",
-      "defaultUnit": null,
-      "id": "monocitos.absoluto.serum",
-      "loinc": null,
-      "needsClinicalReview": true,
-      "origem": [
-        "diferencial-absoluto"
       ],
       "plausibleRange": null,
       "valueKind": "numeric"
@@ -2884,20 +2758,6 @@
       "origem": [
         "PARAM_WHITELIST",
         "regra"
-      ],
-      "plausibleRange": null,
-      "valueKind": "numeric"
-    },
-    "neutrofilos.absoluto.serum": {
-      "canonicalName": "Neutrófilos (absoluto)",
-      "category": null,
-      "defaultSpecimen": "blood",
-      "defaultUnit": null,
-      "id": "neutrofilos.absoluto.serum",
-      "loinc": null,
-      "needsClinicalReview": true,
-      "origem": [
-        "diferencial-absoluto"
       ],
       "plausibleRange": null,
       "valueKind": "numeric"
@@ -3294,20 +3154,6 @@
       },
       "valueKind": "numeric"
     },
-    "plasmocitos.absoluto.serum": {
-      "canonicalName": "Plasmócitos (absoluto)",
-      "category": null,
-      "defaultSpecimen": "blood",
-      "defaultUnit": null,
-      "id": "plasmocitos.absoluto.serum",
-      "loinc": null,
-      "needsClinicalReview": true,
-      "origem": [
-        "diferencial-absoluto"
-      ],
-      "plausibleRange": null,
-      "valueKind": "numeric"
-    },
     "plasmocitos.csf": {
       "canonicalName": "Plasmócitos (LCR)",
       "category": null,
@@ -3492,20 +3338,6 @@
       "needsClinicalReview": true,
       "origem": [
         "NAME_MAP"
-      ],
-      "plausibleRange": null,
-      "valueKind": "numeric"
-    },
-    "promielocitos.absoluto.serum": {
-      "canonicalName": "Promielócitos (absoluto)",
-      "category": null,
-      "defaultSpecimen": "blood",
-      "defaultUnit": null,
-      "id": "promielocitos.absoluto.serum",
-      "loinc": null,
-      "needsClinicalReview": true,
-      "origem": [
-        "diferencial-absoluto"
       ],
       "plausibleRange": null,
       "valueKind": "numeric"
@@ -3737,20 +3569,6 @@
       "origem": [
         "PARAM_WHITELIST",
         "regra"
-      ],
-      "plausibleRange": null,
-      "valueKind": "numeric"
-    },
-    "segmentados.absoluto.serum": {
-      "canonicalName": "Segmentados (absoluto)",
-      "category": null,
-      "defaultSpecimen": "blood",
-      "defaultUnit": null,
-      "id": "segmentados.absoluto.serum",
-      "loinc": null,
-      "needsClinicalReview": true,
-      "origem": [
-        "diferencial-absoluto"
       ],
       "plausibleRange": null,
       "valueKind": "numeric"

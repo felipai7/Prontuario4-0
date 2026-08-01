@@ -1,5 +1,4 @@
 {
-  "absoluteSuffix": " (absoluto)",
   "absoluteUnit": "/mm³",
   "cells": [
     "Promielócitos",
@@ -16,5 +15,6 @@
     "Plasmócitos",
     "Blastos"
   ],
+  "preferAbsolute": true,
   "version": "1.0.0"
 }
