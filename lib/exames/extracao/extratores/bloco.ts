@@ -39,7 +39,12 @@ const ALCANCE = 6
  * sigla, não a frase. Testar só o texto inteiro perdia o bloco todo.
  */
 function variantesDeNome(texto: string): string[] {
-  const t = texto.trim()
+  let t = texto.trim()
+  // O Núcleo escreve o NOME do exame como valor de um rótulo:
+  // "Exame: CREATININA". Sem desembrulhar, o candidato a título é "Exame:",
+  // que é metadado — e o bloco inteiro ficava órfão.
+  const rotulado = t.match(/^Exames?\s*[.:]+\s*(.+)$/i)
+  if (rotulado) t = rotulado[1]!.trim()
   const variantes = [t]
   const sigla = t.match(/\(([^)]{2,12})\)\s*$/)
   if (sigla) {
@@ -60,7 +65,10 @@ function variantesDeNome(texto: string): string[] {
  */
 function pareceNomeDeExame(texto: string, especime: SpecimenContext): boolean {
   const t = texto.trim()
-  if (t.length < 2 || /\d/.test(t) || t.includes(':')) return false
+  if (t.length < 2 || /\d/.test(t)) return false
+  // Dois-pontos desqualifica, EXCETO no rótulo "Exame: <NOME>", que é como o
+  // Núcleo apresenta o título do bloco.
+  if (t.includes(':') && !/^Exames?\s*[.:]/i.test(t)) return false
   if (variantesDeNome(t).some(v => resolverAnalito(v, especime))) return true
   return !ehRotuloDeMetadado(t)
 }

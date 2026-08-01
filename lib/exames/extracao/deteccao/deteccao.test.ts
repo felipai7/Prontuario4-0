@@ -117,7 +117,7 @@ describe('6.3 · dado pessoal nunca é fingerprint', () => {
 })
 
 describe('A3 · regra de bloco de referência é dado do perfil', () => {
-  it('só o HOC declara bloco de referência, e é intencional', () => {
+  it('só os laboratórios verificados declaram bloco de referência', () => {
     // A mesma marca textual tem função diferente em cada LIS: no HOC
     // "VALOR DE REFERÊNCIA:" sozinho abre a tabela de faixas; no IMEC
     // "Valores de Referência" aparece exame a exame e não abre nada.
@@ -131,8 +131,11 @@ describe('A3 · regra de bloco de referência é dado do perfil', () => {
     // O PIOX fica de fora porque o seu marcador de FECHAMENTO não é confiável:
     // o laudo nem sempre traz "Data de Coleta" entre um bloco e o seguinte, e
     // o bloco engole 55 linhas, inclusive títulos de exame.
-    const comBloco = PERFIS.filter(p => p.referenceBlocks.length > 0).map(p => p.id)
-    expect(comBloco).toEqual(['hoc'])
+    // O Núcleo entrou depois, na revisão de paridade: ele abre a tabela com
+    // "Valores de referência" e fecha no cabeçalho do exame seguinte, e sem a
+    // regra as faixas por faixa etária viravam resultado.
+    const comBloco = PERFIS.filter(p => p.referenceBlocks.length > 0).map(p => p.id).sort()
+    expect(comBloco).toEqual(['hoc', 'nucleo'])
   })
 
   it('todo bloco declara abertura E fechamento', () => {

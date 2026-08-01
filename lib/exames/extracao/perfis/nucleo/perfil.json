@@ -35,7 +35,12 @@
     "enable": [],
     "disable": []
   },
-  "referenceBlocks": [],
+  "referenceBlocks": [
+    {
+      "open": "^\\s*Valores?\\s+de\\s+refer[êe]ncias?\\s*:?\\s*$",
+      "close": "^\\s*(?:\\[\\s*Conv[êe]nio|Id\\s+Exame|Exames?\\s*[.:])"
+    }
+  ],
   "specimen": {
     "inherit": [],
     "fromMaterialLine": false

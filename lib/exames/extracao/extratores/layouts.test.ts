@@ -366,6 +366,59 @@ describe('leucograma abreviado do PIOX', () => {
   })
 })
 
+describe('título de bloco rotulado (NUCLEO)', () => {
+  // O Núcleo escreve o NOME do exame como valor de um rótulo:
+  //
+  //     Exame: CREATININA
+  //     Material: SORO
+  //     Resultado.............: 6,7   mg/dL
+  //     Valores de referência          ← tabela por faixa etária
+  //     Recém-nascidos: 0.56-1.2 mg/dL
+  //
+  // O candidato a título era "Exame:", que é metadado, e o bloco inteiro
+  // ficava órfão. Cinco exames de rotina — creatinina, ureia, potássio, sódio
+  // e PCR — perdidos num único laudo.
+  const LAUDO = [
+    'Id Exame: 29',
+    'Exame: CREATININA',
+    'Material: SORO',
+    'Coleta: 05/04/2026',
+    'Resultado.............: 6,7   mg/dL',
+    'Valores de referência',
+    'Recém-nascidos: 0.56-1.2 mg/dL',
+    '2 sem. 1 ano: 0.41-0.64 mg/dL',
+    'Id Exame: 31',
+    'Exame: POTASSIO',
+    'Material: SORO',
+    'Resultado.............: 5,5   mmol/L',
+  ]
+
+  it('"Exame: <NOME>" é reconhecido como título do bloco', async () => {
+    const nomes = (await extrair(LAUDO)).observations.map(o => o.canonicalName)
+    expect(nomes).toContain('Creatinina')
+    expect(nomes).toContain('Potássio')
+  })
+
+  it('a tabela de faixas por idade não vira resultado', async () => {
+    const r = await extrair(LAUDO)
+    // "Recém-nascidos: 0.56-1.2" tem a forma de um resultado e não é um.
+    expect(r.observations.map(o => o.rawName)).not.toContain('Recém-nascidos')
+    expect(r.observations.find(o => o.canonicalName === 'Creatinina')?.value)
+      .toMatchObject({ kind: 'numeric', value: 6.7 })
+  })
+
+  it('o rótulo "Exame" sozinho continua sendo metadado', async () => {
+    const r = await extrair([
+      'BIOQUIMICA',
+      'Coleta: 05/04/2026',
+      'Exame: 12345',
+      'Creatinina          1,42     mg/dL      0,60 - 1,30',
+    ])
+    expect(r.observations).toHaveLength(1)
+    expect(r.observations[0]!.canonicalName).toBe('Creatinina')
+  })
+})
+
 describe('metadado nunca é confundido com resultado', () => {
   it('rótulos de identificação, data e laboratório são reconhecidos como tal', () => {
     const rotulos = [
