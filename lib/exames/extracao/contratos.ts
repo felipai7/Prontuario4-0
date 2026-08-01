@@ -310,6 +310,14 @@ export type DiscardReason =
   | 'duplicate'
   | 'unsupportedBlock'
   | 'blockInvalidated'
+  /**
+   * Decisão clínica de não importar, e não uma falha de leitura.
+   *
+   * Existe para que "não usamos este resultado" seja visível em vez de
+   * silencioso — a hemoglobina redundante dentro da gasometria, o resultado de
+   * imunidade sorológica. R1 vale igual para o descarte deliberado.
+   */
+  | 'notUsedClinically'
 
 export interface DiscardedItem {
   page: number
@@ -417,8 +425,15 @@ export interface Analyte {
   defaultUnit: string | null
   valueKind: ExamValue['kind']
   loinc: string | null
-  /** Faixa fisicamente possível, NÃO faixa de normalidade. Só o validador usa. */
-  plausibleRange: { min: number; max: number } | null
+  /**
+   * Faixa fisicamente possível, NÃO faixa de normalidade. Só o validador usa,
+   * e só para detectar erro de escala (potássio 7,2 lido como 0,72).
+   *
+   * `unit` é obrigatório: 1,4 mg/dL de creatinina é 124 µmol/L, e comparar um
+   * número contra uma faixa sem saber a unidade produz o falso alarme que a
+   * faixa existia para evitar. Sem unidade compatível, o validador não opina.
+   */
+  plausibleRange: { min: number; max: number; unit: string } | null
   needsClinicalReview: boolean
 }
 

@@ -122,6 +122,66 @@ describe('integridade do catálogo', () => {
   })
 })
 
+describe('R6 · vocabulário por espécime não vaza', () => {
+  it('"Glicose" sem contexto é a glicemia do sangue', () => {
+    expect(resolverAnalito('Glicose')?.id).toBe('glicose.serum')
+  })
+
+  it('"Glicose" dentro de urina e de líquor são analitos DIFERENTES', () => {
+    expect(resolverAnalito('Glicose', 'urine')?.id).toBe('glicose.urine')
+    expect(resolverAnalito('Glicose', 'csf')?.id).toBe('glicose.csf')
+    expect(resolverAnalito('Glicose', 'urine')?.id).not.toBe(resolverAnalito('Glicose')?.id)
+  })
+
+  it('o mesmo vale para hemoglobina e leucócitos', () => {
+    expect(resolverAnalito('Hemoglobina')?.id).toBe('hemoglobina.serum')
+    expect(resolverAnalito('Hemoglobina', 'urine')?.id).toBe('hemoglobina.urine')
+    expect(resolverAnalito('Leucócitos')?.id).toBe('leucocitos.serum')
+    expect(resolverAnalito('Leucócitos', 'urine')?.id).toBe('leucocitos.urine')
+  })
+
+  it('gasometria: o mesmo parâmetro nu muda de analito conforme a via', () => {
+    expect(resolverAnalito('SODIO', 'arterialBlood')?.id).toBe('sodio.art')
+    expect(resolverAnalito('SODIO', 'venousBlood')?.id).toBe('sodio.ven')
+    expect(resolverAnalito('SODIO')?.id).toBe('sodio.serum')
+  })
+
+  it('o escopo não vaza para fora: um espécime não enxerga o vocabulário do outro', () => {
+    // "Densidade" é urinária por natureza e existe no global; "Cor" só existe
+    // com sufixo, então fora do escopo não deve resolver para a versão de urina.
+    expect(resolverAnalito('Densidade')?.id).toBe('densidade.urine')
+    expect(resolverAnalito('Cor', 'urine')?.id).toBe('cor.urine')
+    expect(resolverAnalito('Cor', 'csf')?.id).toBe('cor.csf')
+  })
+})
+
+describe('faixas de plausibilidade', () => {
+  it('toda faixa declara a unidade em que vale', () => {
+    const semUnidade = Object.values(analitos.analytes)
+      .filter(a => {
+        const f = (a as { plausibleRange: { unit?: string } | null }).plausibleRange
+        return f !== null && typeof f.unit !== 'string'
+      })
+    expect(semUnidade).toEqual([])
+  })
+
+  it('faixa é fisicamente possível, não faixa de normalidade', () => {
+    // Um potássio de 7,2 é gravíssimo e TEM que caber: a faixa serve para pegar
+    // erro de escala (0,72), não para julgar o paciente.
+    const k = resolverAnalito('Potássio')
+    expect(k?.plausibleRange).not.toBeNull()
+    expect(k!.plausibleRange!.min).toBeLessThan(2.5)
+    expect(k!.plausibleRange!.max).toBeGreaterThan(7.2)
+    expect(k!.plausibleRange!.unit).toBe('mmol/L')
+  })
+
+  it('quem tem faixa não fica pendente de revisão; quem não tem, fica', () => {
+    for (const a of Object.values(analitos.analytes) as { plausibleRange: unknown; needsClinicalReview: boolean }[]) {
+      expect(a.needsClinicalReview).toBe(a.plausibleRange === null)
+    }
+  })
+})
+
 describe('R3 · o catálogo carrega vocabulário, não interpretação', () => {
   it('os códigos qualitativos não trazem status clínico', () => {
     const valores = new Set(Object.values(qualitativos.codes))

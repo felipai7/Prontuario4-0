@@ -4,35 +4,12 @@ Gerado por `scripts/migrate-clinboard-catalog.mts`. Reexecutável.
 
 | Métrica | Valor |
 |---|---|
-| Sinônimos migrados | 797 |
+| Sinônimos migrados | 790 |
 | Analitos distintos | 281 |
 | Nomes geráveis por regra | 72 |
-| Conflitos detectados | 17 |
+| Conflitos detectados | 0 |
 
 **Nenhum conflito foi resolvido automaticamente.** Cada item abaixo exige decisão clínica.
-
-## Termos qualitativos sem código correspondente no contrato (3)
-
-- "IMUNE" não corresponde a nenhum QualitativeCode do contrato
-- "NAO IMUNE" não corresponde a nenhum QualitativeCode do contrato
-- "NÃO IMUNE" não corresponde a nenhum QualitativeCode do contrato
-
-## Descrição física tratada como resultado qualitativo pelo doador (14)
-
-- "AMARELADO" é descrição física (cor/aspecto), não código qualitativo
-- "AVERMELHADO" é descrição física (cor/aspecto), não código qualitativo
-- "CRISTALINO" é descrição física (cor/aspecto), não código qualitativo
-- "HEMORRAGICO" é descrição física (cor/aspecto), não código qualitativo
-- "HEMORRÁGICO" é descrição física (cor/aspecto), não código qualitativo
-- "INCOLOR" é descrição física (cor/aspecto), não código qualitativo
-- "LIGEIRAMENTE TURVO" é descrição física (cor/aspecto), não código qualitativo
-- "LIMPIDO" é descrição física (cor/aspecto), não código qualitativo
-- "LÍMPIDO" é descrição física (cor/aspecto), não código qualitativo
-- "OPACO" é descrição física (cor/aspecto), não código qualitativo
-- "ROSADO" é descrição física (cor/aspecto), não código qualitativo
-- "TURVO" é descrição física (cor/aspecto), não código qualitativo
-- "XANTOCROMICO" é descrição física (cor/aspecto), não código qualitativo
-- "XANTOCRÔMICO" é descrição física (cor/aspecto), não código qualitativo
 
 ## Lacunas deliberadas
 

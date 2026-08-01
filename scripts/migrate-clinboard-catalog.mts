@@ -67,6 +67,25 @@ const chaveSinonimo = (s: string) =>
 const chaveFrouxa = (s: string) =>
   semAcento(s).toLowerCase().replace(/\s+/g, ' ').trim()
 
+/**
+ * Nomes que o EAS produz sem sufixo de urina, mas que SÓ existem em urina:
+ * densidade, cetonas, cilindros, cristais, leveduras, células do sedimento.
+ *
+ * Sem esta lista, oito deles ganhariam DOIS analitos — um vindo do NAME_MAP
+ * como sangue e outro do EAS — e o mesmo exame apareceria em duas linhas do
+ * histórico do paciente. É a mesma classe de estrago que o E1 corrigiu.
+ */
+const URINARIOS_POR_NATUREZA = new Set(
+  Object.values(D.EAS_NAME_MAP as Record<string, string>)
+    .filter(v => v && !/\(/.test(v))
+    .map(chaveSinonimoBruta),
+)
+
+/** Igual a `chaveSinonimo`, declarada antes para uso no conjunto acima. */
+function chaveSinonimoBruta(s: string): string {
+  return s.normalize('NFC').toUpperCase().replace(/\s+/g, ' ').trim()
+}
+
 /** Identificador estável de analito, derivado do nome canônico. */
 function idDeAnalito(nomeCanonico: string): { id: string; specimen: string; base: string } {
   const sufixos: [RegExp, string, string][] = [
@@ -81,6 +100,10 @@ function idDeAnalito(nomeCanonico: string): { id: string; specimen: string; base
   let curto = 'serum'
   for (const [re, esp, sufixo] of sufixos) {
     if (re.test(nomeCanonico)) { base = nomeCanonico.replace(re, ''); specimen = esp; curto = sufixo; break }
+  }
+  if (curto === 'serum' && URINARIOS_POR_NATUREZA.has(chaveSinonimoBruta(nomeCanonico))) {
+    specimen = 'urine'
+    curto = 'urine'
   }
   const slug = semAcento(base)
     .toLowerCase()
@@ -128,8 +151,67 @@ const DESCRICAO_FISICA = [
   'AMARELADO', 'ROSADO', 'AVERMELHADO',
 ]
 
-/** Sem correspondência em QualitativeCode — exigem decisão clínica. */
-const SEM_CODIGO = ['IMUNE', 'NÃO IMUNE', 'NAO IMUNE']
+/**
+ * Decisão clínica (31/07/2026): não usamos resultado de imunidade sorológica.
+ *
+ * "Não usar" não pode virar sumiço silencioso (R1): estes termos entram no
+ * catálogo de descarte deliberado, e a linha correspondente aparece em
+ * `discarded[]` com motivo `notUsedClinically`. O usuário fica sabendo que o
+ * laudo trazia o dado e que o módulo optou por não importá-lo.
+ */
+const NAO_USADOS = ['IMUNE', 'NÃO IMUNE', 'NAO IMUNE']
+
+// ── Faixas de plausibilidade (decisão clínica de 31/07/2026) ────────────────
+//
+// NÃO são faixas de normalidade. São o intervalo FISICAMENTE POSSÍVEL, usado
+// só para detectar erro de escala — um potássio de 7,2 lido como 0,72 não gera
+// erro em lugar nenhum, gera conduta. São deliberadamente largas: qualquer
+// valor real de UTI precisa caber dentro, inclusive os extremos incompatíveis
+// com a vida, que existem e são justamente os que não podem ser perdidos.
+//
+// A unidade é parte da faixa. Se o laudo vier em outra unidade, o validador
+// não opina — nunca converte por conta própria.
+//
+// Cobre os analitos de maior peso em UTI, conforme combinado. Os demais 250
+// seguem com `plausibleRange: null`, e o validador simplesmente não os checa.
+const PLAUSIBILIDADE: Record<string, { min: number; max: number; unit: string }> = {
+  // Eletrólitos e função renal
+  'sodio.serum':          { min: 90,   max: 200,     unit: 'mmol/L' },
+  'potassio.serum':       { min: 0.5,  max: 12,      unit: 'mmol/L' },
+  'cloro.serum':          { min: 50,   max: 180,     unit: 'mmol/L' },
+  'magnesio.serum':       { min: 0.2,  max: 15,      unit: 'mg/dL' },
+  'fosforo.serum':        { min: 0.1,  max: 25,      unit: 'mg/dL' },
+  'calcio.ionico.serum':  { min: 0.2,  max: 3,       unit: 'mmol/L' },
+  'ureia.serum':          { min: 1,    max: 500,     unit: 'mg/dL' },
+  'creatinina.serum':     { min: 0.05, max: 30,      unit: 'mg/dL' },
+  // Metabólico
+  'glicose.serum':        { min: 5,    max: 1500,    unit: 'mg/dL' },
+  'lactato.serum':        { min: 0.1,  max: 40,      unit: 'mmol/L' },
+  'albumina.serum':       { min: 0.3,  max: 8,       unit: 'g/dL' },
+  // Gasometria arterial
+  'ph.art':               { min: 6.5,  max: 7.9,     unit: '' },
+  'pco2.art':             { min: 5,    max: 200,     unit: 'mmHg' },
+  'po2.art':              { min: 10,   max: 700,     unit: 'mmHg' },
+  'hco3.art':             { min: 1,    max: 60,      unit: 'mmol/L' },
+  'be.art':               { min: -40,  max: 40,      unit: 'mmol/L' },
+  // Hemograma
+  'hemoglobina.serum':    { min: 1,    max: 25,      unit: 'g/dL' },
+  'hematocrito.serum':    { min: 3,    max: 75,      unit: '%' },
+  'leucocitos.serum':     { min: 0,    max: 500000,  unit: '/mm³' },
+  'plaquetas.serum':      { min: 0,    max: 3000000, unit: '/mm³' },
+  // Coagulação
+  'inr.serum':            { min: 0.4,  max: 20,      unit: '' },
+  'ttpa.serum':           { min: 8,    max: 300,     unit: 's' },
+  // Inflamatório e hepático
+  'pcr.serum':            { min: 0,    max: 600,     unit: 'mg/L' },
+  'bilirrubina.total.serum': { min: 0, max: 60,      unit: 'mg/dL' },
+  'tgo.ast.serum':        { min: 0,    max: 20000,   unit: 'U/L' },
+  'tgp.alt.serum':        { min: 0,    max: 20000,   unit: 'U/L' },
+  'amilase.serum':        { min: 0,    max: 20000,   unit: 'U/L' },
+  'lipase.serum':         { min: 0,    max: 20000,   unit: 'U/L' },
+  // Urina
+  'densidade.urine':      { min: 1,    max: 1.06,    unit: '' },
+}
 
 // ── Construção do catálogo ──────────────────────────────────────────────────
 interface Conflito { tipo: string; detalhe: string }
@@ -164,8 +246,10 @@ function registrarAnalito(nomeCanonico: string, origem: string, valueKind = 'num
       defaultUnit: null,       // não inventar
       valueKind,
       loinc: null,             // NUNCA inventar código LOINC
-      plausibleRange: null,    // faixa fisicamente possível — decisão clínica
-      needsClinicalReview: true,
+      plausibleRange: PLAUSIBILIDADE[id] ?? null,
+      // Segue pendente de revisão enquanto não houver faixa de plausibilidade
+      // nem unidade padrão — os dois campos que o validador da F7 precisa.
+      needsClinicalReview: !PLAUSIBILIDADE[id],
       origem: [origem],
       _base: base,
     }
@@ -194,12 +278,50 @@ for (const nome of D.PARAM_WHITELIST as Set<string>) {
   sinonimos[chaveSinonimo(nome)] = id
 }
 
-// 2) EAS — parâmetros de urina.
+// 2) Vocabulário POR ESPÉCIME.
+//
+// R6: contexto de espécime é escopo léxico. "Glicose" dentro de uma seção de
+// urina é glicose urinária; no sangue, é glicemia; no líquor, é outra coisa
+// ainda. Jogar os três na mesma tabela faz o último carregado vencer — foi o
+// que aconteceu na primeira versão deste script, e uma glicemia de sangue
+// passou a resolver para glicose urinária.
+//
+// Regra: se o nome canônico tem sufixo de espécime, o sinônimo NU é ambíguo e
+// fica restrito ao escopo. Se não tem (densidade, cetonas, cilindros — que só
+// existem em urina), pode ser global sem risco.
+const sinonimosPorEspecime: Record<string, Record<string, string>> = {
+  urine: {}, csf: {}, arterialBlood: {}, venousBlood: {},
+}
+
+function registrarPorEspecime(especime: string, bruto: string, canonico: string, origem: string) {
+  const id = registrarAnalito(canonico, origem)
+  const temSufixo = /\((LCR|U|Arterial|Venosa)\)\s*$|\sVenoso\s*$/i.test(canonico)
+  if (temSufixo) sinonimosPorEspecime[especime]![chaveSinonimo(bruto)] = id
+  else sinonimos[chaveSinonimo(bruto)] = id
+  return id
+}
+
 const easMap = D.EAS_NAME_MAP as Record<string, string>
 for (const [bruto, canonico] of Object.entries(easMap)) {
   if (!canonico) continue
-  const id = registrarAnalito(canonico, 'EAS_NAME_MAP')
-  sinonimos[chaveSinonimo(bruto)] = id
+  registrarPorEspecime('urine', bruto, canonico, 'EAS_NAME_MAP')
+}
+
+// Líquor: a tabela de renomeação é, por definição, escopo de líquor.
+for (const [bruto, canonico] of Object.entries(D.LCR_RENAME as Record<string, string>)) {
+  registrarPorEspecime('csf', bruto, canonico, 'LCR_RENAME')
+}
+
+// Gasometria: o mesmo parâmetro nu ("SODIO", "PH") significa arterial ou venoso
+// conforme a seção. Sem escopo, um sódio de gasometria viraria o sódio sérico.
+for (const [contexto, especime] of [['Arterial', 'arterialBlood'], ['Venosa', 'venousBlood']] as const) {
+  for (const [bruto, canonico] of Object.entries(D.GASO_PARAMS as Record<string, string | null>)) {
+    if (!canonico) continue
+    registrarPorEspecime(especime, bruto, `${canonico} (${contexto})`, 'GASO_PARAMS')
+  }
+  for (const [bruto, canonico] of Object.entries((D.GASO_SPECIAL_NAMES as any)[contexto] ?? {})) {
+    registrarPorEspecime(especime, bruto, canonico as string, 'GASO_SPECIAL_NAMES')
+  }
 }
 
 // 3) Nomes que REGRAS podem produzir. É a lição do E2: sete nomes de líquor
@@ -266,19 +388,10 @@ for (const nome of [...new Set(geradosPorRegra)].sort()) {
   }
 }
 
-// 6) Qualitativos sem código, e as três famílias misturadas no doador.
-for (const termo of SEM_CODIGO) {
-  conflitos.push({
-    tipo: 'qualitativoSemCodigo',
-    detalhe: `"${termo}" não corresponde a nenhum QualitativeCode do contrato`,
-  })
-}
-for (const termo of DESCRICAO_FISICA) {
-  conflitos.push({
-    tipo: 'descricaoFisicaComoQualitativo',
-    detalhe: `"${termo}" é descrição física (cor/aspecto), não código qualitativo`,
-  })
-}
+// 6) As duas famílias que o doador misturava já têm decisão clínica tomada
+//    (31/07/2026) e por isso não são mais conflito — são dado do catálogo:
+//    descrição física vira valor de texto; imunidade sorológica não é
+//    importada, mas é registrada em `discarded[]`.
 
 // ── Escrita ─────────────────────────────────────────────────────────────────
 mkdirSync(DESTINO, { recursive: true })
@@ -305,13 +418,25 @@ const analitosLimpos = Object.fromEntries(
 )
 
 escrever('analitos.json', { version: VERSAO, analytes: analitosLimpos })
-escrever('sinonimos.json', { version: VERSAO, synonyms: sinonimos })
+escrever('sinonimos.json', {
+  version: VERSAO,
+  synonyms: sinonimos,
+  // R6 — vocabulário que só vale dentro do escopo do espécime. Consultado
+  // ANTES do global quando a seção prova o contexto, e ignorado fora dele.
+  bySpecimen: sinonimosPorEspecime,
+})
 escrever('qualitativos.json', {
   version: VERSAO,
   codes: QUALITATIVO,
   growth: CRESCIMENTO,
+  // Decisão clínica de 31/07/2026: cor e aspecto do líquor são TEXTO. O doador
+  // os classificava como 'normal'/'high' — "xantocrômico" não é um resultado
+  // alterado, é a cor do líquor. A leitura clínica fica no módulo de
+  // interpretação, fora daqui (R3).
   physicalDescription: DESCRICAO_FISICA,
-  needsClinicalReview: SEM_CODIGO,
+  // Decisão clínica de 31/07/2026: resultado de imunidade não é importado.
+  // Continua visível em `discarded[]` com motivo `notUsedClinically` (R1).
+  notUsedClinically: NAO_USADOS,
 })
 escrever('culturas.json', { version: VERSAO, materials: D.CULTURE_TYPES })
 escrever('descartes.json', { version: VERSAO, skipNames: [...(D.SKIP_NAMES as Set<string>)].sort() })
@@ -348,13 +473,41 @@ escrever('especimes.json', {
     ruleOutputs: [...SAIDAS_REGRA_LIQUOR].sort(),
   },
 })
+// O doador não tem tabela de unidades — esta é AUTORADA, não migrada. Cobre
+// só normalização de grafia (a mesma unidade escrita de formas diferentes pelo
+// LIS), nunca conversão de valor: converter mg/dL em µmol/L muda o número, e
+// mudar número de exame sem decisão clínica explícita é o que R1 proíbe.
+const UNIDADES: Record<string, string> = {
+  // Contagem celular — a origem de `x10~3/uL`, que é como alguns LIS grafam.
+  'X10~3/UL': '10³/µL', 'X10^3/UL': '10³/µL', '10^3/UL': '10³/µL',
+  '10E3/UL': '10³/µL', 'MIL/MM3': '10³/µL', 'MIL/MM³': '10³/µL',
+  'X10~6/UL': '10⁶/µL', 'X10^6/UL': '10⁶/µL', '10^6/UL': '10⁶/µL',
+  'MILHOES/MM3': '10⁶/µL', 'MILHÕES/MM³': '10⁶/µL',
+  '/MM3': '/mm³', '/MM³': '/mm³', 'MM3': '/mm³', 'CEL/MM3': '/mm³', 'CEL/MM³': '/mm³',
+  '/UL': '/µL', '/µL': '/µL',
+  // Massa e concentração
+  'MG/DL': 'mg/dL', 'G/DL': 'g/dL', 'MG/L': 'mg/L', 'G/L': 'g/L',
+  'UG/DL': 'µg/dL', 'µG/DL': 'µg/dL', 'NG/ML': 'ng/mL', 'PG/ML': 'pg/mL',
+  'UG/ML': 'µg/mL', 'µG/ML': 'µg/mL', 'NG/DL': 'ng/dL',
+  // Molar
+  'MMOL/L': 'mmol/L', 'UMOL/L': 'µmol/L', 'µMOL/L': 'µmol/L', 'MEQ/L': 'mEq/L',
+  'MOSM/KG': 'mOsm/kg', 'MOSM/L': 'mOsm/L',
+  // Atividade e pressão
+  'U/L': 'U/L', 'UI/L': 'UI/L', 'UI/ML': 'UI/mL', 'MUI/ML': 'mUI/mL',
+  'MMHG': 'mmHg', 'MM HG': 'mmHg',
+  // Adimensionais e razões
+  '%': '%', 'SEG': 's', 'SEGUNDOS': 's', 'S': 's',
+  'FL': 'fL', 'PG': 'pg',
+  'ML/MIN': 'mL/min', 'ML/MIN/1.73M2': 'mL/min/1,73m²',
+  // Cultura
+  'UFC/ML': 'CFU/mL', 'UFC/G': 'CFU/g',
+}
+
 escrever('unidades.json', {
   version: VERSAO,
-  // O doador não tem tabela de unidades. Este arquivo nasce vazio de propósito:
-  // preenchê-lo por adivinhação seria inventar dado clínico. F4 o popula com
-  // as unidades observadas no corpus, sob revisão.
-  canonical: {},
-  needsClinicalReview: true,
+  canonical: UNIDADES,
+  // Nenhuma conversão de valor foi cadastrada, de propósito. Ver comentário.
+  conversions: {},
 })
 escrever('antimicrobianos.json', {
   version: VERSAO,

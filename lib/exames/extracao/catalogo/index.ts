@@ -10,7 +10,7 @@
 // (R9) — o objeto é global, mas imutável, e portanto não é estado.
 // ══════════════════════════════════════════════════════════════════════════
 
-import type { Analyte, Catalog, QualitativeCode } from '../contratos'
+import type { Analyte, Catalog, QualitativeCode, SpecimenContext } from '../contratos'
 import analitosJson from './analitos.json'
 import sinonimosJson from './sinonimos.json'
 import qualitativosJson from './qualitativos.json'
@@ -41,8 +41,36 @@ export function carregarCatalogo(): Catalog {
   return CATALOGO
 }
 
-/** Resolve um nome bruto de laudo para o analito canônico, ou null. */
-export function resolverAnalito(nomeBruto: string, catalogo: Catalog = CATALOGO): Analyte | null {
-  const id = catalogo.synonyms[chaveSinonimo(nomeBruto)]
+/**
+ * Vocabulário restrito a um espécime (R6).
+ *
+ * "Glicose" dentro de uma seção de urina é glicose urinária; no sangue, é
+ * glicemia; no líquor, é outra coisa. Estas tabelas só são consultadas quando
+ * a estrutura do documento PROVOU o contexto naquele ponto — nunca por
+ * herança, nunca por estado de módulo.
+ */
+const POR_ESPECIME = congelarProfundo(
+  sinonimosJson.bySpecimen as Record<string, Record<string, string>>,
+)
+
+/**
+ * Resolve um nome bruto de laudo para o analito canônico, ou null.
+ *
+ * `especime` é o escopo provado pelo documento naquele ponto. Sem ele, só o
+ * vocabulário global é consultado — que é o comportamento certo para uma linha
+ * fora de qualquer seção com contexto.
+ */
+export function resolverAnalito(
+  nomeBruto: string,
+  especime: SpecimenContext | null = null,
+  catalogo: Catalog = CATALOGO,
+): Analyte | null {
+  const chave = chaveSinonimo(nomeBruto)
+  if (especime) {
+    const escopo = POR_ESPECIME[especime]
+    const idEscopo = escopo?.[chave]
+    if (idEscopo) return catalogo.analytes[idEscopo] ?? null
+  }
+  const id = catalogo.synonyms[chave]
   return id ? (catalogo.analytes[id] ?? null) : null
 }

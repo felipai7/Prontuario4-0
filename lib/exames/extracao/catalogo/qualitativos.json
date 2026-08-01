@@ -37,7 +37,7 @@
     "NÃO HOUVE CRESCIMENTO": "noGrowth",
     "NÃO HOUVE CRESCIMENTO DE BACTÉRIAS": "noGrowth"
   },
-  "needsClinicalReview": [
+  "notUsedClinically": [
     "IMUNE",
     "NÃO IMUNE",
     "NAO IMUNE"

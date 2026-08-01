@@ -35,11 +35,15 @@
       "defaultUnit": null,
       "id": "albumina.serum",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
         "NAME_MAP"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 8,
+        "min": 0.3,
+        "unit": "g/dL"
+      },
       "valueKind": "numeric"
     },
     "amh.serum": {
@@ -63,11 +67,15 @@
       "defaultUnit": null,
       "id": "amilase.serum",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
         "NAME_MAP"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 20000,
+        "min": 0,
+        "unit": "U/L"
+      },
       "valueKind": "numeric"
     },
     "anca.mpo.serum": {
@@ -233,6 +241,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -278,6 +287,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -293,6 +303,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -308,6 +319,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -323,6 +335,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -364,12 +377,17 @@
       "defaultUnit": null,
       "id": "be.art",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
+        "GASO_PARAMS",
         "PARAM_WHITELIST",
         "regra"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 40,
+        "min": -40,
+        "unit": "mmol/L"
+      },
       "valueKind": "numeric"
     },
     "be.serum": {
@@ -395,6 +413,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "GASO_PARAMS",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -436,11 +455,15 @@
       "defaultUnit": null,
       "id": "bilirrubina.total.serum",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
         "NAME_MAP"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 60,
+        "min": 0,
+        "unit": "mg/dL"
+      },
       "valueKind": "numeric"
     },
     "bilirrubina.urine": {
@@ -507,12 +530,17 @@
       "defaultUnit": null,
       "id": "calcio.ionico.serum",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
+        "GASO_SPECIAL_NAMES",
         "NAME_MAP",
         "regra"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 3,
+        "min": 0.2,
+        "unit": "mmol/L"
+      },
       "valueKind": "numeric"
     },
     "calcio.ionico.ven": {
@@ -524,6 +552,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "GASO_SPECIAL_NAMES",
         "NAME_MAP",
         "regra"
       ],
@@ -544,12 +573,12 @@
       "plausibleRange": null,
       "valueKind": "numeric"
     },
-    "cel.epiteliais.serum": {
+    "cel.epiteliais.urine": {
       "canonicalName": "Cél. Epiteliais",
       "category": null,
-      "defaultSpecimen": "blood",
+      "defaultSpecimen": "urine",
       "defaultUnit": null,
-      "id": "cel.epiteliais.serum",
+      "id": "cel.epiteliais.urine",
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
@@ -559,12 +588,12 @@
       "plausibleRange": null,
       "valueKind": "numeric"
     },
-    "cel.escamosas.serum": {
+    "cel.escamosas.urine": {
       "canonicalName": "Cél. Escamosas",
       "category": null,
-      "defaultSpecimen": "blood",
+      "defaultSpecimen": "urine",
       "defaultUnit": null,
-      "id": "cel.escamosas.serum",
+      "id": "cel.escamosas.urine",
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
@@ -574,12 +603,12 @@
       "plausibleRange": null,
       "valueKind": "numeric"
     },
-    "cel.nao.escamosas.serum": {
+    "cel.nao.escamosas.urine": {
       "canonicalName": "Cél. Não Escamosas",
       "category": null,
-      "defaultSpecimen": "blood",
+      "defaultSpecimen": "urine",
       "defaultUnit": null,
-      "id": "cel.nao.escamosas.serum",
+      "id": "cel.nao.escamosas.urine",
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
@@ -589,12 +618,12 @@
       "plausibleRange": null,
       "valueKind": "numeric"
     },
-    "cel.transicionais.serum": {
+    "cel.transicionais.urine": {
       "canonicalName": "Cél. Transicionais",
       "category": null,
-      "defaultSpecimen": "blood",
+      "defaultSpecimen": "urine",
       "defaultUnit": null,
-      "id": "cel.transicionais.serum",
+      "id": "cel.transicionais.urine",
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
@@ -604,12 +633,12 @@
       "plausibleRange": null,
       "valueKind": "numeric"
     },
-    "cel.tubulares.serum": {
+    "cel.tubulares.urine": {
       "canonicalName": "Cél. Tubulares",
       "category": null,
-      "defaultSpecimen": "blood",
+      "defaultSpecimen": "urine",
       "defaultUnit": null,
-      "id": "cel.tubulares.serum",
+      "id": "cel.tubulares.urine",
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
@@ -677,12 +706,12 @@
       "plausibleRange": null,
       "valueKind": "numeric"
     },
-    "cetonas.serum": {
+    "cetonas.urine": {
       "canonicalName": "Cetonas",
       "category": null,
-      "defaultSpecimen": "blood",
+      "defaultSpecimen": "urine",
       "defaultUnit": null,
-      "id": "cetonas.serum",
+      "id": "cetonas.urine",
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
@@ -762,12 +791,12 @@
       "plausibleRange": null,
       "valueKind": "numeric"
     },
-    "cilindros.hialinos.serum": {
+    "cilindros.hialinos.urine": {
       "canonicalName": "Cilindros Hialinos",
       "category": null,
-      "defaultSpecimen": "blood",
+      "defaultSpecimen": "urine",
       "defaultUnit": null,
-      "id": "cilindros.hialinos.serum",
+      "id": "cilindros.hialinos.urine",
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
@@ -777,12 +806,12 @@
       "plausibleRange": null,
       "valueKind": "numeric"
     },
-    "cilindros.patol.serum": {
+    "cilindros.patol.urine": {
       "canonicalName": "Cilindros Patol.",
       "category": null,
-      "defaultSpecimen": "blood",
+      "defaultSpecimen": "urine",
       "defaultUnit": null,
-      "id": "cilindros.patol.serum",
+      "id": "cilindros.patol.urine",
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
@@ -792,12 +821,12 @@
       "plausibleRange": null,
       "valueKind": "numeric"
     },
-    "cilindros.serum": {
+    "cilindros.urine": {
       "canonicalName": "Cilindros",
       "category": null,
-      "defaultSpecimen": "blood",
+      "defaultSpecimen": "urine",
       "defaultUnit": null,
-      "id": "cilindros.serum",
+      "id": "cilindros.urine",
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
@@ -830,6 +859,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -857,11 +887,15 @@
       "defaultUnit": null,
       "id": "cloro.serum",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
         "NAME_MAP"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 180,
+        "min": 50,
+        "unit": "mmol/L"
+      },
       "valueKind": "numeric"
     },
     "cmv.igg.serum": {
@@ -901,6 +935,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -973,6 +1008,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -1099,11 +1135,15 @@
       "defaultUnit": null,
       "id": "creatinina.serum",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
         "NAME_MAP"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 30,
+        "min": 0.05,
+        "unit": "mg/dL"
+      },
       "valueKind": "numeric"
     },
     "creatinina.urinaria.serum": {
@@ -1120,12 +1160,12 @@
       "plausibleRange": null,
       "valueKind": "numeric"
     },
-    "cristais.serum": {
+    "cristais.urine": {
       "canonicalName": "Cristais",
       "category": null,
-      "defaultSpecimen": "blood",
+      "defaultSpecimen": "urine",
       "defaultUnit": null,
-      "id": "cristais.serum",
+      "id": "cristais.urine",
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
@@ -1220,27 +1260,31 @@
       "plausibleRange": null,
       "valueKind": "numeric"
     },
-    "densidade.serum": {
+    "densidade.urine": {
       "canonicalName": "Densidade",
       "category": null,
-      "defaultSpecimen": "blood",
+      "defaultSpecimen": "urine",
       "defaultUnit": null,
-      "id": "densidade.serum",
+      "id": "densidade.urine",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
         "EAS_NAME_MAP",
         "NAME_MAP"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 1.06,
+        "min": 1,
+        "unit": ""
+      },
       "valueKind": "numeric"
     },
-    "deposito.serum": {
+    "deposito.urine": {
       "canonicalName": "Depósito",
       "category": null,
-      "defaultSpecimen": "blood",
+      "defaultSpecimen": "urine",
       "defaultUnit": null,
-      "id": "deposito.serum",
+      "id": "deposito.urine",
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
@@ -1371,6 +1415,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -1420,12 +1465,12 @@
       "plausibleRange": null,
       "valueKind": "numeric"
     },
-    "espermatozoides.serum": {
+    "espermatozoides.urine": {
       "canonicalName": "Espermatozoides",
       "category": null,
-      "defaultSpecimen": "blood",
+      "defaultSpecimen": "urine",
       "defaultUnit": null,
-      "id": "espermatozoides.serum",
+      "id": "espermatozoides.urine",
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
@@ -1435,12 +1480,12 @@
       "plausibleRange": null,
       "valueKind": "numeric"
     },
-    "est.leucocitaria.serum": {
+    "est.leucocitaria.urine": {
       "canonicalName": "Est. Leucocitária",
       "category": null,
-      "defaultSpecimen": "blood",
+      "defaultSpecimen": "urine",
       "defaultUnit": null,
-      "id": "est.leucocitaria.serum",
+      "id": "est.leucocitaria.urine",
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
@@ -1534,12 +1579,12 @@
       "plausibleRange": null,
       "valueKind": "numeric"
     },
-    "filamentos.de.muco.serum": {
+    "filamentos.de.muco.urine": {
       "canonicalName": "Filamentos de Muco",
       "category": null,
-      "defaultSpecimen": "blood",
+      "defaultSpecimen": "urine",
       "defaultUnit": null,
-      "id": "filamentos.de.muco.serum",
+      "id": "filamentos.de.muco.urine",
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
@@ -1563,12 +1608,12 @@
       "plausibleRange": null,
       "valueKind": "numeric"
     },
-    "flora.bacteriana.serum": {
+    "flora.bacteriana.urine": {
       "canonicalName": "Flora Bacteriana",
       "category": null,
-      "defaultSpecimen": "blood",
+      "defaultSpecimen": "urine",
       "defaultUnit": null,
-      "id": "flora.bacteriana.serum",
+      "id": "flora.bacteriana.urine",
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
@@ -1599,11 +1644,15 @@
       "defaultUnit": null,
       "id": "fosforo.serum",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
         "NAME_MAP"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 25,
+        "min": 0.1,
+        "unit": "mg/dL"
+      },
       "valueKind": "numeric"
     },
     "fragmento.serum": {
@@ -1686,6 +1735,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "GASO_PARAMS",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -1701,6 +1751,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -1714,11 +1765,15 @@
       "defaultUnit": null,
       "id": "glicose.serum",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
         "NAME_MAP"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 1500,
+        "min": 5,
+        "unit": "mg/dL"
+      },
       "valueKind": "numeric"
     },
     "glicose.urine": {
@@ -1745,6 +1800,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "GASO_PARAMS",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -1842,12 +1898,17 @@
       "defaultUnit": null,
       "id": "hco3.art",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
+        "GASO_PARAMS",
         "PARAM_WHITELIST",
         "regra"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 60,
+        "min": 1,
+        "unit": "mmol/L"
+      },
       "valueKind": "numeric"
     },
     "hco3.serum": {
@@ -1873,6 +1934,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "GASO_PARAMS",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -1888,6 +1950,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "GASO_PARAMS",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -1903,6 +1966,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "GASO_PARAMS",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -1932,6 +1996,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -1974,11 +2039,15 @@
       "defaultUnit": null,
       "id": "hematocrito.serum",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
         "NAME_MAP"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 75,
+        "min": 3,
+        "unit": "%"
+      },
       "valueKind": "numeric"
     },
     "hemocultura.serum": {
@@ -2003,11 +2072,15 @@
       "defaultUnit": null,
       "id": "hemoglobina.serum",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
         "NAME_MAP"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 25,
+        "min": 1,
+        "unit": "g/dL"
+      },
       "valueKind": "numeric"
     },
     "hemoglobina.urine": {
@@ -2172,11 +2245,15 @@
       "defaultUnit": null,
       "id": "inr.serum",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
         "NAME_MAP"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 20,
+        "min": 0.4,
+        "unit": ""
+      },
       "valueKind": "numeric"
     },
     "insulina.serum": {
@@ -2202,6 +2279,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "GASO_PARAMS",
         "NAME_MAP",
         "regra"
       ],
@@ -2217,6 +2295,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -2230,11 +2309,15 @@
       "defaultUnit": null,
       "id": "lactato.serum",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
         "NAME_MAP"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 40,
+        "min": 0.1,
+        "unit": "mmol/L"
+      },
       "valueKind": "numeric"
     },
     "lactato.ven": {
@@ -2246,6 +2329,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "GASO_PARAMS",
         "NAME_MAP",
         "PARAM_WHITELIST",
         "regra"
@@ -2319,6 +2403,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -2332,11 +2417,15 @@
       "defaultUnit": null,
       "id": "leucocitos.serum",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
         "NAME_MAP"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 500000,
+        "min": 0,
+        "unit": "/mm³"
+      },
       "valueKind": "numeric"
     },
     "leucocitos.urine": {
@@ -2354,12 +2443,12 @@
       "plausibleRange": null,
       "valueKind": "numeric"
     },
-    "leveduras.serum": {
+    "leveduras.urine": {
       "canonicalName": "Leveduras",
       "category": null,
-      "defaultSpecimen": "blood",
+      "defaultSpecimen": "urine",
       "defaultUnit": null,
-      "id": "leveduras.serum",
+      "id": "leveduras.urine",
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
@@ -2406,6 +2495,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -2433,11 +2523,15 @@
       "defaultUnit": null,
       "id": "lipase.serum",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
         "NAME_MAP"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 20000,
+        "min": 0,
+        "unit": "U/L"
+      },
       "valueKind": "numeric"
     },
     "liquido.ascitico.serum": {
@@ -2551,11 +2645,15 @@
       "defaultUnit": null,
       "id": "magnesio.serum",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
         "NAME_MAP"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 15,
+        "min": 0.2,
+        "unit": "mg/dL"
+      },
       "valueKind": "numeric"
     },
     "metamielocitos.serum": {
@@ -2609,6 +2707,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -2653,6 +2752,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -2673,12 +2773,12 @@
       "plausibleRange": null,
       "valueKind": "numeric"
     },
-    "nitrito.serum": {
+    "nitrito.urine": {
       "canonicalName": "Nitrito",
       "category": null,
-      "defaultSpecimen": "blood",
+      "defaultSpecimen": "urine",
       "defaultUnit": null,
-      "id": "nitrito.serum",
+      "id": "nitrito.urine",
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
@@ -2711,6 +2811,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "GASO_PARAMS",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -2726,6 +2827,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "GASO_PARAMS",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -2741,6 +2843,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "GASO_PARAMS",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -2756,6 +2859,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "GASO_PARAMS",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -2769,12 +2873,17 @@
       "defaultUnit": null,
       "id": "pco2.art",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
+        "GASO_PARAMS",
         "PARAM_WHITELIST",
         "regra"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 200,
+        "min": 5,
+        "unit": "mmHg"
+      },
       "valueKind": "numeric"
     },
     "pco2.serum": {
@@ -2800,6 +2909,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "GASO_PARAMS",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -2813,11 +2923,15 @@
       "defaultUnit": null,
       "id": "pcr.serum",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
         "NAME_MAP"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 600,
+        "min": 0,
+        "unit": "mg/L"
+      },
       "valueKind": "numeric"
     },
     "pct.serum": {
@@ -2885,6 +2999,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -2912,12 +3027,17 @@
       "defaultUnit": null,
       "id": "ph.art",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
+        "GASO_PARAMS",
         "PARAM_WHITELIST",
         "regra"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 7.9,
+        "min": 6.5,
+        "unit": ""
+      },
       "valueKind": "numeric"
     },
     "ph.csf": {
@@ -2929,6 +3049,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -2987,6 +3108,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "GASO_PARAMS",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -3000,11 +3122,15 @@
       "defaultUnit": null,
       "id": "plaquetas.serum",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
         "NAME_MAP"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 3000000,
+        "min": 0,
+        "unit": "/mm³"
+      },
       "valueKind": "numeric"
     },
     "plasmocitos.csf": {
@@ -3016,6 +3142,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -3043,12 +3170,17 @@
       "defaultUnit": null,
       "id": "po2.art",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
+        "GASO_PARAMS",
         "PARAM_WHITELIST",
         "regra"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 700,
+        "min": 10,
+        "unit": "mmHg"
+      },
       "valueKind": "numeric"
     },
     "po2.serum": {
@@ -3074,6 +3206,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "GASO_PARAMS",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -3104,6 +3237,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "GASO_PARAMS",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -3117,11 +3251,15 @@
       "defaultUnit": null,
       "id": "potassio.serum",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
         "NAME_MAP"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 12,
+        "min": 0.5,
+        "unit": "mmol/L"
+      },
       "valueKind": "numeric"
     },
     "potassio.ven": {
@@ -3133,6 +3271,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "GASO_PARAMS",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -3218,6 +3357,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -3432,6 +3572,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "GASO_PARAMS",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -3445,11 +3586,15 @@
       "defaultUnit": null,
       "id": "sodio.serum",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
         "NAME_MAP"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 200,
+        "min": 90,
+        "unit": "mmol/L"
+      },
       "valueKind": "numeric"
     },
     "sodio.ven": {
@@ -3461,6 +3606,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "GASO_PARAMS",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -3549,6 +3695,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "GASO_PARAMS",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -3578,6 +3725,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "GASO_PARAMS",
         "PARAM_WHITELIST",
         "regra"
       ],
@@ -3661,11 +3809,15 @@
       "defaultUnit": null,
       "id": "tgo.ast.serum",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
         "NAME_MAP"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 20000,
+        "min": 0,
+        "unit": "U/L"
+      },
       "valueKind": "numeric"
     },
     "tgp.alt.serum": {
@@ -3675,11 +3827,15 @@
       "defaultUnit": null,
       "id": "tgp.alt.serum",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
         "NAME_MAP"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 20000,
+        "min": 0,
+        "unit": "U/L"
+      },
       "valueKind": "numeric"
     },
     "toxina.a.c.difficile.serum": {
@@ -3843,11 +3999,15 @@
       "defaultUnit": null,
       "id": "ttpa.serum",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
         "NAME_MAP"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 300,
+        "min": 8,
+        "unit": "s"
+      },
       "valueKind": "numeric"
     },
     "ureia.serum": {
@@ -3857,19 +4017,23 @@
       "defaultUnit": null,
       "id": "ureia.serum",
       "loinc": null,
-      "needsClinicalReview": true,
+      "needsClinicalReview": false,
       "origem": [
         "NAME_MAP"
       ],
-      "plausibleRange": null,
+      "plausibleRange": {
+        "max": 500,
+        "min": 1,
+        "unit": "mg/dL"
+      },
       "valueKind": "numeric"
     },
-    "urobilinogenio.serum": {
+    "urobilinogenio.urine": {
       "canonicalName": "Urobilinogênio",
       "category": null,
-      "defaultSpecimen": "blood",
+      "defaultSpecimen": "urine",
       "defaultUnit": null,
-      "id": "urobilinogenio.serum",
+      "id": "urobilinogenio.urine",
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
@@ -3917,6 +4081,7 @@
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
+        "LCR_RENAME",
         "PARAM_WHITELIST",
         "regra"
       ],
