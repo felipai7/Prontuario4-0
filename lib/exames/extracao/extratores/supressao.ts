@@ -49,6 +49,20 @@ export function suprimir(linha: string): Supressao | null {
   // clínica, e interpretação não entra neste módulo (R3).
   if (/^\s*valor(?:es)?\s+de\s+refer[êe]ncia\s*[:.]/i.test(texto)) return null
 
+  // Cabeçalho de DUAS colunas na MESMA linha física: "DOSAGEM DE AMILASE
+  // Valores de Referência" é o título do bloco e o título da coluna de
+  // referência, lado a lado. O matcher tabular lia a segunda coluna como se
+  // fosse o VALOR do exame da primeira, e gravava "Valores de Referência" no
+  // lugar do resultado (A-06). A regra acima só protege a forma COM
+  // dois-pontos, sozinha na linha — esta aqui não é âncorada no início, porque
+  // aqui o título de exame vem ANTES; a âncora que importa é o FIM da linha,
+  // para não engolir uma faixa de referência de verdade que venha em seguida
+  // ("... Valores de referência: 10 - 50" continua intocada, porque tem algo
+  // depois de "referência").
+  if (/valor(?:es)?\s+de\s+refer[êe]ncias?\s*$/i.test(texto)) {
+    return { reason: 'referenceTable', detail: 'título de coluna de referência' }
+  }
+
   if (RESULTADO_ANTERIOR.test(texto)) {
     return { reason: 'historicalResult', detail: 'rótulo de resultado anterior' }
   }

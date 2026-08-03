@@ -474,3 +474,72 @@ describe('nome do exame vem da primeira coluna do título (HUGO)', () => {
     expect(ggt?.value).toMatchObject({ kind: 'numeric', value: 67 })
   })
 })
+
+// ── 12. Título de coluna não vira valor de exame ────────────────────────────
+// Achado A-06, fechado nesta tarefa. "DOSAGEM DE AMILASE   Valores de
+// Referência" é o título do bloco E o título da coluna de referência, lado a
+// lado na MESMA linha física — igual ao bloco 10 acima, só que aqui a
+// asserção é sobre o VALOR, não sobre o segmento history. O matcher tabular
+// lia a segunda coluna como se fosse o resultado da primeira, e gravava o
+// exame com valor "Valores de Referência". Na tela ficava escondido porque o
+// valor verdadeiro, numa linha própria mais abaixo, chegava depois e
+// sobrescrevia — mas os dois ficavam no banco, e bastaria a ordem de leitura
+// mudar para o valor errado aparecer.
+//
+// A regra do plano original ("^valor de referência$", ancorada só no INÍCIO)
+// cobre a forma de UMA coluna, não esta: aqui o título do exame vem ANTES,
+// então a âncora que importa é o FIM da linha — não o início. Ver a nota ao
+// lado da regra em supressao.ts. As duas grafias do corpus real aparecem
+// aqui: "Valores de Referência" (maiúscula, na amilase) e "valores de
+// referência" (minúscula, na creatinina) — a regra tem que pegar as duas.
+//
+// Nota: "GASOMETRIA ARTERIAL/VENOSA" NÃO entra neste teste porque já é título
+// de SEÇÃO — está em `CABECALHOS` (segmentar.ts) e por isso é consumida como
+// título de segmento antes de chegar aqui, nunca vira linha de exame nem
+// candidata a valor. O defeito desta tarefa só existe para título de EXAME
+// (fora de `CABECALHOS`), como "DOSAGEM DE AMILASE" e "DOSAGEM DE CREATININA".
+//
+// A Tarefa 2a (bloco acima) já faz o resultado NUMÉRICO ser extraído sem
+// depender desta supressão — aqui a asserção é só sobre a Tarefa 2: o valor
+// errado ("Valores de Referência") não pode aparecer em NENHUMA observação,
+// nem quando o exame também tem um resultado numérico de verdade.
+describe('título de coluna de referência não vira valor de exame', () => {
+  const COLUNAS = [50, 210, 280, 350, 420]
+  const bytes = pdfTabular([
+    ['DOSAGEM DE AMILASE', 'Valores de Referência'],
+    ['Coleta: 08/04/2026'],
+    ['Amilase', ':', '45,0 U/L', '28,0 - 100,0 U/L'],
+    ['DOSAGEM DE CREATININA', 'valores de referência'],
+    ['Coleta: 08/04/2026'],
+    ['Creatinina', ':', '1,10 mg/dL', '0,60 - 1,30 mg/dL'],
+  ], COLUNAS)
+
+  const extrair = () =>
+    extrairExames({ document: { bytes, filename: null }, hints: null, options: null })
+
+  it('nenhuma observação carrega o título da coluna como valor', async () => {
+    const r = await extrair()
+    const valores = r.observations.map(o => o.value.raw)
+    expect(valores).not.toContain('Valores de Referência')
+    expect(valores).not.toContain('valores de referência')
+  })
+
+  it('os resultados numéricos verdadeiros continuam sendo extraídos', async () => {
+    const r = await extrair()
+    const amilase = r.observations.filter(o => o.canonicalName === 'Amilase')
+    const creatinina = r.observations.filter(o => o.canonicalName === 'Creatinina')
+    expect(amilase.some(o => o.value.kind === 'numeric' && o.value.value === 45)).toBe(true)
+    expect(creatinina.some(o => o.value.kind === 'numeric' && o.value.value === 1.1)).toBe(true)
+  })
+
+  it('R1 · as duas linhas de título aparecem como descarte, não somem', async () => {
+    const r = await extrairExames({
+      document: { bytes, filename: null },
+      hints: null,
+      options: { retainRawText: true },
+    })
+    const titulos = r.discarded.filter(d => d.reason === 'referenceTable')
+    expect(titulos.some(d => d.rawLine.includes('DOSAGEM DE AMILASE'))).toBe(true)
+    expect(titulos.some(d => d.rawLine.includes('DOSAGEM DE CREATININA'))).toBe(true)
+  })
+})
