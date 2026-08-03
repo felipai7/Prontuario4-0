@@ -4,6 +4,7 @@ import { getAI, generateWithFallback } from '@/lib/ai'
 import { featureFlags } from '@/lib/featureFlags'
 import { extrairExames } from '@/lib/exames/extracao'
 import { adaptarParaExames, type ExameParaSalvar } from '@/lib/exames/adaptador'
+import { montarEntrega } from '@/lib/exames/entrega'
 
 /**
  * Extração LOCAL, sem mandar o PDF para lugar nenhum.
@@ -28,7 +29,7 @@ async function extrairLocalmente(base64: string): Promise<{
   })
   if (resultado.observations.length === 0) return null
   return {
-    exames: adaptarParaExames(resultado),
+    exames: adaptarParaExames(montarEntrega(resultado, false)),
     laboratorio: resultado.detection.profileId,
     avisos: resultado.warnings.map(w => w.code),
   }

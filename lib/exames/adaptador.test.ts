@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { adaptarParaExames } from './adaptador'
+import { montarEntrega } from './entrega'
 import { interpretarNumerico, interpretarQualitativo } from './interpretacao'
 import { extrairExames } from './extracao'
 import { pdfDeLinhas } from './extracao/_testes/pdfMinimo'
@@ -10,7 +11,7 @@ async function extrairEAdaptar(linhas: string[]) {
     hints: null,
     options: null,
   })
-  return adaptarParaExames(r)
+  return adaptarParaExames(montarEntrega(r, false))
 }
 
 // ══════════════════════════════════════════════════════════════════════════

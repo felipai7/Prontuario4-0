@@ -15,9 +15,14 @@
 // ══════════════════════════════════════════════════════════════════════════
 
 import type { Reference } from '@/lib/exames/extracao'
-import type { ResultadoExame } from '@/types'
 
-export type Direcao = ResultadoExame['direcao']
+/**
+ * Mesmo vocabulário de `ResultadoExame['direcao']` (`@/types`), mas declarado
+ * aqui em vez de importado de lá — este arquivo é interno a `lib/exames/`, e
+ * só `adaptador.ts` e `agrupamento.ts` conhecem o formato do banco (inversão
+ * de dependência de 03/08/2026, ver `entrega.ts`).
+ */
+export type Direcao = 'alto' | 'baixo' | 'normal' | 'qualitativo'
 
 export interface Interpretacao {
   alterado: boolean
@@ -70,7 +75,7 @@ const CODIGOS_SEM_ACHADO = new Set([
  */
 export function interpretarNumerico(
   valor: number,
-  censura: ResultadoExame['censura'],
+  censura: 'lt' | 'lte' | 'gt' | 'gte' | null,
   referencia: Reference,
 ): Interpretacao {
   if (censura) return SEM_OPINIAO
