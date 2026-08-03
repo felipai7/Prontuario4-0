@@ -16,6 +16,7 @@
 
 import type { DocumentText, LabProfile, Segment, SpecimenContext, TemporalRef, TextLine } from '../contratos'
 import { diaDe, marcadorDeColeta, SEM_DATA } from '../normalizadores/data'
+import { separarColunas } from '../extratores/colunas'
 
 /** Cabeçalhos que provam o espécime da seção que se inicia. */
 const CABECALHOS: [RegExp, SpecimenContext | null, Segment['kind']][] = [
@@ -63,6 +64,43 @@ function cabecalhoDe(linha: TextLine): { specimen: SpecimenContext | null; kind:
     if (re.test(texto)) return { specimen, kind }
   }
   return null
+}
+
+/**
+ * Fecha a boca do segmento `history` — ver nota longa no contrato.
+ *
+ * `CABECALHOS` não pode listar "DOSAGEM DE AMILASE", "DOSAGEM DE CREATININA"
+ * e toda a lista de exames de um laudo: são títulos de EXAME, não de SEÇÃO,
+ * e a lista cresceria sem fim. Sem este limite, um segmento `history` que
+ * abre em "Evolução do paciente" só fecha no próximo cabeçalho DA LISTA —
+ * e no HUGO isso nunca acontece, então o segmento engole o resto do laudo
+ * (medido: 328 linhas dentro de um único segmento history no corpus real).
+ *
+ * A forma de um título de exame não depende de reconhecer o nome, e é medida
+ * em DOIS lugares diferentes da mesma linha:
+ *
+ * 1. Maiúscula pura só na PRIMEIRA COLUNA. No HUGO o título vem colado ao
+ *    cabeçalho da coluna vizinha na mesma linha física — "DOSAGEM DE AMILASE
+ *    Valores de Referência" — e "Valores de Referência" tem letra minúscula.
+ *    A rodada 1 desta correção testou a linha INTEIRA, a segunda coluna
+ *    reprovava sempre, e nenhum segmento fechava no corpus real. Usa o mesmo
+ *    corte de coluna do matcher tabular (`separarColunas`, vão geométrico)
+ *    para não reinventar onde fica a fronteira.
+ *
+ * 2. Nenhum dígito na LINHA INTEIRA. Título de exame não traz número; linha
+ *    de resultado traz. Sem esta parte, uma linha da PRÓPRIA tabela de
+ *    evolução cujo analito é sigla maiúscula ("TGO", "PCR", "RNI") fechava o
+ *    segmento history no meio da tabela, e todas as linhas seguintes dela
+ *    voltavam a virar resultado de agora — exatamente o defeito que esta
+ *    tarefa existe para matar. Medido no HUGO2: duas tabelas de evolução
+ *    vazando por siglas.
+ */
+function pareceTituloDeSecao(linha: TextLine): boolean {
+  if (/\d/.test(linha.text)) return false
+  const primeiraColuna = separarColunas(linha)[0]?.texto ?? ''
+  const t = primeiraColuna.trim()
+  if (t.length === 0 || t.length > 60) return false
+  return /[A-ZÀ-Ú]/.test(t) && !/[a-zà-ú]/.test(t)
 }
 
 /**
@@ -162,6 +200,23 @@ export function segmentar(
       }
       atual = abrir(linha.text.trim(), especimeCorrente, cabecalho.kind)
       continue
+    }
+
+    // Fronteira do segmento history — ver `pareceTituloDeSecao`. Uma linha
+    // com cara de título de exame fecha a tabela de evolução mesmo sem estar
+    // em CABECALHOS: sem isto, "DOSAGEM DE AMILASE" (e tudo depois) ficava
+    // soterrado dentro do segmento history e era descartado por engano.
+    //
+    // Sem `continue`: a linha fecha o history E CONTINUA sendo conteúdo do
+    // segmento novo. Um cabeçalho de CABECALHOS é consumido como título
+    // porque a lista garante que ali não há resultado; aqui a linha é
+    // reconhecida pela FORMA, e engoli-la faria duas coisas erradas — some
+    // sem descarte (viola R1) e some do alcance dos matchers. Medido: com o
+    // `continue`, 12 linhas do corpus real deixavam de ser lidas por esta
+    // tarefa, que não é a dona desse assunto.
+    if (atual?.kind === 'history' && pareceTituloDeSecao(linha)) {
+      if (!herdam.has(especimeCorrente)) especimeCorrente = 'blood'
+      atual = abrir(linha.text.trim(), especimeCorrente, 'examSection')
     }
 
     if (atual === null) atual = abrir(null, especimeCorrente, 'examSection')

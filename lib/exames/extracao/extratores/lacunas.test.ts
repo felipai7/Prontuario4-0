@@ -335,3 +335,85 @@ describe('tabela de evolução do paciente não vira resultado', () => {
     expect(r.discarded.some(d => d.reason === 'historicalResult')).toBe(true)
   })
 })
+
+// ── 10. O segmento history tem que FECHAR sozinho ───────────────────────────
+// Rodada 1 de correção sobre a tarefa acima. `CABECALHOS` nunca vai listar
+// "DOSAGEM DE AMILASE", "DOSAGEM DE CREATININA" e o resto dos títulos de
+// exame de um laudo — são título de EXAME, não de SEÇÃO. Sem um jeito de
+// fechar o segmento history nessas linhas, ele engolia o resto do laudo: no
+// corpus real do HUGO um único segmento history chegou a ter 328 linhas,
+// e todo exame de verdade depois da tabela de evolução virava descarte por
+// engano.
+//
+// Rodada 2: no laudo de verdade o título vem em DUAS colunas na MESMA linha
+// física — "DOSAGEM DE AMILASE" | "Valores de Referência" — porque é também
+// o cabeçalho da coluna de referência do bloco que se abre. "Valores de
+// Referência" tem letra minúscula, e testar a LINHA INTEIRA (rodada 1) nunca
+// fechava nada, porque a segunda coluna sempre reprovava o teste de maiúscula
+// pura. A fixture tem que carregar as duas colunas separadas — uma só coluna
+// passava com a heurística quebrada e esse teste não provava nada. As
+// colunas aqui são mais largas que nos outros blocos deste arquivo: com o
+// espaçamento do bloco 9, "DOSAGEM DE AMILASE" (19 caracteres) já não cabia
+// antes da coluna seguinte, e o vão medido (6,08pt) ficava ABAIXO do limiar
+// de corte de `separarColunas` (~7,3pt) — a linha nunca se partia em duas
+// colunas de verdade, e o teste passava sem exercitar o corte.
+//
+// Rodada 3: a forma de título também exige que a LINHA INTEIRA não tenha
+// dígito. A linha "TGO 88 75 60 41" é linha da PRÓPRIA tabela de evolução —
+// o analito é sigla, e sigla é maiúscula pura. Com o teste só na primeira
+// coluna, ela fechava o segmento no meio da tabela e tudo dali para baixo
+// voltava a virar resultado de agora. Medido no HUGO2: duas tabelas vazando
+// por sigla.
+describe('history não engole o exame que vem depois da tabela de evolução', () => {
+  const COLUNAS = [50, 210, 280, 350, 420]
+  const bytes = pdfTabular([
+    ['GASOMETRIA ARTERIAL', 'Valores de referência'],
+    ['Coleta: 08/04/2026'],
+    ['pH', ':', '7,370', '7,350 - 7,450'],
+    ['Evolução do paciente'],
+    ['Data', '04/04/2026', '05/04/2026', '06/04/2026', '08/04/2026'],
+    ['pH', '7,460', '7,420', '7,400', '7,370'],
+    ['TGO', '88', '75', '60', '41'],
+    ['DOSAGEM DE AMILASE', 'Valores de Referência'],
+    ['Amilase', ':', '45,0 U/L', '28,0 - 100,0 U/L'],
+  ], COLUNAS)
+
+  const extrair = () =>
+    extrairExames({ document: { bytes, filename: null }, hints: null, options: null })
+
+  it('o exame depois da tabela de evolução ainda é extraído', async () => {
+    const r = await extrair()
+    // O laudo real repete o nome do analito no título de duas colunas
+    // ("DOSAGEM DE AMILASE   Valores de Referência"), e HOJE essa linha também
+    // vira uma observação — com "Valores de Referência" no lugar do valor.
+    // Esse é o achado A-02, dono da Tarefa 2. Aqui a asserção é só a desta
+    // tarefa: o resultado NUMÉRICO de depois da tabela de evolução existe.
+    // Deixar a linha de título no segmento, em vez de engoli-la como título,
+    // é deliberado — ver a nota em `segmentar.ts`.
+    const amilase = r.observations.filter(o => o.canonicalName === 'Amilase')
+    expect(amilase.some(o => o.value.kind === 'numeric' && o.value.value === 45)).toBe(true)
+  })
+
+  it('sigla maiúscula DENTRO da tabela não reabre a extração', async () => {
+    const r = await extrair()
+    expect(r.observations.filter(o => o.canonicalName === 'TGO (AST)')).toHaveLength(0)
+    expect(r.discarded.filter(d => d.reason === 'historicalResult').length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('R1 · a linha que fecha o history não some — vira observação ou descarte', async () => {
+    const r = await extrairExames({
+      document: { bytes, filename: null },
+      hints: null,
+      options: { retainRawText: true },
+    })
+    const apareceu =
+      r.observations.some(o => o.provenance.rawLine.includes('DOSAGEM DE AMILASE')) ||
+      r.discarded.some(d => d.rawLine.includes('DOSAGEM DE AMILASE'))
+    expect(apareceu).toBe(true)
+  })
+
+  it('a tabela de evolução continua descartada com motivo', async () => {
+    const r = await extrair()
+    expect(r.discarded.some(d => d.reason === 'historicalResult')).toBe(true)
+  })
+})

@@ -567,6 +567,21 @@ export interface Segment {
    * Antes de 03/08/2026 essa tabela era lida como resultado de agora, e o
    * extrator pegava a coluna mais antiga: a gasometria de 08/04 aparecia com
    * os valores de 04/04.
+   *
+   * O segmento tem que FECHAR sozinho: `segmentar.ts` fecha um `history` ao
+   * ver qualquer linha com cara de título de exame (`pareceTituloDeSecao`),
+   * não só ao ver um cabeçalho de `CABECALHOS`. A primeira versão desta
+   * correção só fechava em CABECALHOS, e no HUGO os títulos entre exames
+   * ("DOSAGEM DE AMILASE", "DOSAGEM DE CREATININA", ...) não estão nessa
+   * lista — o segmento engolia o resto do laudo (328 linhas medidas em um
+   * único segmento history no corpus real, com resultados de verdade
+   * descartados como se fossem a tabela de evolução).
+   *
+   * A linha que fecha o history NÃO é consumida como título: ela continua
+   * dentro do segmento novo. Cabeçalho de `CABECALHOS` pode ser engolido
+   * porque a lista garante que ali não há resultado; a fronteira do history é
+   * reconhecida pela FORMA, e engolir uma linha reconhecida por forma some com
+   * ela sem descarte — viola R1 e tira a linha do alcance dos matchers.
    */
   kind: 'examSection' | 'table' | 'culture' | 'antibiogram' | 'eas' | 'notes' | 'footer' | 'imaging' | 'history'
   title: string | null
