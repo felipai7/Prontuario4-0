@@ -168,3 +168,20 @@ if (semNada.length) {
   console.log(`\n⚠ ${semNada.length} laudos sem NENHUMA observação:`)
   semNada.forEach(s => console.log(`    ${s}`))
 }
+
+// Piso medido em 03/08/2026, depois de a tabela de evolução deixar de virar
+// resultado. Cair abaixo disto é perder exame; subir é ganho, e o piso deve
+// subir junto no mesmo commit. Já houve commit vermelho neste projeto por
+// piso maior que o real — meça antes de escrever. O número é menor que as 912
+// anteriores porque essas linhas da tabela de evolução deixaram de virar
+// resultado (correção intencional, não regressão).
+const PISO_OBSERVACOES = 878
+const PISO_CULTURAS = 12
+if (totalObs < PISO_OBSERVACOES) {
+  console.error(`✗ REGRESSÃO: ${totalObs} observações, piso é ${PISO_OBSERVACOES}`)
+  process.exit(1)
+}
+if (totalCult < PISO_CULTURAS) {
+  console.error(`✗ REGRESSÃO: ${totalCult} culturas, piso é ${PISO_CULTURAS}`)
+  process.exit(1)
+}
