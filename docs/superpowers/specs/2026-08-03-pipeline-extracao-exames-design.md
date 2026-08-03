@@ -46,12 +46,40 @@ lacunas reais.
 | D5 | Conflito aparece na mesma célula: `47,0 / 33,0 ⚠` | A tabela mantém uma linha por exame |
 | D6 | Laudo reenviado: **grava e marca**, não bloqueia | Ser bloqueada é pior que ter um duplicado |
 | D7 | A gravação passa do navegador para o servidor | Erro vira falha que a tela não consegue ignorar |
+| D8 | O sistema confere se o laudo é do paciente da tela | Avisa, não bloqueia. O nome do laudo nunca sai do módulo |
+| D9 | Marcação de conferência: símbolo na célula **e** lista de pendências acima da tabela | Você vê se há algo pendente sem varrer a tabela |
+| D10 | O que a IA lê é marcado **uma vez por laudo**, não por valor | 40 valores marcados fazem a marcação virar ruído |
+| D11 | A tabela "Evolução do paciente" é descartada, não aproveitada | Ela não traz unidade nem referência, e duplica o que já foi subido |
 
 **Nota sobre D6:** um laudo reemitido pelo laboratório com correção tem bytes
 diferentes, logo impressão digital diferente, e não seria detectado como
 duplicado de qualquer forma. A marcação só dispara em arquivo byte a byte
 idêntico. A decisão vale mesmo assim, pelo motivo dela: bloquear atrapalha mais
 do que ajuda.
+
+**Nota sobre D8 — como conferir o paciente sem guardar dado pessoal.**
+
+O desenho é pergunta-e-veredito, e não leitura-e-devolução:
+
+```
+a rota MANDA:      "o paciente desta tela se chama <nome>"
+o módulo DEVOLVE:  confere | não confere | não achei nome no laudo
+```
+
+O nome que está no laudo **nunca aparece em nenhum campo de saída**. Não há
+como ele ser gravado, logado ou vazado por acidente, porque ele não existe fora
+da função que faz a comparação. Isso é mais forte do que "temos o cuidado de
+não guardar": torna o vazamento impossível por construção, que é a mesma regra
+que vale hoje para o texto do laudo (R10).
+
+A comparação tolera abreviação e ordem trocada, e o resultado **avisa, não
+bloqueia** — nome de casada, nome abreviado pelo laboratório e acento perdido
+gerariam alarme falso demais para justificar uma trava.
+
+**Nota sobre D10.** A marcação de origem responde "de onde veio este laudo" e
+aparece uma vez, no cabeçalho do exame. As marcações por valor continuam
+existindo e ficam reservadas ao que é específico daquele número: sem data de
+coleta, referência não confiável, valor fora da faixa fisicamente possível.
 
 ## 4. Arquitetura
 
@@ -117,7 +145,8 @@ trabalho dela.
 [0]  você envia o PDF na tela do paciente
        ↓
 [1]  o módulo lê o laudo
-       · a seção "Evolução do paciente" é descartada, com motivo registrado
+       · recebe o nome do paciente da tela e devolve só um veredito   (D8)
+       · a seção "Evolução do paciente" é descartada, com motivo      (D11)
        · o título "Valores de Referência" não vira valor
        ↓
 [2]  monta a ENTREGA
@@ -134,8 +163,27 @@ trabalho dela.
        · falhou? a tela recebe erro e NÃO diz "salvo"    (D7)
        ↓
 [5]  a tela exibe
-       · valor marcado para conferência aparece sinalizado
+       · lista de pendências acima da tabela             (D9)
+       · símbolo na célula de cada valor marcado         (D9)
        · conflito aparece como  47,0 / 33,0 ⚠            (D5)
+       · "lido por IA" no cabeçalho, uma vez             (D10)
+       · aviso se o laudo parece ser de outro paciente   (D8)
+```
+
+Como a tela fica, com D9 aplicado:
+
+```
+  ⚠ 3 resultados deste laudo pedem conferência
+     Ureia · sem data de coleta
+     Sódio · sem data de coleta
+     PCR · referência não confiável
+
+                      06/04      08/04
+
+  Creatinina           1,42       1,58
+  Ureia                  62         71 ⚠
+  Potássio              4,1        5,9
+  Sódio                 138        141 ⚠
 ```
 
 ## 6. Tratamento de erro
@@ -166,6 +214,9 @@ já passa no código atual não prova nada sobre o defeito que diz cobrir.
 | Resultado marcado para conferência → chega até a tela | A-04 |
 | Mesmo arquivo duas vezes → o segundo é gravado E marcado | A-08 / D6 |
 | Título "Valores de Referência" não vira valor | A-06 |
+| Laudo de outro paciente → veredito "não confere", e o nome do laudo **não aparece em nenhum campo de saída** | A-02 / D8 |
+| Laudo com pendências → a lista aparece acima da tabela | D9 |
+| Laudo lido pela IA → marcação de origem uma vez, não por valor | D10 |
 
 Mais duas travas de regressão sobre os 50 laudos reais:
 
@@ -184,23 +235,32 @@ vão gerado era mais estreito que o de um laudo real.
 | Versionar os perfis de laboratório | Serve à extensibilidade, não ao critério D1 |
 | Encaixe para trocar OCR / leitor / modelo de IA | Idem |
 | Tela própria para antibiograma | D3 — cultura entra como texto; tela fica para depois |
-| Laudos de imagem | Hoje vão para a IA e são gravados; não são perdidos como as culturas |
+| **Separar Exames Laboratoriais e Exames de Imagem em dois módulos** | Decidido que SIM, em spec própria — ver 8.1 |
 | Corrigir registros já gravados | D2 |
-| Conferir se o laudo é do paciente certo | Achado A-02, crítico, mas exige decidir regra de privacidade antes |
+| Aproveitar a tabela de evolução como histórico datado | D11 |
 
-**A-02 continua aberto e é o achado mais grave da auditoria.** Não entra aqui
-porque a decisão que ele exige — ler um dado pessoal que hoje é descartado de
-propósito — não foi tomada.
+### 8.1 O próximo trabalho, já decidido
 
-## 9. Perguntas de domínio ainda em aberto
+Laudos de imagem passam a ter **módulo próprio**, separado dos laboratoriais.
+A decisão está tomada; o desenho fica para uma spec própria, pelo motivo de
+sequência abaixo.
 
-Da auditoria, seguem sem resposta e **não** são resolvidas por este design:
+Laudo de imagem **não está perdendo dado hoje** — ele vai para a IA e é
+gravado. Separar os módulos é organização e extensibilidade, que é o que a
+decisão D1 conscientemente deixou de fora deste trabalho. Fazer junto dobraria
+o escopo e atrasaria a saída da gasometria errada do ar.
 
-- **P1** — o sistema deve recusar um laudo que parece ser de outro paciente?
-- **P3** — laudos de imagem pertencem ao módulo de exames?
-- **P5** — a tabela de "evolução do paciente" deve ser aproveitada como
-  histórico datado, em vez de apenas descartada?
-- **P6** — como exatamente um valor marcado para conferência deve aparecer?
-  Este design diz *que* ele aparece; a forma exata ainda não foi desenhada.
-- **P7** — o que a IA lê deve nascer marcado como "não conferido"? Decidido em
-  01/08, nunca implementado, e fora do escopo deste trabalho.
+## 9. Perguntas de domínio — respondidas em 03/08
+
+| | Pergunta | Resposta |
+|---|---|---|
+| **P1** | Recusar laudo de outro paciente? | **Sim** — avisar, não bloquear. Vira D8 |
+| **P3** | Imagem pertence a este módulo? | **Não** — módulo próprio, em spec seguinte (8.1) |
+| **P5** | Aproveitar a tabela de evolução? | **Não** — descartar. Vira D11 |
+| **P6** | Como a marcação aparece? | Símbolo na célula **e** lista acima. Vira D9 |
+| **P7** | O que a IA lê nasce marcado? | **Sim, uma vez por laudo.** Vira D10 |
+
+**Ponto que ainda não foi confirmado por ela:** D10 é sugestão minha, feita a
+pedido, e não foi contestada — mas também não foi escolhida entre alternativas
+como as outras. Se a preferência for marcar valor a valor, é uma linha de
+diferença e vale dizer antes do plano.
