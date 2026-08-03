@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { carregarCatalogo, chaveSinonimo, resolverAnalito } from './index'
+import { carregarCatalogo, chaveSinonimo, resolverAnalito, grupoDoNome, gruposEmOrdem } from './index'
 import analitos from './analitos.json'
 import sinonimos from './sinonimos.json'
 import especimes from './especimes.json'
@@ -198,6 +198,95 @@ describe('R3 · o catálogo carrega vocabulário, não interpretação', () => {
   it('descrição física do líquor não virou código qualitativo', () => {
     for (const termo of qualitativos.physicalDescription) {
       expect(qualitativos.codes, termo).not.toHaveProperty(termo)
+    }
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════
+// GRUPOS CLÍNICOS — revisão da Juliana, 03/08/2026.
+//
+// Até esta data o campo `category` era null nos 285 analitos e o agrupamento
+// vivia em doze expressões regulares dentro de `ExamesTab.tsx`, testadas
+// contra o NOME EXIBIDO. Os testes abaixo travam os defeitos que essa escolha
+// produzia, e que só apareceram quando alguém foi medir.
+// ══════════════════════════════════════════════════════════════════════════
+
+describe('grupos são dado clínico, não regex de tela', () => {
+  const todos = Object.values(catalogo.analytes)
+
+  it('todo analito tem grupo — nenhum fica para trás', () => {
+    const sem = todos.filter(a => !a.category).map(a => a.canonicalName)
+    expect(sem).toEqual([])
+  })
+
+  it('todo grupo usado existe na ordem de exibição', () => {
+    const ordem = new Set(gruposEmOrdem())
+    const forasteiros = [...new Set(todos.map(a => a.category))].filter(g => !ordem.has(g))
+    expect(forasteiros).toEqual([])
+  })
+
+  it('grupos.json e analitos.json não divergem', () => {
+    // grupos.json existe para a tela não carregar os 145 KB do catálogo. Ter
+    // duas cópias do mesmo dado só é aceitável com esta trava.
+    for (const a of todos) {
+      expect(grupoDoNome(a.canonicalName), a.canonicalName).toBe(a.category)
+    }
+  })
+
+  it('a ordem dos grupos não tem repetição nem buraco', () => {
+    const ordem = gruposEmOrdem()
+    expect(new Set(ordem).size).toBe(ordem.length)
+    expect(ordem.length).toBeGreaterThan(0)
+  })
+})
+
+describe('cada material no seu grupo', () => {
+  // O defeito que motivou tudo: agrupar por regex sobre o nome exibido jogava
+  // exame de um material dentro do grupo de outro. "Leucócitos (U)" casava com
+  // /leucócit/ e aparecia entre as células do sangue; "pH (U)" casava com
+  // /\bph\b/ e aparecia na gasometria.
+  it('sedimento urinário NUNCA cai no hemograma', () => {
+    for (const n of ['Leucócitos (U)', 'Hemácias (U)', 'Hemoglobina (U)']) {
+      expect(grupoDoNome(n), n).toBe('🔬 EAS/Urina')
+    }
+  })
+
+  it('pH urinário NUNCA cai na gasometria', () => {
+    expect(grupoDoNome('pH (U)')).toBe('🔬 EAS/Urina')
+  })
+
+  it('citologia do líquor NUNCA cai no hemograma', () => {
+    for (const n of ['Neutrófilos (LCR)', 'Linfócitos (LCR)', 'Hemácias (LCR)',
+                     'Leucócitos (LCR)', 'Monócitos (LCR)', 'Eosinófilos (LCR)']) {
+      expect(grupoDoNome(n), n).toBe('🧠 Líquor')
+    }
+  })
+
+  it('pH e glicose do líquor ficam no líquor', () => {
+    expect(grupoDoNome('pH (LCR)')).toBe('🧠 Líquor')
+    expect(grupoDoNome('Glicose (LCR)')).toBe('🧠 Líquor')
+  })
+
+  it('o que caía em "Outros" por descuido do padrão agora tem grupo', () => {
+    // Índices plaquetários: o padrão procurava "mpv", em inglês.
+    for (const n of ['VPM', 'PDW', 'PCT']) expect(grupoDoNome(n), n).toBe('🩸 Hemograma')
+    // Coagulação: o padrão tinha "tap\b", que não casa com "TP".
+    for (const n of ['TP - Atividade', 'TP (segundos)', 'Tempo de Coagulação',
+                     'Tempo de Sangramento', 'Prova do Laço']) {
+      expect(grupoDoNome(n), n).toBe('🩻 Coagulação')
+    }
+    // Marcador cardíaco: o padrão exigia fronteira de palavra antes de "bnp".
+    expect(grupoDoNome('NT-proBNP')).toBe('🫀 Cardíaco')
+    // Eletrólitos da gasometria: o padrão aceitava "(gaso.)", não "(Venosa)".
+    for (const n of ['Sódio (Venosa)', 'Potássio (Arterial)', 'Glicose (Venosa)']) {
+      expect(grupoDoNome(n), n).toBe('💨 Gasometria')
+    }
+    // Não existia grupo de lipídios nem de sorologias.
+    for (const n of ['Colesterol Total', 'HDL', 'LDL', 'Triglicérides']) {
+      expect(grupoDoNome(n), n).toBe('🫀 Lipídios')
+    }
+    for (const n of ['Influenza A', 'Influenza B', 'COVID-19 Ag']) {
+      expect(grupoDoNome(n), n).toBe('🦠 Sorologias')
     }
   })
 })

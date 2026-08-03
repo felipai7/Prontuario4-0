@@ -505,11 +505,29 @@ export interface Catalog {
   analytes: Readonly<Record<string, Analyte>>
   qualitative: Readonly<Record<string, QualitativeCode>>
   units: Readonly<Record<string, string>>
+  /**
+   * Os grupos clínicos na ordem em que devem ser exibidos.
+   *
+   * A ordem é decisão clínica (Juliana, 03/08/2026) e por isso é dado, não a
+   * ordem de um array num componente de tela.
+   */
+  groupOrder: readonly string[]
 }
 
 export interface Analyte {
   id: string
   canonicalName: string
+  /**
+   * Grupo clínico a que o exame pertence, em `catalogo/grupos.json`.
+   *
+   * É DADO, não código. Antes de 03/08/2026 este campo era null nos 285
+   * analitos e o agrupamento vivia em doze expressões regulares dentro de
+   * `ExamesTab.tsx`, testadas contra o nome exibido. Bastava o extrator mudar
+   * um nome para o exame trocar de grupo sem ninguém saber — foi assim que o
+   * sedimento urinário passou a aparecer dentro do hemograma.
+   *
+   * Nunca vazio: há teste que falha se algum analito ficar sem grupo.
+   */
   category: string
   defaultSpecimen: SpecimenContext
   defaultUnit: string | null

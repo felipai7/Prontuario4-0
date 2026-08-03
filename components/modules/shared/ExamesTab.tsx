@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { agruparExamesPorHorario, parseExameTimestamp, type ClusterExames } from '@/lib/exames/agrupamento'
+import { grupoDoNome, gruposEmOrdem } from '@/lib/exames/grupos'
 import type { Exame, Paciente, ResultadoExame, ToastData } from '@/types'
 
 interface Props {
@@ -96,6 +97,19 @@ const ALIASES: Array<[RegExp, string]> = [
 
 function canonicalize(name: string): string {
   const trimmed = name.trim()
+  // Nome que JÁ é canônico no catálogo passa intacto.
+  //
+  // As ALIASES acima nasceram quando todo exame vinha da IA, que entregava o
+  // diferencial em PERCENTUAL — daí os sufixos "(%)". O extrator local entrega
+  // o valor ABSOLUTO (decisão da Juliana), e sem esta guarda a tela carimbava
+  // "Segmentados (%)" numa linha cujo valor é 8.500 /mm³.
+  //
+  // O que sobra das ALIASES continua servindo ao que elas sempre serviram:
+  // traduzir os nomes LEGADOS do banco ("na_gasometria", "segmentados_%").
+  // Registro antigo em percentual segue numa linha própria, de propósito — o
+  // valor dele não é comparável com o absoluto, e juntá-los na mesma linha
+  // esconderia isso.
+  if (grupoDoNome(trimmed)) return trimmed
   for (const [pattern, canonical] of ALIASES) {
     if (pattern.test(trimmed)) return canonical
   }
@@ -103,6 +117,20 @@ function canonicalize(name: string): string {
 }
 
 // ── Category grouping ─────────────────────────────────────────────────────────
+//
+// O grupo de cada exame é DADO CLÍNICO, e mora em
+// `lib/exames/extracao/catalogo/grupos.json`, revisado exame por exame pela
+// Juliana em 03/08/2026. A ordem dos grupos também é dela.
+//
+// A lista de regex abaixo era, até então, o único agrupamento que existia — e
+// agrupava pelo NOME EXIBIDO, o que fazia o sedimento urinário cair dentro do
+// hemograma (`Leucócitos (U)` casa com `leucócit`), o pH urinário cair na
+// gasometria, e os índices plaquetários caírem em "Outros" porque o padrão
+// procurava `mpv`, em inglês, e o extrator emite `VPM`.
+//
+// Ela sobrevive como SEGUNDA opção, para nomes que não estão no catálogo:
+// registros antigos gravados pela IA e, principalmente, os antimicrobianos do
+// antibiograma, que não são analitos e não têm entrada no catálogo.
 type Category = { label: string; test: (n: string) => boolean }
 
 const CATEGORIES: Category[] = [
@@ -143,6 +171,8 @@ const CATEGORIES: Category[] = [
 ]
 
 function getCategoryLabel(name: string): string {
+  const doCatalogo = grupoDoNome(name)
+  if (doCatalogo) return doCatalogo
   for (const cat of CATEGORIES) {
     if (cat.test(name)) return cat.label
   }
@@ -160,10 +190,11 @@ function buildTableRows(allParams: string[]): TableRow[] {
     groupMap.get(cat)!.push(p)
   }
   const rows: TableRow[] = []
-  for (const cat of CATEGORIES) {
-    const params = groupMap.get(cat.label)
+  // A ordem dos grupos vem do catálogo, não da ordem deste array.
+  for (const label of gruposEmOrdem()) {
+    const params = groupMap.get(label)
     if (params?.length) {
-      rows.push({ kind: 'header', label: cat.label })
+      rows.push({ kind: 'header', label })
       params.forEach(p => rows.push({ kind: 'param', name: p }))
     }
   }

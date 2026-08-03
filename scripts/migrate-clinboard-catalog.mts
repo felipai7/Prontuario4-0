@@ -560,7 +560,38 @@ const analitosLimpos = Object.fromEntries(
   }),
 )
 
-escrever('analitos.json', { version: VERSAO, analytes: analitosLimpos })
+// ── Não destruir a revisão clínica ────────────────────────────────────────
+// `category` é decisão da médica, tomada exame por exame fora deste script, e
+// `analitos.json` é sobrescrito inteiro aqui. Sem esta preservação, rodar a
+// migração de novo devolveria os 265 analitos a `category: null` e o
+// agrupamento inteiro sumiria em silêncio — o arquivo continuaria válido, a
+// suíte continuaria verde, e a tela perderia os grupos.
+//
+// O mesmo vale para analitos EXCLUÍDOS na revisão: ressuscitá-los traria de
+// volta duplicatas que ela já resolveu ("Cloro" e "Cloretos", "DHL" e "LDH").
+const anterior: Record<string, any> = existsSync(join(DESTINO, 'analitos.json'))
+  ? JSON.parse(readFileSync(join(DESTINO, 'analitos.json'), 'utf8')).analytes
+  : {}
+let categoriasPreservadas = 0
+let ressurreicoesBloqueadas = 0
+const analitosFinais: Record<string, any> = {}
+for (const [id, a] of Object.entries(analitosLimpos) as [string, any][]) {
+  const velho = anterior[id]
+  if (Object.keys(anterior).length > 0 && !velho) {
+    // Analito que não existe no arquivo revisado: ou é novo de verdade, ou foi
+    // removido na revisão. Não dá para distinguir aqui, e ressuscitar é o erro
+    // mais caro — entra sem grupo e o teste de cobertura acusa.
+    ressurreicoesBloqueadas++
+  }
+  analitosFinais[id] = velho?.category ? { ...a, category: velho.category } : a
+  if (velho?.category) categoriasPreservadas++
+}
+console.log(`  categorias preservadas: ${categoriasPreservadas}`)
+if (ressurreicoesBloqueadas > 0) {
+  console.log(`  ⚠ ${ressurreicoesBloqueadas} analito(s) sem correspondência no arquivo revisado — confira antes de commitar`)
+}
+
+escrever('analitos.json', { version: VERSAO, analytes: analitosFinais })
 escrever('sinonimos.json', {
   version: VERSAO,
   synonyms: sinonimos,
