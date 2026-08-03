@@ -424,8 +424,13 @@ export default function PacienteModal({ paciente, unidade, onClose, onAltaConced
 
           {/* Header */}
           <div className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white px-3 sm:px-6 py-4 rounded-t-2xl flex-shrink-0">
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0 flex-1">
+            {/* No celular a identificação fica ACIMA dos botões, em vez de ao lado.
+                Lado a lado, os botões (flex-shrink-0 + whitespace-nowrap) somam
+                ~420px e não cedem, então o bloco do nome era espremido até
+                largura ZERO — o texto quebrava letra a letra e o cabeçalho
+                passava de 900px, empurrando todo o conteúdo para fora da tela. */}
+            <div className="flex flex-col sm:flex-row items-start justify-between gap-2 sm:gap-4">
+              <div className="min-w-0 w-full sm:flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="text-xl font-bold truncate">{pac.nome}</h2>
                   {pac.paliativo && (
@@ -459,7 +464,7 @@ export default function PacienteModal({ paciente, unidade, onClose, onAltaConced
                   <p className="text-indigo-300 text-xs mt-1 italic">🩺 {fmtHipoteses(pac.hipoteses)}</p>
                 )}
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto sm:flex-nowrap sm:flex-shrink-0">
                 <button onClick={handleAbrirEvolucao} disabled={loading}
                   title={loading ? 'Aguarde o carregamento dos dados do paciente' : 'Evolução diária compilada dos resumos de cada aba (sem IA)'}
                   className="bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
@@ -605,11 +610,13 @@ export default function PacienteModal({ paciente, unidade, onClose, onAltaConced
               </div>
             )}
 
-            {/* Abas do módulo ativo */}
-            <div className="flex gap-1 mt-3 flex-wrap">
+            {/* Abas do módulo ativo. No celular rolam na horizontal, numa linha
+                só: quebrando, as 7 abas ocupavam 176px de altura — espaço que o
+                cabeçalho (flex-shrink-0) tira direto do conteúdo. */}
+            <div className="flex gap-1 mt-3 overflow-x-auto sm:flex-wrap sm:overflow-x-visible pb-1 sm:pb-0">
               {moduloAtivo.tabs.map(t => (
                 <button key={t.id} onClick={() => setTab(t.id)}
-                  className={`px-3 sm:px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                  className={`px-3 sm:px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap flex-shrink-0 ${
                     tab === t.id ? 'bg-white text-indigo-700' : 'text-indigo-200 hover:text-white hover:bg-white/10'
                   }`}>
                   {t.label}
