@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import AltaModal        from './AltaModal'
-import { fmtData, calcAge, pad, diasDesde, fmtNum, toTitleCaseNome, ultimoPorTurno, horasDesdeAdmissao } from '@/lib/utils'
+import { fmtData, calcAge, pad, diasDesde, fmtNum, toTitleCaseNome, ultimoPorTurno, horasDesdeAdmissao, parseDataParaISO } from '@/lib/utils'
 import { PLANOS } from '@/lib/config'
 import { nomeDaAla, type Unidade } from '@/lib/unidade'
 import { modulosAtivos, type PacienteContext } from '@/lib/modules'
@@ -40,6 +40,7 @@ type EditForm = {
   nome: string; data_nascimento: string
   plano: string; planoOu: string
   peso_kg: string; ala_id: string; numero_leito: string
+  data_internacao: string; hora_internacao: string
   hipoteses: string
   saps3: string; paliativo: boolean; oncologico: boolean
 }
@@ -101,6 +102,9 @@ export default function PacienteModal({ paciente, unidade, onClose, onAltaConced
       peso_kg: String(p.peso_kg ?? ''),
       ala_id: p.ala_id,
       numero_leito: String(p.numero_leito),
+      data_internacao: p.data_internacao,
+      // O banco guarda `time` (HH:MM:SS); o input type=time espera HH:MM.
+      hora_internacao: (p.hora_internacao ?? '12:00').substring(0, 5),
       hipoteses: p.hipoteses ?? '',
       saps3: String(p.saps3 ?? ''),
       paliativo: p.paliativo,
@@ -109,6 +113,10 @@ export default function PacienteModal({ paciente, unidade, onClose, onAltaConced
   }
 
   const [editForm,   setEditForm]   = useState<EditForm>(() => makeEditForm(paciente))
+  /** A admissão em edição difere da salva? Dispara o aviso de impacto. */
+  const admissaoAlterada =
+    editForm.data_internacao !== pac.data_internacao ||
+    editForm.hora_internacao !== (pac.hora_internacao ?? '12:00').substring(0, 5)
   const [editErrors, setEditErrors] = useState<Record<string, string>>({})
   const [saving,     setSaving]     = useState(false)
 
@@ -342,6 +350,20 @@ export default function PacienteModal({ paciente, unidade, onClose, onAltaConced
     if (!alaInfo || !alaInfo.leitos.includes(novoLeito)) {
       errs.numero_leito = `Leito inválido para ${alaInfo?.nome ?? 'UTI selecionada'}`
     }
+    // Admissão: valida data E hora juntas. Só a data não basta — admitir "hoje
+    // às 23:00" às 14:00 seria uma internação que ainda não aconteceu, e isso
+    // contamina pacientes-dia, tempo de permanência e o cálculo do 1º balanço.
+    if (!editForm.data_internacao) errs.data_internacao = 'Obrigatória'
+    else if (!editForm.hora_internacao) errs.hora_internacao = 'Obrigatória'
+    else {
+      const admissao = new Date(`${editForm.data_internacao}T${editForm.hora_internacao}:00`)
+      if (isNaN(admissao.getTime())) errs.data_internacao = 'Data ou hora inválida'
+      else if (admissao.getTime() > Date.now()) errs.data_internacao = 'A admissão não pode estar no futuro'
+      else if (editForm.data_nascimento && editForm.data_internacao < editForm.data_nascimento) {
+        errs.data_internacao = 'Anterior à data de nascimento'
+      }
+    }
+
     const pesoNum = editForm.peso_kg ? parseFloat(editForm.peso_kg) : null
     if (pesoNum !== null && (pesoNum < 1 || pesoNum > 300)) errs.peso_kg = 'Peso inválido (1–300 Kg)'
     const saps3Num = editForm.saps3 ? parseFloat(editForm.saps3) : null
@@ -367,6 +389,8 @@ export default function PacienteModal({ paciente, unidade, onClose, onAltaConced
       peso_kg: pesoNum,
       ala_id: editForm.ala_id,
       numero_leito: novoLeito,
+      data_internacao: editForm.data_internacao,
+      hora_internacao: editForm.hora_internacao,
       hipoteses: editForm.hipoteses.trim() || null,
       saps3: saps3Num,
       paliativo: editForm.paliativo,
@@ -538,6 +562,33 @@ export default function PacienteModal({ paciente, unidade, onClose, onAltaConced
                       ))}
                     </ESelect>
                   </EF>
+                  <EF label="Data de internação" error={editErrors.data_internacao}>
+                    <EInput type="date" value={editForm.data_internacao} max={hoje}
+                      onPaste={e => {
+                        const iso = parseDataParaISO(e.clipboardData.getData('text'))
+                        if (iso) { e.preventDefault(); setEditForm(f => ({...f, data_internacao: iso})) }
+                      }}
+                      onChange={e => setEditForm(f => ({...f, data_internacao: e.target.value}))}/>
+                  </EF>
+                  <EF label="Hora de internação" error={editErrors.hora_internacao}>
+                    <EInput type="time" value={editForm.hora_internacao}
+                      onChange={e => setEditForm(f => ({...f, hora_internacao: e.target.value}))}/>
+                  </EF>
+
+                  {/* A admissão não é um dado qualquer: ela é o início da contagem
+                      de pacientes-dia, do tempo de permanência e dos turnos de
+                      balanço. Corrigir um erro de digitação é legítimo, mas quem
+                      mexe precisa saber o que arrasta junto. */}
+                  {admissaoAlterada && (
+                    <div className="sm:col-span-2 bg-amber-400/20 border border-amber-300/50 rounded-lg px-3 py-2">
+                      <p className="text-xs text-amber-100">
+                        ⚠️ Alterar a admissão recalcula <strong>tempo de permanência</strong>,{' '}
+                        <strong>pacientes-dia</strong> e a <strong>taxa de ocupação</strong> do período.
+                        {periodos.length > 0 && ' Os turnos de balanço já lançados não são movidos.'}
+                      </p>
+                    </div>
+                  )}
+
                   <div className="col-span-2">
                     <EF label="Hipóteses diagnósticas">
                       <textarea value={editForm.hipoteses} onChange={e => setEditForm(f => ({...f, hipoteses: e.target.value}))}
