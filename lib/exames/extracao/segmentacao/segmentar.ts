@@ -32,6 +32,9 @@ const CABECALHOS: [RegExp, SpecimenContext | null, Segment['kind']][] = [
   [/UROCULTURA|HEMOCULTURA|CULTURA\s+DE/i, 'unknown', 'culture'],
   [/ANTIBIOGRAMA|TESTE\s+DE\s+SENSIBILIDADE/i, 'unknown', 'antibiogram'],
   [/HEMOGRAMA|ERITROGRAMA|ERITOGRAMA|LEUCOGRAMA|PLAQUETOGRAMA/i, 'blood', 'examSection'],
+  // Tabela de resultados anteriores impressa pelo próprio laudo. Abre um
+  // segmento que nenhum matcher alcança — ver Segment['kind'] no contrato.
+  [/EVOLU[ÇC][ÃA]O\s+DO\s+PACIENTE|HIST[ÓO]RICO\s+DE\s+RESULTADOS|RESULTADOS\s+ANTERIORES/i, null, 'history'],
   // Subseções NEUTRAS: não provam espécime. O que fazer com elas — voltar a
   // sangue ou manter o material vigente — é decisão do perfil.
   [/COAGULOGRAMA|BIOQU[IÍ]MICA|SOROLOGIA|IMUNOLOGIA|CITOMETRIA|CITOLOGIA|EXAME\s+(MICROSC[ÓO]PICO|QU[IÍ]MICO|F[IÍ]SICO|BIOQU[IÍ]MICO)|CARACTERES\s+F[IÍ]SICOS/i, null, 'examSection'],

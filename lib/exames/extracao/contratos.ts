@@ -558,7 +558,17 @@ export interface ParseContext {
 // ── Matchers (A2) ──────────────────────────────────────────────────────────
 
 export interface Segment {
-  kind: 'examSection' | 'table' | 'culture' | 'antibiogram' | 'eas' | 'notes' | 'footer' | 'imaging'
+  /**
+   * `history` — tabela de resultados anteriores que o próprio laudo imprime
+   * ("Evolução do paciente" no HUGO). NENHUM matcher se aplica a ela: os três
+   * aceitam apenas examSection, eas e culture. As linhas viram descarte com
+   * motivo, e não observação.
+   *
+   * Antes de 03/08/2026 essa tabela era lida como resultado de agora, e o
+   * extrator pegava a coluna mais antiga: a gasometria de 08/04 aparecia com
+   * os valores de 04/04.
+   */
+  kind: 'examSection' | 'table' | 'culture' | 'antibiogram' | 'eas' | 'notes' | 'footer' | 'imaging' | 'history'
   title: string | null
   lines: TextLine[]
   specimen: SpecimenContext

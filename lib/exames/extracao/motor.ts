@@ -80,6 +80,18 @@ export function extrairDoTexto(
     for (const linha of segmento.lines) {
       if (linhasConsumidas.has(linha.index)) continue
 
+      // R1 — a tabela de evolução não vira resultado, mas também não some.
+      if (segmento.kind === 'history') {
+        discarded.push({
+          page: linha.page,
+          lineIndex: linha.index,
+          rawLine: opcoes.retainRawText ? linha.text : '',
+          reason: 'historicalResult',
+          detail: 'linha de tabela de resultados anteriores',
+        })
+        continue
+      }
+
       const supressao = suprimir(linha.text)
       if (supressao) {
         // Linha em branco não interessa a ninguém; as demais supressões sim.

@@ -294,3 +294,44 @@ describe('não é lacuna · o espécime do líquor não se perde na subseção n
     expect(nomes(r)).toContain('Proteínas (LCR)')
   })
 })
+
+// ── 9. Tabela de evolução lida como resultado de agora ─────────────────────
+// Achado A-01 da auditoria de 03/08. Os laudos do HUGO trazem, depois do
+// resultado, uma seção "Evolução do paciente" com uma coluna por data. O
+// extrator lia essa tabela como resultado novo e pegava a PRIMEIRA coluna —
+// a data mais antiga. Na tela, esse valor apagava o verdadeiro.
+describe('tabela de evolução do paciente não vira resultado', () => {
+  const COLUNAS = [50, 170, 240, 310, 380]
+  const bytes = pdfTabular([
+    ['GASOMETRIA ARTERIAL', 'Valores de referência'],
+    ['Coleta: 08/04/2026'],
+    ['pH', ':', '7,370', '7,350 - 7,450'],
+    ['pCO2', ':', '47,0 mmHg', '35,0 - 45,0 mmHg'],
+    ['Evolução do paciente'],
+    ['Data', '04/04/2026', '05/04/2026', '06/04/2026', '08/04/2026'],
+    ['pH', '7,460', '7,420', '7,400', '7,370'],
+    ['pCO2', '33,0', '38,0', '41,0', '47,0'],
+  ], COLUNAS)
+
+  const extrair = () =>
+    extrairExames({ document: { bytes, filename: null }, hints: null, options: null })
+
+  it('o resultado de verdade é extraído', async () => {
+    const r = await extrair()
+    const ph = r.observations.filter(o => o.canonicalName === 'pH (Arterial)')
+    expect(ph).toHaveLength(1)
+    expect(ph[0]!.value).toMatchObject({ kind: 'numeric', value: 7.37 })
+  })
+
+  it('a linha da tabela de evolução NÃO vira observação', async () => {
+    const r = await extrair()
+    const pco2 = r.observations.filter(o => o.canonicalName === 'PCO2 (Arterial)')
+    expect(pco2).toHaveLength(1)
+    expect(pco2[0]!.value).toMatchObject({ kind: 'numeric', value: 47 })
+  })
+
+  it('R1 · a linha descartada aparece com motivo, não some', async () => {
+    const r = await extrair()
+    expect(r.discarded.some(d => d.reason === 'historicalResult')).toBe(true)
+  })
+})
