@@ -417,3 +417,60 @@ describe('history não engole o exame que vem depois da tabela de evolução', (
     expect(r.discarded.some(d => d.reason === 'historicalResult')).toBe(true)
   })
 })
+
+// ── 11. Nome do exame vem da PRIMEIRA COLUNA do título (Task 2a) ───────────
+// `bloco.ts` achava o nome do exame olhando a linha ANTERIOR à de
+// "Resultado:" INTEIRA, colada. No HUGO o título do bloco divide a linha
+// física com o cabeçalho da coluna de referência — "DOSAGEM DE AMILASE
+// Valores de Referência" — e a linha inteira nunca resolve no catálogo (a
+// comparação é exata, sem aparar sufixo). O resultado numérico de verdade
+// nunca chegou a ser extraído por este caminho — nem antes da Tarefa 1, nem
+// depois dela: a tabela de evolução era a ÚNICA fonte que esses exames
+// tinham. Medido no corpus real (HUGO2): Amilase, Creatinina, Sódio,
+// Fósforo, Gama GT e Lipase caíam em `unrecognizedAnalyte` ou
+// `noValueFound`, e só pareciam "extraídos" porque o achado A-06 (Tarefa 2)
+// deixava uma observação errada no lugar, com o nome certo por acidente.
+//
+// `separarColunas` — o mesmo corte GEOMÉTRICO que `segmentar.ts` já usa em
+// `pareceTituloDeSecao` para fechar o segmento history — resolve os dois
+// problemas de uma vez: o nome vem só da primeira coluna, e a faixa de
+// referência (que no HUGO é a SEGUNDA coluna da própria linha "Resultado:",
+// não uma linha à parte como no HOC) passa a ser lida em vez de descartada
+// sem uso.
+describe('nome do exame vem da primeira coluna do título (HUGO)', () => {
+  const COLUNAS = [50, 240, 380]
+  const bytes = pdfTabular([
+    ['DOSAGEM DE AMILASE', 'Valores de Referência'],
+    ['Resultado: 135 U/L', '0 - 110 U/L'],
+    ['DOSAGEM DE GAMA GT', 'Valores de Referência'],
+    ['Resultado: 67 U/L', '8 - 61 U/L'],
+  ], COLUNAS)
+
+  const extrair = () =>
+    extrairExames({ document: { bytes, filename: null }, hints: null, options: null })
+
+  // Filtra por `matcherId: 'bloco'` (não só por nome): a Tarefa 2 ainda
+  // suprime a linha de título por outro motivo (A-06), e este teste tem que
+  // valer isolado dela — a ordem de trabalho pediu as duas tarefas
+  // verificadas em separado antes de uma se apoiar na outra.
+  it('o resultado numérico é extraído com valor, unidade e referência', async () => {
+    const r = await extrair()
+    const amilase = r.observations.find(
+      o => o.canonicalName === 'Amilase' && o.provenance.matcherId === 'bloco',
+    )
+    expect(amilase?.value).toMatchObject({ kind: 'numeric', value: 135 })
+    expect(amilase?.unit.canonical).toBe('U/L')
+    expect(amilase?.reference).toMatchObject({ kind: 'range', min: 0, max: 110 })
+  })
+
+  it('"DOSAGEM DE GAMA GT" resolve mesmo sem sinônimo próprio no catálogo', async () => {
+    // O catálogo tem "GAMA GT", não "DOSAGEM DE GAMA GT" — variantesDeNome
+    // precisa saber tirar o prefixo "Dosagem de", sem o catálogo ganhar
+    // entrada nova só por causa deste exame.
+    const r = await extrair()
+    const ggt = r.observations.find(
+      o => o.canonicalName === 'GGT' && o.provenance.matcherId === 'bloco',
+    )
+    expect(ggt?.value).toMatchObject({ kind: 'numeric', value: 67 })
+  })
+})

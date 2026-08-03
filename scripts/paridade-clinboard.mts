@@ -185,6 +185,11 @@ for (const arquivo of arquivos) {
     ['Cloretos', 'Cloro'],
     ['pH Urinário', 'pH (U)'],
     ['DHL', 'LDH'],
+    // Task 2a: o doador não sabia ligar "Resultado:" ao título de bloco do
+    // HUGO e este exame nunca tinha sido extraído por nenhum dos dois lados
+    // até agora — o doador lê pelo texto corrido, sem o mesmo problema de
+    // coluna. Ele guarda o nome por extenso; o catálogo daqui só tem a sigla.
+    ['Dosagem De Gama Gt', 'GGT'],
   ] as [string, string][]).map(([antes, depois]) => [chave(antes), depois]))
 
   const materiaisDeCultura = new Set(novo.cultures.map((c: any) => chave(c.specimen)))
