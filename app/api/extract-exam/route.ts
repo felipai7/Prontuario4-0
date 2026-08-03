@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getAI, generateWithFallback } from '@/lib/ai'
 import { featureFlags } from '@/lib/featureFlags'
 import type { ClienteExames } from '@/lib/exames/persistencia'
-import { processarPdf } from './processar'
+import { processarPdf, processarIA, type ResultadoIA } from './processar'
 
 /**
  * `ClienteExames` sobre o Supabase de verdade — a única peça de borda que
@@ -51,20 +51,20 @@ export async function POST(request: NextRequest) {
     // base64 + mediaType               — single file upload
     // rawText                          — plain text paste
     // pacienteId / pacienteNome / nomeArquivo — quem recebe o exame e a
-    // conferência de nome (A-02); só o caminho local usa, por ora (ver
-    // task-6-report.md sobre o caminho da IA).
+    // conferência de nome (A-02). Tarefa 7: os TRÊS caminhos (PDF local, IA
+    // sobre print colado, IA sobre texto colado) gravam aqui agora — nenhum
+    // deles some sem paciente para não haver onde gravar o exame.
+    if (!pacienteId) {
+      return NextResponse.json(
+        { ok: false, erro: 'Paciente não informado — não há onde gravar o exame.' },
+        { status: 400 },
+      )
+    }
 
     // ── Caminho local ──────────────────────────────────────────────────────
     // Só para PDF: prints colados e texto colado continuam indo para a IA,
     // porque a camada de texto trabalha sobre o arquivo.
     if (featureFlags.extracaoLocal && base64 && mediaType === 'application/pdf') {
-      if (!pacienteId) {
-        return NextResponse.json(
-          { ok: false, erro: 'Paciente não informado — não há onde gravar o exame.' },
-          { status: 400 },
-        )
-      }
-
       const bytes = new Uint8Array(Buffer.from(base64, 'base64'))
       const resultado = await processarPdf(
         clienteSupabase(supabase),
@@ -138,14 +138,33 @@ export async function POST(request: NextRequest) {
       (() => { const i = raw.indexOf('{'); return i >= 0 ? tryParse(raw.slice(i)) : null })() ??
       null
 
-    return NextResponse.json({
-      via: 'ia',
-      tipo_exame:  parsed?.tipo_exame  || 'Exame',
-      data_exame:  parsed?.data_exame  || null,
-      resultados:  parsed?.resultados  || null,
-      observacoes: parsed?.observacoes || null,
-      raw_text:    parsed ? null : raw,
-    })
+    if (!parsed) {
+      // Antes da Tarefa 7, JSON malformado da IA ainda virava exame "salvo"
+      // com o texto cru em `raw_text`, para leitura manual depois.
+      // `processarIA` (Tarefa 6b) grava sempre `raw_text: null` — gravar do
+      // mesmo jeito aqui produziria um registro vazio, só com o marcador de
+      // IA e nenhum conteúdo visível. Melhor avisar e deixar tentar de novo
+      // do que um exame fantasma no prontuário.
+      return NextResponse.json(
+        { ok: false, erro: 'Não foi possível interpretar a resposta da IA para este laudo. Tente novamente ou use outro formato.' },
+        { status: 500 },
+      )
+    }
+
+    // Tarefa 7 — o caminho da IA (prints, texto colado, PDF não reconhecido
+    // localmente) passa a gravar aqui via `processarIA`, e devolve o mesmo
+    // formato `RespostaExtracao` do caminho local: é isso que permite a tela
+    // tratar os dois com um único contrato (pendências, conferência de
+    // paciente, duplicata), sem `if (data.via === 'local')` espalhado.
+    const resultadoIA: ResultadoIA = {
+      tipo_exame: parsed.tipo_exame || 'Exame',
+      data_exame: parsed.data_exame || null,
+      resultados: parsed.resultados || null,
+      observacoes: parsed.observacoes || null,
+    }
+
+    const resultado = await processarIA(clienteSupabase(supabase), pacienteId, resultadoIA, nomeArquivo ?? null)
+    return NextResponse.json(resultado, { status: resultado.ok ? 200 : 500 })
   } catch {
     // R10 — a mensagem original de exceção pode carregar trecho do que foi
     // enviado. O módulo local nunca lança (contrato de `extrairExames`), mas

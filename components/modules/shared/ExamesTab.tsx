@@ -242,6 +242,12 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
   const [savingM,    setSavingM]    = useState(false)
   const [rawText,    setRawText]    = useState('')
   const [pastedImgs, setPastedImgs] = useState<{ base64: string; mediaType: string; preview: string }[]>([])
+  // Achado A-04 (Tarefa 7): o extrator marcava, o adaptador traduzia, o banco
+  // guardava — e nenhum componente lia. `pendencias` e `conferenciaPaciente`
+  // são o que a rota devolve em `RespostaExtracao`, guardados aqui só para a
+  // tela renderizar a lista (D9) e o aviso (D8) do ÚLTIMO envio.
+  const [pendencias, setPendencias] = useState<{ nome: string; motivo: string }[]>([])
+  const [conferenciaPaciente, setConferenciaPaciente] = useState<string>('naoPerguntado')
 
   // ── Pivot table data ─────────────────────────────────────────────────────
   const comRes  = exames.filter(ex => ex.resultados && ex.resultados.length > 0)
@@ -358,16 +364,25 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
     try {
       const resp = await fetch('/api/extract-exam', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ images: pastedImgs.map(i => ({ base64: i.base64, mediaType: i.mediaType })) }),
+        body: JSON.stringify({
+          images: pastedImgs.map(i => ({ base64: i.base64, mediaType: i.mediaType })),
+          pacienteId: paciente.id, pacienteNome: paciente.nome,
+          nomeArquivo: 'print-colado',
+        }),
       })
       const data = await resp.json()
-      if (!resp.ok) throw new Error(data.error)
-      await supabase.from('exames').insert({
-        paciente_id: paciente.id, tipo_exame: data.tipo_exame,
-        data_exame: data.data_exame, resultados: data.resultados,
-        observacoes: data.observacoes, raw_text: data.raw_text, nome_arquivo: 'print-colado',
-      })
-      resetAdding(); onRefresh(); showToast('Exame extraído e salvo!')
+      if (!resp.ok || !data.ok) throw new Error(data.erro ?? 'Não foi possível salvar')
+
+      setPendencias(data.pendencias ?? [])
+      setConferenciaPaciente(data.conferenciaPaciente ?? 'naoPerguntado')
+      resetAdding(); onRefresh()
+      showToast(
+        data.duplicataDe
+          ? `Salvo. Atenção: este mesmo arquivo já foi enviado em ${data.duplicataDe}.`
+          : data.registros > 1
+            ? `Laudo com ${data.registros} datas de coleta: ${data.registros} exames salvos!`
+            : 'Exame extraído e salvo!',
+      )
     } catch (e: any) { setLocalErr(e.message) }
     setExtracting(false)
   }
@@ -378,16 +393,25 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
     try {
       const resp = await fetch('/api/extract-exam', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rawText: rawText.trim() }),
+        body: JSON.stringify({
+          rawText: rawText.trim(),
+          pacienteId: paciente.id, pacienteNome: paciente.nome,
+          nomeArquivo: null,
+        }),
       })
       const data = await resp.json()
-      if (!resp.ok) throw new Error(data.error)
-      await supabase.from('exames').insert({
-        paciente_id: paciente.id, tipo_exame: data.tipo_exame,
-        data_exame: data.data_exame, resultados: data.resultados,
-        observacoes: data.observacoes, raw_text: data.raw_text, nome_arquivo: null,
-      })
-      resetAdding(); onRefresh(); showToast('Exame extraído e salvo!')
+      if (!resp.ok || !data.ok) throw new Error(data.erro ?? 'Não foi possível salvar')
+
+      setPendencias(data.pendencias ?? [])
+      setConferenciaPaciente(data.conferenciaPaciente ?? 'naoPerguntado')
+      resetAdding(); onRefresh()
+      showToast(
+        data.duplicataDe
+          ? `Salvo. Atenção: este mesmo arquivo já foi enviado em ${data.duplicataDe}.`
+          : data.registros > 1
+            ? `Laudo com ${data.registros} datas de coleta: ${data.registros} exames salvos!`
+            : 'Exame extraído e salvo!',
+      )
     } catch (e: any) { setLocalErr(e.message) }
     setExtracting(false)
   }
@@ -411,33 +435,30 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
         reader.onerror = rej
         reader.readAsDataURL(file)
       })
+      // Gravação agora acontece no servidor (Tarefa 7 — achado A-04): tanto o
+      // caminho local (`processarPdf`) quanto o da IA (`processarIA`)
+      // devolvem o mesmo formato `RespostaExtracao`, então este handler não
+      // precisa mais saber por qual dos dois o laudo passou.
       const resp = await fetch('/api/extract-exam', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base64: b64, mediaType: file.type }),
+        body: JSON.stringify({
+          base64: b64, mediaType: file.type,
+          pacienteId: paciente.id, pacienteNome: paciente.nome,
+          nomeArquivo: file.name,
+        }),
       })
       const data = await resp.json()
-      if (!resp.ok) throw new Error(data.error)
+      if (!resp.ok || !data.ok) throw new Error(data.erro ?? 'Não foi possível salvar')
 
-      // A extração local devolve UM REGISTRO POR DATA DE COLETA: um laudo com
-      // coletas de dois dias vira dois exames, cada resultado na data em que
-      // foi colhido. A IA continua devolvendo um só.
-      const linhas = data.via === 'local'
-        ? (data.exames as { tipo_exame: string; data_exame: string | null; resultados: unknown; observacoes: string | null }[])
-        : [{ tipo_exame: data.tipo_exame, data_exame: data.data_exame, resultados: data.resultados, observacoes: data.observacoes }]
-
-      await supabase.from('exames').insert(linhas.map(l => ({
-        paciente_id: paciente.id, tipo_exame: l.tipo_exame,
-        data_exame: l.data_exame, resultados: l.resultados,
-        observacoes: l.observacoes,
-        raw_text: data.via === 'local' ? null : data.raw_text,
-        nome_arquivo: file.name,
-      })))
-
+      setPendencias(data.pendencias ?? [])
+      setConferenciaPaciente(data.conferenciaPaciente ?? 'naoPerguntado')
       resetAdding(); onRefresh()
       showToast(
-        linhas.length > 1
-          ? `Laudo com ${linhas.length} datas de coleta: ${linhas.length} exames salvos!`
-          : 'Exame extraído e salvo!',
+        data.duplicataDe
+          ? `Salvo. Atenção: este mesmo arquivo já foi enviado em ${data.duplicataDe}.`
+          : data.registros > 1
+            ? `Laudo com ${data.registros} datas de coleta: ${data.registros} exames salvos!`
+            : 'Exame extraído e salvo!',
       )
     } catch (e: any) { setLocalErr(e.message) }
     setExtracting(false)
@@ -674,6 +695,32 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
         <p className="text-slate-400 text-sm italic text-center py-8">Nenhum exame registrado</p>
       )}
 
+      {/* D8 — aviso quando o nome do laudo não bate com o do paciente da tela.
+          Avisa, nunca bloqueia: o exame já foi salvo mesmo assim. */}
+      {conferenciaPaciente === 'naoConfere' && (
+        <div className="mb-3 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <b>Atenção:</b> o nome no laudo enviado não parece ser o deste paciente.
+          O exame foi salvo — confira antes de usar.
+        </div>
+      )}
+
+      {/* D9 — lista de pendências do ÚLTIMO laudo enviado, acima da tabela.
+          Escolhida entre três formas (símbolo só / um valor + aviso / símbolo
+          na célula + lista) com as três à vista da Juliana. */}
+      {pendencias.length > 0 && (
+        <div className="mb-3 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <b>⚠ {pendencias.length} resultado{pendencias.length > 1 ? 's' : ''} deste laudo
+          {pendencias.length > 1 ? ' pedem' : ' pede'} conferência</b>
+          <ul className="mt-1.5 space-y-0.5">
+            {pendencias.map((p, i) => (
+              <li key={`${p.nome}-${i}`} className="text-amber-800">
+                {p.nome} · {p.motivo}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Pivot table */}
       {comRes.length > 0 && (
         <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
@@ -689,6 +736,19 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
                     <th key={cl.key} className="px-2 py-2 text-center bg-slate-100 border-b-2 border-r border-slate-200 font-semibold min-w-[80px] whitespace-nowrap">
                       <p className="text-slate-700 font-semibold text-xs leading-tight">{cl.dataLabel ?? `Exame ${idx + 1}`}</p>
                       {cl.horaLabel && <p className="text-slate-400 font-normal text-xs mt-0.5">{cl.horaLabel}</p>}
+                      {/* D10 — o marcador do laudo lido por IA vive em
+                          `observacoes` do registro, mas a maioria dos exames
+                          da IA TEM resultados estruturados e por isso cai
+                          aqui na tabela pivô, não na lista "sem
+                          estruturação" (onde `observacoes` já era exibido).
+                          Sem isto, o marcador nunca aparecia na tela — a
+                          única leitura que a Juliana de fato usa. */}
+                      {cl.exames.some(ex => ex.observacoes?.includes('Lido por IA')) && (
+                        <p className="text-[10px] text-slate-400 font-normal mt-0.5"
+                          title={cl.exames.map(ex => ex.observacoes).filter(Boolean).join(' · ')}>
+                          💬 Lido por IA
+                        </p>
+                      )}
                       {!solo && (
                         <p className="text-[10px] text-indigo-500 font-semibold mt-0.5"
                           title={`${cl.exames.length} exames desta coleta agrupados nesta coluna`}>
@@ -873,6 +933,12 @@ function PivotCell({ r, rowBg }: { r: ResultadoExame | undefined; rowBg: string 
       <span className="font-semibold">{r.valor}</span>
       {r.unidade && <span className="ml-0.5 opacity-60">{r.unidade}</span>}
       {arrow && <span className="font-black">{arrow}</span>}
+      {/* D9 — marca na célula. D5 — quando é conflito (dois valores na mesma
+          coleta), `r.valor` já chega pronto como "47,0 / 33,0" de entrega.ts;
+          aqui não há nada para escolher, só marcar. */}
+      {r.revisar && (
+        <span className="ml-1 text-amber-600" title={(r.motivos_revisao ?? []).join(' · ')}>⚠</span>
+      )}
     </td>
   )
 }
