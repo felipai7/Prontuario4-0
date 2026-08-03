@@ -146,7 +146,9 @@ export default function CadastroForm({ alaId, alaNome, unitId, numeroLeito, onCl
               placeholder="Nome do paciente" className={input(errors.nome)} />
           </Field>
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* Campos de data precisam de largura para o seletor nativo do celular
+              mostrar dd/mm/aaaa — em meia tela ficam cortados. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Data de Nascimento *" error={errors.dataNasc}>
               {/* onPaste: um <input type="date"> não aceita texto colado sozinho.
                   Aqui interceptamos a colagem do prontuário (ex.: "12/05/1970") e
@@ -193,7 +195,7 @@ export default function CadastroForm({ alaId, alaNome, unitId, numeroLeito, onCl
             )}
           </Field>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Data de Internação *" error={errors.dataInt}>
               <input type="date" value={dataInt} max={hoje}
                 onChange={e => setDataInt(e.target.value)} className={input(errors.dataInt)} />

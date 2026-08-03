@@ -177,7 +177,7 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
 
           {mode === 'ia' && aiResult && (
             <>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs text-slate-500 font-medium block mb-1">Tipo de exame *</label>
                   <input value={tipoEdit} onChange={e => setTipoEdit(e.target.value)}
@@ -225,7 +225,7 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
           {/* Manual mode */}
           {mode === 'manual' && (
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs text-slate-500 font-medium block mb-1">Tipo de exame *</label>
                   <input value={mTipo} onChange={e => setMTipo(e.target.value)}

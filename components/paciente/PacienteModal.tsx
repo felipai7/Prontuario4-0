@@ -417,11 +417,13 @@ export default function PacienteModal({ paciente, unidade, onClose, onAltaConced
       {/* Sem fechar ao clicar fora: um clique acidental no fundo fechava o modal
           e derrubava um formulário meio preenchido (ex.: o balanço). O fechamento
           é só pelo X ou por ESC (ver o handler de teclado acima). */}
-      <div className="fixed inset-0 bg-black/60 z-40 flex items-start justify-center p-4 overflow-y-auto">
+      {/* p-1 no celular: os 16px de cada lado custavam ~9% da largura útil de um
+          iPhone, e isso sai justamente do conteúdo. No desktop segue p-4. */}
+      <div className="fixed inset-0 bg-black/60 z-40 flex items-start justify-center p-1 sm:p-4 overflow-y-auto">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[1300px] my-2 flex flex-col" style={{maxHeight:'97vh'}}>
 
           {/* Header */}
-          <div className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white px-6 py-4 rounded-t-2xl flex-shrink-0">
+          <div className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white px-3 sm:px-6 py-4 rounded-t-2xl flex-shrink-0">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -488,7 +490,9 @@ export default function PacienteModal({ paciente, unidade, onClose, onAltaConced
             {editing && (
               <div className="mt-4 bg-white/10 rounded-xl p-4 space-y-3">
                 <p className="text-xs font-bold text-white/80 uppercase tracking-wide">Editar dados do paciente</p>
-                <div className="grid grid-cols-2 gap-2">
+                {/* Empilha no celular: "Nome completo" em meia tela de 375px
+                    mostra meia dúzia de caracteres. */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <EF label="Nome completo" error={editErrors.nome}>
                     <EInput value={editForm.nome} onChange={e => setEditForm(f => ({...f, nome: e.target.value}))}/>
                   </EF>
@@ -585,12 +589,14 @@ export default function PacienteModal({ paciente, unidade, onClose, onAltaConced
             )}
 
             {/* Seletor de módulo (só na nova estrutura, com 2+ módulos) */}
+            {/* max-w-full + overflow-x-auto: com w-fit sozinho, os 5 módulos
+                estouravam a largura do celular em vez de rolar. */}
             {modulos.length > 1 && (
-              <div className="flex gap-0 mt-4 bg-white/10 rounded-xl p-1 w-fit">
+              <div className="flex gap-0 mt-4 bg-white/10 rounded-xl p-1 w-fit max-w-full overflow-x-auto">
                 {modulos.map(m => (
                   <button key={m.id}
                     onClick={() => { setModuloId(m.id); setTab(m.tabs[0].id) }}
-                    className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${
+                    className={`px-3 sm:px-4 py-1.5 rounded-lg text-sm font-bold transition-colors whitespace-nowrap ${
                       moduloId === m.id ? 'bg-white text-indigo-700 shadow' : 'text-indigo-200 hover:text-white'
                     }`}>
                     {m.label}
@@ -603,7 +609,7 @@ export default function PacienteModal({ paciente, unidade, onClose, onAltaConced
             <div className="flex gap-1 mt-3 flex-wrap">
               {moduloAtivo.tabs.map(t => (
                 <button key={t.id} onClick={() => setTab(t.id)}
-                  className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                  className={`px-3 sm:px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
                     tab === t.id ? 'bg-white text-indigo-700' : 'text-indigo-200 hover:text-white hover:bg-white/10'
                   }`}>
                   {t.label}
@@ -613,7 +619,7 @@ export default function PacienteModal({ paciente, unidade, onClose, onAltaConced
           </div>
 
           {/* Body */}
-          <div className="overflow-y-auto flex-1 p-6 relative">
+          <div className="overflow-y-auto flex-1 p-3 sm:p-6 relative">
 
             {/* Evolução Diária overlay (determinística, sem IA) */}
             {evoOpen && (

@@ -250,7 +250,9 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
   return (
     <div className="space-y-4">
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-3">
+      {/* Os três cartões empilham no celular: em 3 colunas, "Acumulado Móvel"
+          e o valor com sinal não cabem em ~110px. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <SummaryCard label="Saldo Parcial"    value={periodos.length > 0 ? calcBalanco(periodos[periodos.length-1]).parcial : null} sub="Último turno"/>
         <SummaryCard label="Acumulado Total"  value={periodos.length > 0 ? acTotal : null} sub="Desde admissão"/>
         <SummaryCard label="Acumulado Móvel"  value={periodos.length > 0 ? acMovel : null} sub="Últimos 10 turnos"/>
@@ -258,7 +260,9 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
 
       {/* Highlight metrics */}
       {periodos.length > 0 && (
-        <div className="grid grid-cols-2 gap-3">
+        // Empilha no celular: os selos de ANÚRIA/OLIGÚRIA e o "mL/Kg/h" quebram
+        // feio quando o cartão fica com metade de uma tela de 375px.
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {/* Débito Urinário */}
           {(() => {
             const duMlKgH = duHoras > 0 ? duTotal / peso / duHoras : null

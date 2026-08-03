@@ -357,7 +357,9 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
 
         {atbFormOpen && (
           <div className="border-2 border-indigo-200 rounded-xl bg-indigo-50 p-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            {/* 1 coluna no celular: a célula da data traz o campo + os botões D0/D1
+                lado a lado, e isso não cabe em meia tela. */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className={labelCls}>Droga *</label>
                 <Combobox value={atbDroga} onChange={setAtbDroga} options={ATBS_SUGERIDOS}
@@ -420,8 +422,10 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
           <span className="font-semibold text-slate-700">💊 Em uso de Pantoprazol (IBP)</span>
         </label>
 
+        {/* No celular vira 1 coluna e sem o recuo: com 2 colunas + pl-6 sobram
+            ~145px por campo, e o select corta "Enteral (Oral/SNE/GTT)". */}
         {ibpEmUso && (
-          <fieldset disabled={!podeEditar} className="grid grid-cols-2 gap-3 pl-6 disabled:opacity-60">
+          <fieldset disabled={!podeEditar} className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:pl-6 disabled:opacity-60">
             <div>
               <label className={labelCls}>Via</label>
               <select value={ibpVia} onChange={e => setIbpVia(e.target.value as ViaIBP)} className={inputCls}>
@@ -466,8 +470,8 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
         </label>
 
         {anticoagEmUso && (
-          <fieldset disabled={!podeEditar} className="pl-6 space-y-3 disabled:opacity-60">
-            <div className="grid grid-cols-3 gap-3">
+          <fieldset disabled={!podeEditar} className="sm:pl-6 space-y-3 disabled:opacity-60">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className={labelCls}>Droga</label>
                 <select value={anticoagDroga} onChange={e => handleAnticoagDrogaChange(e.target.value as DrogaAnticoag)} className={inputCls}>
@@ -497,7 +501,7 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
                 <input value={anticoagOutro} onChange={e => setAnticoagOutro(e.target.value)} className={inputCls} />
               </div>
             )}
-            <div className="grid grid-cols-2 gap-3 max-w-md">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md">
               <div>
                 <label className={labelCls}>Dose</label>
                 <div className="flex gap-1">

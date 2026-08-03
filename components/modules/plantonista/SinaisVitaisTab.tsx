@@ -350,7 +350,8 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
             Resumo do último período — {periodLabel}
             <span className="ml-2 text-slate-300">({lastPeriodSinais.length} leituras)</span>
           </p>
-          <div className="grid grid-cols-4 gap-1.5">
+          {/* 2 colunas no celular: com 4, cada card fica com ~85px e o valor não cabe. */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
             {COLS.map(col => {
               const s = summaryStats[col.key]
               if (!s) return (
