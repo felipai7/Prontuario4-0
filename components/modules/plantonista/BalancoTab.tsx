@@ -302,9 +302,14 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
             {lastEvac ? (
               <>
                 <p className="text-2xl font-black text-amber-800">{lastEvac.evacuacao.toFixed(0)} mL</p>
+                {/* fmtTurno(turno, INÍCIO) — a mesma função do cabeçalho da tabela.
+                    Antes esta linha formatava a data à mão a partir de `fim`, e o
+                    turno noturno (19:00 → 07:00 do dia seguinte) aparecia com a
+                    data do dia posterior: a evacuação do noturno de 02/08 era
+                    exibida como 03/08. Usar a função compartilhada faz o cartão e
+                    a tabela concordarem por construção, não por coincidência. */}
                 <p className="text-xs text-amber-600 mt-0.5">
-                  {new Date(lastEvac.fim).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' })}
-                  {' '}{lastEvac.turno === 'diurno' ? '☀️ Diurno' : '🌙 Noturno'}
+                  {fmtTurno(lastEvac.turno, lastEvac.inicio)}
                 </p>
               </>
             ) : (
