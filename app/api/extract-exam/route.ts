@@ -1,37 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { getAI, generateWithFallback } from '@/lib/ai'
 import { featureFlags } from '@/lib/featureFlags'
-import { extrairExames } from '@/lib/exames/extracao'
-import { adaptarParaExames, type ExameParaSalvar } from '@/lib/exames/adaptador'
-import { montarEntrega } from '@/lib/exames/entrega'
+import type { ClienteExames } from '@/lib/exames/persistencia'
+import { processarPdf } from './processar'
 
 /**
- * Extração LOCAL, sem mandar o PDF para lugar nenhum.
+ * `ClienteExames` sobre o Supabase de verdade — a única peça de borda que
+ * fala com o banco. `processarPdf` (`./processar.ts`) não conhece Supabase,
+ * e é isso que permite testá-lo sem servidor nem banco.
  *
- * Decisão Q6 (01/08/2026): laudos dos laboratórios reconhecidos são lidos aqui;
- * só documento não reconhecido cai na IA. Devolve `null` quando não reconheceu
- * nada — e é o chamador que decide se aciona o fallback.
- *
- * Nenhum conteúdo do laudo aparece em erro nem em log (R10): o módulo não
- * lança, e o que ele devolve de diagnóstico são contadores e um hash.
+ * Tipado com `SupabaseClient` de `@supabase/supabase-js` (dependência direta
+ * do projeto — ver `package.json`): não existe um tipo `SupabaseClient`
+ * próprio em `lib/`, e inventar um caminho de import seria adivinhação.
  */
-async function extrairLocalmente(base64: string): Promise<{
-  exames: ExameParaSalvar[]
-  laboratorio: string | null
-  avisos: string[]
-} | null> {
-  const bytes = new Uint8Array(Buffer.from(base64, 'base64'))
-  const resultado = await extrairExames({
-    document: { bytes, filename: null },
-    hints: null,
-    options: null,
-  })
-  if (resultado.observations.length === 0) return null
+function clienteSupabase(supabase: SupabaseClient): ClienteExames {
   return {
-    exames: adaptarParaExames(montarEntrega(resultado, false)),
-    laboratorio: resultado.detection.profileId,
-    avisos: resultado.warnings.map(w => w.code),
+    async buscarPorImpressaoDigital(pacienteId, hash) {
+      // A coluna `impressao_digital` ainda não existe em produção (pendência
+      // externa — ver task-5-report.md). Se a query rejeitar por causa disso,
+      // `gravarEntrega` já trata a falha como "nenhum envio anterior
+      // encontrado" (não deixa o `.catch` chegar até aqui bloquear nada) —
+      // aqui só repassamos o que o Supabase devolveu.
+      const { data } = await supabase
+        .from('exames')
+        .select('created_at')
+        .eq('paciente_id', pacienteId)
+        .eq('impressao_digital', hash)
+        .limit(1)
+        .maybeSingle()
+      return data ? { dataEnvio: new Date(data.created_at).toLocaleDateString('pt-BR') } : null
+    },
+    async inserir(linhas) {
+      const { error } = await supabase.from('exames').insert(linhas)
+      return { erro: error?.message ?? null }
+    },
   }
 }
 
@@ -42,23 +46,40 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { base64, mediaType, rawText, images } = body
+    const { base64, mediaType, rawText, images, pacienteId, pacienteNome, nomeArquivo } = body
     // images: [{ base64, mediaType }]  — multi-image paste
     // base64 + mediaType               — single file upload
     // rawText                          — plain text paste
+    // pacienteId / pacienteNome / nomeArquivo — quem recebe o exame e a
+    // conferência de nome (A-02); só o caminho local usa, por ora (ver
+    // task-6-report.md sobre o caminho da IA).
 
     // ── Caminho local ──────────────────────────────────────────────────────
     // Só para PDF: prints colados e texto colado continuam indo para a IA,
     // porque a camada de texto trabalha sobre o arquivo.
     if (featureFlags.extracaoLocal && base64 && mediaType === 'application/pdf') {
-      const local = await extrairLocalmente(base64)
-      if (local) {
-        return NextResponse.json({
-          via: 'local',
-          laboratorio: local.laboratorio,
-          exames: local.exames,
-          avisos: local.avisos,
-        })
+      if (!pacienteId) {
+        return NextResponse.json(
+          { ok: false, erro: 'Paciente não informado — não há onde gravar o exame.' },
+          { status: 400 },
+        )
+      }
+
+      const bytes = new Uint8Array(Buffer.from(base64, 'base64'))
+      const resultado = await processarPdf(
+        clienteSupabase(supabase),
+        pacienteId,
+        bytes,
+        nomeArquivo ?? null,
+        pacienteNome ?? null,
+      )
+
+      // 'NAO_RECONHECIDO' não é uma falha de gravação — é o sinal de que o
+      // laudo não foi lido aqui, e por isso segue para a IA (Q6). Qualquer
+      // outro `ok: false` É falha de verdade (ex.: A-05, erro do banco) e
+      // precisa chegar à tela como erro, não desaparecer num fallback silencioso.
+      if (resultado.ok || resultado.erro !== 'NAO_RECONHECIDO') {
+        return NextResponse.json(resultado, { status: resultado.ok ? 200 : 500 })
       }
       // Não reconhecido: segue para a IA, e o resultado nasce para revisão.
     }
@@ -125,7 +146,14 @@ export async function POST(request: NextRequest) {
       observacoes: parsed?.observacoes || null,
       raw_text:    parsed ? null : raw,
     })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch {
+    // R10 — a mensagem original de exceção pode carregar trecho do que foi
+    // enviado. O módulo local nunca lança (contrato de `extrairExames`), mas
+    // o caminho da IA pode (rede, parsing, etc.), e a mensagem dele não é
+    // confiável para devolver ao navegador crua.
+    return NextResponse.json(
+      { ok: false, erro: 'Não foi possível ler este laudo. Tente novamente ou use outro formato.' },
+      { status: 500 },
+    )
   }
 }
