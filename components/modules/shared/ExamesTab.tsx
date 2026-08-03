@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { agruparExamesPorHorario, parseExameTimestamp, type ClusterExames } from '@/lib/exames/agrupamento'
-import { grupoDoNome, gruposEmOrdem } from '@/lib/exames/grupos'
+import { grupoDoNome, gruposEmOrdem, nomeCanonico } from '@/lib/exames/grupos'
 import type { Exame, Paciente, ResultadoExame, ToastData } from '@/types'
 
 interface Props {
@@ -37,6 +37,21 @@ const ALIASES: Array<[RegExp, string]> = [
   [/^ph[_\s]*gasometria.*$/i,              'pH'],
   [/^pco2[_\s]*gasometria.*$/i,            'PCO2'],
   [/^po2[_\s]*gasometria.*$/i,             'PO2'],
+  // ── Grafias antigas do próprio catálogo ────────────────────────────────
+  // Padronizadas em 03/08/2026. O banco NÃO foi reescrito — decisão da
+  // Juliana, por ser a opção que não toca em dado de paciente. Sem estas
+  // linhas, um exame gravado antes e outro gravado depois viram DUAS linhas
+  // na tabela, e a evolução do paciente aparece partida ao meio.
+  [/^lactato\s+venoso$/i,                  'Lactato (Venosa)'],
+  [/^o2\s*sat\s*\(arterial\)$/i,           'SatO2 (Arterial)'],
+  [/^o2\s*sat\s*\(venosa\)$/i,             'SatO2 (Venosa)'],
+  [/^hct\s*\(arterial\)$/i,                'Hematócrito (Arterial)'],
+  [/^hct\s*\(venosa\)$/i,                  'Hematócrito (Venosa)'],
+  [/^pesquisa\s+de\s+fungos\s*\(lcr\)$/i,  'Pesquisa de Fungos (LCR)'],
+  // Estes três eram o MESMO exame em dois registros do catálogo.
+  [/^cloretos$/i,                          'Cloro'],
+  [/^ph\s+urinário$/i,                     'pH (U)'],
+  [/^dhl$/i,                               'LDH'],
   // Hemograma
   [/^hematócrit[oa]?$|^hct$/i,                                 'Hematócrito'],
   [/^hemoglob[ia]n[ao]?s?$/i,                                  'Hemoglobina'],
@@ -109,7 +124,10 @@ function canonicalize(name: string): string {
   // Registro antigo em percentual segue numa linha própria, de propósito — o
   // valor dele não é comparável com o absoluto, e juntá-los na mesma linha
   // esconderia isso.
-  if (grupoDoNome(trimmed)) return trimmed
+  // Volta a grafia DO CATÁLOGO, não a recebida: senão "Pesquisa De Fungos
+  // (LCR)" e "Pesquisa de Fungos (LCR)" viram duas linhas da tabela.
+  const doCatalogo = nomeCanonico(trimmed)
+  if (doCatalogo) return doCatalogo
   for (const [pattern, canonical] of ALIASES) {
     if (pattern.test(trimmed)) return canonical
   }

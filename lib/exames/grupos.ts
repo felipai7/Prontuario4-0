@@ -44,3 +44,16 @@ export function gruposEmOrdem(): readonly string[] {
 export function grupoDoNome(nome: string): string | null {
   return POR_NOME[chave(nome)] ?? null
 }
+
+const NOME_POR_CHAVE = gruposJson.nameByKey as Record<string, string>
+
+/**
+ * A grafia canônica de um exame, ou `null` se ele não estiver no catálogo.
+ *
+ * Serve para a tela não tratar "Pesquisa De Fungos (LCR)" e
+ * "Pesquisa de Fungos (LCR)" como dois exames. A busca ignora caixa e acento
+ * de espaçamento; o que volta é sempre a grafia do catálogo.
+ */
+export function nomeCanonico(nome: string): string | null {
+  return NOME_POR_CHAVE[chave(nome)] ?? null
+}

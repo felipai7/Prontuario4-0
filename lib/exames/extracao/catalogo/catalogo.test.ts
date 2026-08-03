@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { carregarCatalogo, chaveSinonimo, resolverAnalito, grupoDoNome, gruposEmOrdem } from './index'
+import { carregarCatalogo, chaveSinonimo, resolverAnalito, grupoDoNome, gruposEmOrdem, nomeCanonico } from './index'
 import analitos from './analitos.json'
 import sinonimos from './sinonimos.json'
 import especimes from './especimes.json'
@@ -287,6 +287,78 @@ describe('cada material no seu grupo', () => {
     }
     for (const n of ['Influenza A', 'Influenza B', 'COVID-19 Ag']) {
       expect(grupoDoNome(n), n).toBe('🦠 Sorologias')
+    }
+  })
+})
+
+describe('nomes padronizados · 03/08/2026', () => {
+  // Cinco pares divergiam entre si dentro do próprio catálogo, e três eram o
+  // MESMO exame em dois registros. O banco não foi reescrito — decisão da
+  // Juliana, por ser a opção que não toca em dado de paciente —, então a
+  // grafia antiga PRECISA continuar resolvendo, ou um laudo já processado
+  // deixa de casar com um novo.
+  const antesEDepois: [string, string][] = [
+    ['Lactato Venoso', 'Lactato (Venosa)'],
+    ['O2 Sat (Arterial)', 'SatO2 (Arterial)'],
+    ['O2 Sat (Venosa)', 'SatO2 (Venosa)'],
+    ['Hct (Arterial)', 'Hematócrito (Arterial)'],
+    ['Hct (Venosa)', 'Hematócrito (Venosa)'],
+    ['Pesquisa De Fungos (LCR)', 'Pesquisa de Fungos (LCR)'],
+    ['Cloretos', 'Cloro'],
+    ['pH Urinário', 'pH (U)'],
+    ['DHL', 'LDH'],
+  ]
+
+  it('a grafia antiga continua resolvendo, e chega no analito novo', () => {
+    for (const [antes, depois] of antesEDepois) {
+      expect(resolverAnalito(antes)?.canonicalName, antes).toBe(depois)
+    }
+  })
+
+  it('todo nome canônico resolve para si mesmo', () => {
+    // A renomeação de 03/08 deixou 28 analitos sem sinônimo para o próprio
+    // nome: o campo mudou e a tabela de busca não. O E2 pegou quatro deles;
+    // este teste cobre os 266.
+    for (const a of Object.values(catalogo.analytes)) {
+      expect(resolverAnalito(a.canonicalName)?.id, a.canonicalName).toBe(a.id)
+    }
+  })
+
+  it('o par arterial/venoso usa a mesma base do exame sem sufixo', () => {
+    const base = (n: string) => n.replace(/\s*\((Arterial|Venosa)\)$/, '')
+    for (const a of Object.values(catalogo.analytes)) {
+      if (!/\((Arterial|Venosa)\)$/.test(a.canonicalName)) continue
+      const semSufixo = Object.values(catalogo.analytes)
+        .find(x => x.canonicalName === base(a.canonicalName))
+      // Nem todo par tem versão sem sufixo; quando tem, os nomes têm que bater.
+      if (semSufixo) expect(base(a.canonicalName), a.canonicalName).toBe(semSufixo.canonicalName)
+    }
+  })
+
+  it('pH urinário deixou de estar catalogado como exame de sangue', () => {
+    // "pH Urinário" era `ph.urinario.serum`: pH de urina com espécime sangue.
+    // Ao fundir com `pH (U)` isso caiu junto.
+    expect(resolverAnalito('pH Urinário')?.defaultSpecimen).toBe('urine')
+  })
+})
+
+describe('grupos.json carrega a grafia canônica, não só o grupo', () => {
+  it('a busca ignora caixa e devolve a grafia do catálogo', () => {
+    // Sem isto, "Pesquisa De Fungos (LCR)" (grafia antiga, ainda no banco) e
+    // "Pesquisa de Fungos (LCR)" viravam duas linhas da tabela de exames.
+    expect(nomeCanonico('PESQUISA DE FUNGOS (LCR)')).toBe('Pesquisa de Fungos (LCR)')
+    expect(nomeCanonico('pesquisa de fungos (lcr)')).toBe('Pesquisa de Fungos (LCR)')
+    expect(nomeCanonico('Pesquisa De Fungos (LCR)')).toBe('Pesquisa de Fungos (LCR)')
+  })
+
+  it('nome fora do catálogo devolve null, e não um chute', () => {
+    expect(nomeCanonico('Xisantopina Refratada')).toBeNull()
+    expect(grupoDoNome('Xisantopina Refratada')).toBeNull()
+  })
+
+  it('todo analito se encontra pela própria grafia', () => {
+    for (const a of Object.values(catalogo.analytes)) {
+      expect(nomeCanonico(a.canonicalName), a.canonicalName).toBe(a.canonicalName)
     }
   })
 })

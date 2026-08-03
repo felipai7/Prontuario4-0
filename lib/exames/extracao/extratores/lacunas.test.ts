@@ -53,8 +53,10 @@ describe('saturação de O2 grafada sem separador', () => {
     expect(nomes(await extrair(LAUDO))).toContain('pH (Arterial)')
   })
 
-  it('"O2SAT" colado resolve para O2 Sat (Arterial)', async () => {
-    expect(nomes(await extrair(LAUDO))).toContain('O2 Sat (Arterial)')
+  it('"O2SAT" colado resolve para SatO2 (Arterial)', async () => {
+    // Renomeado em 03/08/2026: era "O2 Sat (Arterial)", que divergia do
+    // "SatO2" sem sufixo do mesmo catálogo. A grafia antiga segue resolvendo.
+    expect(nomes(await extrair(LAUDO))).toContain('SatO2 (Arterial)')
   })
 })
 

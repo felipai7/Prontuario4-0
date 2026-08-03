@@ -168,6 +168,25 @@ for (const arquivo of arquivos) {
     if (m) comSufixo.set(chave(m[1]!), o)
   }
 
+  // Nomes padronizados em 03/08/2026 dentro do PRÓPRIO catálogo, para não
+  // haver duas grafias do mesmo exame. O doador ficou com a grafia antiga, e
+  // o comparador casa por nome — sem esta tabela, cada padronização aparece
+  // como exame perdido. É a mesma armadilha do líquor: paridade não é
+  // correção. O dado continua sendo extraído; o que mudou foi o rótulo.
+  // Chaveado por `chave()`, não pela grafia literal: ela normaliza caixa e
+  // acento, e escrever as chaves à mão já custou uma rodada em silêncio.
+  const RENOMEADOS = new Map<string, string>(([
+    ['Lactato Venoso', 'Lactato (Venosa)'],
+    ['O2 Sat (Arterial)', 'SatO2 (Arterial)'],
+    ['O2 Sat (Venosa)', 'SatO2 (Venosa)'],
+    ['Hct (Arterial)', 'Hematócrito (Arterial)'],
+    ['Hct (Venosa)', 'Hematócrito (Venosa)'],
+    ['Pesquisa De Fungos (LCR)', 'Pesquisa de Fungos (LCR)'],
+    ['Cloretos', 'Cloro'],
+    ['pH Urinário', 'pH (U)'],
+    ['DHL', 'LDH'],
+  ] as [string, string][]).map(([antes, depois]) => [chave(antes), depois]))
+
   const materiaisDeCultura = new Set(novo.cultures.map((c: any) => chave(c.specimen)))
   const ehCultura = (nome: string) => {
     const k = chave(nome)
@@ -180,6 +199,19 @@ for (const arquivo of arquivos) {
     const b = porNomeNovo.get(k)
     if (!b) {
       soDoador++
+      const renomeado = RENOMEADOS.get(k)
+      const equivalente = renomeado ? porNomeNovo.get(chave(renomeado)) : undefined
+      if (equivalente) {
+        divergencias.push({
+          arquivo: rotulo, exame: a.name,
+          unidade: '', referencia: '', data: a.date ?? '',
+          categoria: 'correcaoIntencional',
+          motivo: `padronizado no catálogo: agora é "${renomeado}"`,
+          clinboard: `${a.value ?? '—'}`,
+          novo: equivalente.value?.kind === 'numeric' ? String(equivalente.value.value) : String(equivalente.value?.kind),
+        })
+        continue
+      }
       const maisPreciso = comSufixo.get(k)
       if (maisPreciso) {
         divergencias.push({

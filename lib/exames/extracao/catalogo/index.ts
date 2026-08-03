@@ -47,7 +47,7 @@ export function carregarCatalogo(): Catalog {
 // `grupos.json` sem arrastar o catálogo inteiro para o bundle do navegador.
 // Reexportados aqui para quem já tem o catálogo em mãos; há teste garantindo
 // que `grupos.json` e `analitos.json` não divirjam.
-export { grupoDoNome, gruposEmOrdem } from '../../grupos'
+export { grupoDoNome, gruposEmOrdem, nomeCanonico } from '../../grupos'
 
 /**
  * Vocabulário restrito a um espécime (R6).

@@ -804,20 +804,6 @@
       "plausibleRange": null,
       "valueKind": "numeric"
     },
-    "cloretos.serum": {
-      "canonicalName": "Cloretos",
-      "category": "⚡ Eletrólitos",
-      "defaultSpecimen": "blood",
-      "defaultUnit": null,
-      "id": "cloretos.serum",
-      "loinc": null,
-      "needsClinicalReview": true,
-      "origem": [
-        "NAME_MAP"
-      ],
-      "plausibleRange": null,
-      "valueKind": "numeric"
-    },
     "cloro.serum": {
       "canonicalName": "Cloro",
       "category": "⚡ Eletrólitos",
@@ -1226,20 +1212,6 @@
       "defaultSpecimen": "blood",
       "defaultUnit": null,
       "id": "dhea.s.serum",
-      "loinc": null,
-      "needsClinicalReview": true,
-      "origem": [
-        "NAME_MAP"
-      ],
-      "plausibleRange": null,
-      "valueKind": "numeric"
-    },
-    "dhl.serum": {
-      "canonicalName": "DHL",
-      "category": "🧪 Inflamatório",
-      "defaultSpecimen": "blood",
-      "defaultUnit": null,
-      "id": "dhl.serum",
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
@@ -1828,7 +1800,7 @@
       "valueKind": "numeric"
     },
     "hct.art": {
-      "canonicalName": "Hct (Arterial)",
+      "canonicalName": "Hematócrito (Arterial)",
       "category": "💨 Gasometria",
       "defaultSpecimen": "arterialBlood",
       "defaultUnit": null,
@@ -1844,7 +1816,7 @@
       "valueKind": "numeric"
     },
     "hct.ven": {
-      "canonicalName": "Hct (Venosa)",
+      "canonicalName": "Hematócrito (Venosa)",
       "category": "💨 Gasometria",
       "defaultSpecimen": "venousBlood",
       "defaultUnit": null,
@@ -2209,7 +2181,7 @@
       "valueKind": "numeric"
     },
     "lactato.ven": {
-      "canonicalName": "Lactato Venoso",
+      "canonicalName": "Lactato (Venosa)",
       "category": "🧪 Inflamatório",
       "defaultSpecimen": "venousBlood",
       "defaultUnit": null,
@@ -2716,7 +2688,7 @@
       "valueKind": "numeric"
     },
     "o2.sat.art": {
-      "canonicalName": "O2 Sat (Arterial)",
+      "canonicalName": "SatO2 (Arterial)",
       "category": "💨 Gasometria",
       "defaultSpecimen": "arterialBlood",
       "defaultUnit": null,
@@ -2733,7 +2705,7 @@
       "valueKind": "numeric"
     },
     "o2.sat.ven": {
-      "canonicalName": "O2 Sat (Venosa)",
+      "canonicalName": "SatO2 (Venosa)",
       "category": "💨 Gasometria",
       "defaultSpecimen": "venousBlood",
       "defaultUnit": null,
@@ -2874,7 +2846,7 @@
       "valueKind": "numeric"
     },
     "pesquisa.de.fungos.csf": {
-      "canonicalName": "Pesquisa De Fungos (LCR)",
+      "canonicalName": "Pesquisa de Fungos (LCR)",
       "category": "🧠 Líquor",
       "defaultSpecimen": "csf",
       "defaultUnit": null,
@@ -2946,20 +2918,6 @@
       "defaultSpecimen": "blood",
       "defaultUnit": null,
       "id": "ph.serum",
-      "loinc": null,
-      "needsClinicalReview": true,
-      "origem": [
-        "NAME_MAP"
-      ],
-      "plausibleRange": null,
-      "valueKind": "numeric"
-    },
-    "ph.urinario.serum": {
-      "canonicalName": "pH Urinário",
-      "category": "🔬 EAS/Urina",
-      "defaultSpecimen": "blood",
-      "defaultUnit": null,
-      "id": "ph.urinario.serum",
       "loinc": null,
       "needsClinicalReview": true,
       "origem": [
