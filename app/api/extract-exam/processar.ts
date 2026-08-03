@@ -15,7 +15,7 @@
 
 import { extrairExames } from '@/lib/exames/extracao'
 import { montarEntrega } from '@/lib/exames/entrega'
-import { gravarEntrega, type ClienteExames } from '@/lib/exames/persistencia'
+import { gravarEntrega, inserirTolerandoImpressaoDigital, type ClienteExames } from '@/lib/exames/persistencia'
 import type { VeredictoPaciente } from '@/lib/exames/extracao'
 
 export type RespostaExtracao =
@@ -123,7 +123,10 @@ export async function processarIA(
     ? `${resultadoDaIA.observacoes}; ${MARCADOR_IA}`
     : MARCADOR_IA
 
-  const { erro } = await cliente.inserir([{
+  // C1 — mesma tolerância do caminho local: a coluna `impressao_digital` só
+  // existe depois do ALTER TABLE, e sem isto TODA gravação por este caminho
+  // falharia hoje. Ver `inserirTolerandoImpressaoDigital`.
+  const { erro } = await inserirTolerandoImpressaoDigital(cliente, [{
     paciente_id: pacienteId,
     tipo_exame: resultadoDaIA.tipo_exame || 'Exame',
     data_exame: resultadoDaIA.data_exame,

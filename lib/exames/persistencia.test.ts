@@ -122,3 +122,99 @@ describe('Correção 3 · busca de duplicata sem a coluna impressao_digital', ()
     expect(gravado[0].resultados[0].motivos_revisao).not.toContain('coleta possivelmente duplicada')
   })
 })
+
+// ══════════════════════════════════════════════════════════════════════════
+// C1 · o INSERT também precisa sobreviver à coluna que ainda não existe.
+//
+// O bloco acima cobria só a BUSCA de duplicata. O `.catch(() => null)` que a
+// protege não alcança o `insert`, e o insert nomeia `impressao_digital` em
+// TODA linha gravada. O PostgREST recusa um insert que nomeia coluna
+// desconhecida (PGRST204) — ou seja, hoje, em produção, TODA gravação de
+// exame falharia, pelos dois caminhos.
+//
+// A coluna vai passar a existir quando a médica rodar o ALTER TABLE. O código
+// tem que funcionar nos DOIS estados, e é isso que estes testes fixam: um
+// banco de antes e um de depois, exercitados lado a lado.
+// ══════════════════════════════════════════════════════════════════════════
+
+/** Banco ANTES do ALTER TABLE: recusa qualquer insert que nomeie a coluna. */
+function bancoSemAColuna() {
+  const gravadas: any[] = []
+  const cliente = clienteFake({
+    inserir: async linhas => {
+      if (linhas.some(l => 'impressao_digital' in l)) {
+        return {
+          erro: "Could not find the 'impressao_digital' column of 'exames' in the schema cache (PGRST204)",
+        }
+      }
+      gravadas.push(...linhas)
+      return { erro: null }
+    },
+  })
+  return { cliente, gravadas }
+}
+
+/** Banco DEPOIS do ALTER TABLE: aceita a coluna e a guarda. */
+function bancoComAColuna() {
+  const gravadas: any[] = []
+  const cliente = clienteFake({
+    inserir: async linhas => { gravadas.push(...linhas); return { erro: null } },
+  })
+  return { cliente, gravadas }
+}
+
+describe('C1 · a gravação funciona com e sem a coluna impressao_digital', () => {
+  it('coluna AUSENTE: o exame é gravado assim mesmo', async () => {
+    const { cliente, gravadas } = bancoSemAColuna()
+    const r = await gravarEntrega(cliente, 'pac-1', ENTREGA, 'laudo.pdf')
+    expect(r.ok).toBe(true)
+    expect(gravadas).toHaveLength(1)
+    // O resultado clínico chegou ao banco — que é o ponto todo.
+    expect(gravadas[0].resultados[0].nome).toBe('Glicose')
+  })
+
+  it('coluna AUSENTE: a linha regravada não nomeia mais a coluna', async () => {
+    const { cliente, gravadas } = bancoSemAColuna()
+    await gravarEntrega(cliente, 'pac-1', ENTREGA, 'laudo.pdf')
+    expect('impressao_digital' in gravadas[0]).toBe(false)
+  })
+
+  it('coluna PRESENTE: grava de primeira, COM a impressão digital', async () => {
+    const { cliente, gravadas } = bancoComAColuna()
+    const r = await gravarEntrega(cliente, 'pac-1', ENTREGA, 'laudo.pdf')
+    expect(r.ok).toBe(true)
+    // D6 volta a funcionar sozinho no dia do ALTER TABLE: sem esta linha, a
+    // detecção de duplicata ficaria desligada para sempre.
+    expect(gravadas[0].impressao_digital).toBe('abc123')
+  })
+
+  it('coluna PRESENTE: uma tentativa só, sem regravar nada', async () => {
+    let chamadas = 0
+    const r = await gravarEntrega(
+      clienteFake({ inserir: async () => { chamadas++; return { erro: null } } }),
+      'pac-1', ENTREGA, 'laudo.pdf')
+    expect(r.ok).toBe(true)
+    expect(chamadas).toBe(1)
+  })
+
+  it('erro de VERDADE continua sendo falha — não vira retentativa infinita', async () => {
+    let chamadas = 0
+    const r = await gravarEntrega(
+      clienteFake({ inserir: async () => { chamadas++; return { erro: 'permissão negada' } } }),
+      'pac-1', ENTREGA, 'laudo.pdf')
+    expect(r.ok).toBe(false)
+    expect(chamadas).toBe(1)
+  })
+
+  it('a coluna ausente na SEGUNDA tentativa não é engolida', async () => {
+    // Se o insert sem a coluna também falhar, a falha é real e tem que subir.
+    const r = await gravarEntrega(
+      clienteFake({
+        inserir: async () => ({
+          erro: "Could not find the 'impressao_digital' column of 'exames' in the schema cache (PGRST204)",
+        }),
+      }),
+      'pac-1', ENTREGA, 'laudo.pdf')
+    expect(r.ok).toBe(false)
+  })
+})

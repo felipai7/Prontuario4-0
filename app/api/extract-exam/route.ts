@@ -33,6 +33,11 @@ function clienteSupabase(supabase: SupabaseClient): ClienteExames {
       return data ? { dataEnvio: new Date(data.created_at).toLocaleDateString('pt-BR') } : null
     },
     async inserir(linhas) {
+      // Repassa a mensagem do PostgREST INTEIRA, sem reescrever: é nela que
+      // vem o código PGRST204 de coluna inexistente, e é por ele que
+      // `inserirTolerandoImpressaoDigital` decide regravar sem
+      // `impressao_digital` enquanto o ALTER TABLE não roda (C1). Encurtar
+      // esta string desliga a tolerância sem quebrar teste nenhum.
       const { error } = await supabase.from('exames').insert(linhas)
       return { erro: error?.message ?? null }
     },

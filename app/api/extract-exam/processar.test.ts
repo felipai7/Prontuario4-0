@@ -108,6 +108,50 @@ describe('D7 · o caminho da IA também para de fingir sucesso', () => {
   })
 })
 
+// C1 — o caminho da IA nomeia `impressao_digital` (vazia) na linha inserida,
+// e por isso morre exatamente igual ao caminho local enquanto a coluna não
+// existe. É o caminho de quem colou um print porque o PDF não foi reconhecido:
+// falhar aqui é falhar na última alternativa que a plantonista tinha.
+describe('C1 · os DOIS caminhos gravam com e sem a coluna impressao_digital', () => {
+  const bancoSemAColuna = () => {
+    const gravadas: any[] = []
+    return {
+      gravadas,
+      cliente: cliente({
+        inserir: async linhas => {
+          if (linhas.some(l => 'impressao_digital' in l)) {
+            return { erro: "Could not find the 'impressao_digital' column of 'exames' in the schema cache (PGRST204)" }
+          }
+          gravadas.push(...linhas)
+          return { erro: null }
+        },
+      }),
+    }
+  }
+
+  it('coluna AUSENTE · caminho da IA grava assim mesmo', async () => {
+    const { cliente: c, gravadas } = bancoSemAColuna()
+    const r = await processarIA(c, 'pac-1', RESULTADO_IA(), 'print-colado.png')
+    expect(r.ok).toBe(true)
+    expect(gravadas[0].resultados[0].nome).toBe('Potássio')
+  })
+
+  it('coluna AUSENTE · caminho local do PDF grava assim mesmo', async () => {
+    const { cliente: c, gravadas } = bancoSemAColuna()
+    const r = await processarPdf(c, 'pac-1', PDF(), 'laudo.pdf', 'Maria das Dores Silva')
+    expect(r.ok).toBe(true)
+    expect(gravadas).toHaveLength(1)
+  })
+
+  it('coluna PRESENTE · caminho da IA continua enviando o campo', async () => {
+    let gravado: any = null
+    await processarIA(
+      cliente({ inserir: async l => { gravado = l; return { erro: null } } }),
+      'pac-1', RESULTADO_IA(), 'print-colado.png')
+    expect('impressao_digital' in gravado[0]).toBe(true)
+  })
+})
+
 describe('flags da IA sobrevivem sem recálculo', () => {
   it('alterado e direcao chegam ao inserir EXATAMENTE como a IA devolveu', async () => {
     let gravado: any = null
