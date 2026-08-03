@@ -7,7 +7,7 @@
 // ══════════════════════════════════════════════════════════════════════════
 
 import { describe, it, expect } from 'vitest'
-import { processarPdf } from './processar'
+import { processarPdf, processarIA, type ResultadoIA } from './processar'
 // Relativo, não pelo alias `@/lib/exames/extracao/...`: o teste estrutural
 // `fronteira.test.ts` proíbe código de fora do módulo de importar um caminho
 // interno pelo alias — só o índice público (`@/lib/exames/extracao`) pode. O
@@ -76,6 +76,72 @@ describe('A-03 · cultura conta na decisão local-vs-IA', () => {
     if (r.ok) {
       expect(r.via).toBe('local')
       expect(r.registros).toBe(1)
+    }
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════
+// Tarefa 6b — `processarIA`: o mesmo contrato de resposta, mas para o
+// resultado que já veio pronto da IA (prints, texto colado, ou PDF que o
+// extrator local não reconheceu). NÃO passa por `montarEntrega`/
+// `adaptarParaExames`: esse caminho recalcularia `alterado`/`direcao` a
+// partir de `referenciaEstruturada`, campo que a IA nunca preenche (ela só
+// devolve texto livre de referência), e apagaria sinal que a IA já acertou.
+// ══════════════════════════════════════════════════════════════════════════
+
+const RESULTADO_IA = (): ResultadoIA => ({
+  tipo_exame: 'Bioquímica',
+  data_exame: '12/05/2026',
+  resultados: [
+    { nome: 'Potássio', valor: '6,2', unidade: 'mEq/L', referencia: '3,5 - 5,0', alterado: true, direcao: 'alto' },
+  ],
+  observacoes: null,
+})
+
+describe('D7 · o caminho da IA também para de fingir sucesso', () => {
+  it('falha de gravação vira resultado explícito, não sucesso', async () => {
+    const r = await processarIA(
+      cliente({ inserir: async () => ({ erro: 'permissão negada' }) }),
+      'pac-1', RESULTADO_IA(), 'print-colado.png')
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.erro).toMatch(/permissão negada/)
+  })
+})
+
+describe('flags da IA sobrevivem sem recálculo', () => {
+  it('alterado e direcao chegam ao inserir EXATAMENTE como a IA devolveu', async () => {
+    let gravado: any = null
+    await processarIA(
+      cliente({ inserir: async linhas => { gravado = linhas; return { erro: null } } }),
+      'pac-1', RESULTADO_IA(), 'print-colado.png')
+    const r = gravado[0].resultados[0]
+    expect(r.alterado).toBe(true)
+    expect(r.direcao).toBe('alto')
+    // Continua sendo o MESMO valor da IA, não um recálculo que por acaso bateu.
+    expect(r.valor).toBe('6,2')
+    expect(r.referencia).toBe('3,5 - 5,0')
+  })
+})
+
+describe('D10 · o marcador de IA é do registro, não do valor', () => {
+  it('observações do registro carregam o marcador; nenhum resultado individual carrega', async () => {
+    let gravado: any = null
+    await processarIA(
+      cliente({ inserir: async linhas => { gravado = linhas; return { erro: null } } }),
+      'pac-1', RESULTADO_IA(), 'print-colado.png')
+    expect(gravado[0].observacoes).toMatch(/Lido por IA/)
+    for (const r of gravado[0].resultados) {
+      expect(JSON.stringify(r)).not.toMatch(/Lido por IA/)
+    }
+  })
+
+  it('sucesso devolve o mesmo formato de resposta do caminho local', async () => {
+    const r = await processarIA(cliente(), 'pac-1', RESULTADO_IA(), 'print-colado.png')
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.via).toBe('ia')
+      expect(r.registros).toBe(1)
+      expect(r.duplicataDe).toBeNull()
     }
   })
 })
