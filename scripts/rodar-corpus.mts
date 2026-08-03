@@ -175,7 +175,14 @@ if (semNada.length) {
 // piso maior que o real — meça antes de escrever. O número é menor que as 912
 // anteriores porque essas linhas da tabela de evolução deixaram de virar
 // resultado (correção intencional, não regressão).
-const PISO_OBSERVACOES = 878
+//
+// 03/08/2026, revisão final: subiu de 878 para 879. O discriminador da
+// fronteira do history deixou de ser "a linha tem dígito?" e passou a ser
+// estrutural (rótulo × célula de valor), e o HUGO4 — que entregava ZERO
+// observação, com o laudo inteiro soterrado dentro da tabela de evolução —
+// passou a entregar 1. Nenhum dos 33 laudos perdeu observação na troca:
+// medido laudo a laudo, o diff tem uma linha só.
+const PISO_OBSERVACOES = 879
 const PISO_CULTURAS = 12
 if (totalObs < PISO_OBSERVACOES) {
   console.error(`✗ REGRESSÃO: ${totalObs} observações, piso é ${PISO_OBSERVACOES}`)

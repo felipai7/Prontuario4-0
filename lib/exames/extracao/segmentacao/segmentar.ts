@@ -16,10 +16,30 @@
 
 import type { DocumentText, LabProfile, Segment, SpecimenContext, TemporalRef, TextLine } from '../contratos'
 import { diaDe, marcadorDeColeta, SEM_DATA } from '../normalizadores/data'
-import { separarColunas } from '../extratores/colunas'
+import { separarColunas, ehCelulaDeValor, pareceRotuloDeExame } from '../extratores/colunas'
+
+/**
+ * O que um cabeçalho faz com o escopo de espécime vigente (R6).
+ *
+ * São TRÊS efeitos, não dois. Enquanto o terceiro não existia, ele era escrito
+ * como `null` — o mesmo valor de `'neutro'` — e a tabela de evolução caía no
+ * ramo da subseção neutra: abrir "Evolução do paciente" ZERAVA o espécime para
+ * sangue. Num laudo de líquor, a glicose de 30 mg/dL depois da tabela era
+ * gravada como GLICEMIA. Glicose baixa no LCR é marca registrada de meningite
+ * bacteriana; como glicemia ela lê como hipoglicemia, e o marcador de
+ * meningite nunca chega ao prontuário.
+ *
+ *  • `SpecimenContext` — o cabeçalho PROVA o espécime e o substitui.
+ *  • `'neutro'`        — não prova nada; o perfil decide entre voltar a sangue
+ *                        e manter o material vigente (`specimen.inherit`).
+ *  • `'preserva'`      — não é seção de material nenhum e NÃO ENCOSTA no
+ *                        escopo. Só a tabela de evolução, que é um recorte do
+ *                        histórico impresso no meio do laudo.
+ */
+type EfeitoNoEspecime = SpecimenContext | 'neutro' | 'preserva'
 
 /** Cabeçalhos que provam o espécime da seção que se inicia. */
-const CABECALHOS: [RegExp, SpecimenContext | null, Segment['kind']][] = [
+const CABECALHOS: [RegExp, EfeitoNoEspecime, Segment['kind']][] = [
   [/GASOMETRIA\s+ARTERIAL/i, 'arterialBlood', 'examSection'],
   [/GASOMETRIA\s+VENOSA/i, 'venousBlood', 'examSection'],
   [/\bGASOMETRIA\b/i, 'arterialBlood', 'examSection'],
@@ -35,10 +55,12 @@ const CABECALHOS: [RegExp, SpecimenContext | null, Segment['kind']][] = [
   [/HEMOGRAMA|ERITROGRAMA|ERITOGRAMA|LEUCOGRAMA|PLAQUETOGRAMA/i, 'blood', 'examSection'],
   // Tabela de resultados anteriores impressa pelo próprio laudo. Abre um
   // segmento que nenhum matcher alcança — ver Segment['kind'] no contrato.
-  [/EVOLU[ÇC][ÃA]O\s+DO\s+PACIENTE|HIST[ÓO]RICO\s+DE\s+RESULTADOS|RESULTADOS\s+ANTERIORES/i, null, 'history'],
+  // `'preserva'` e não `'neutro'`: a tabela de evolução não é seção de
+  // material nenhum, e mexer no escopo dela viola R6 — ver `EfeitoNoEspecime`.
+  [/EVOLU[ÇC][ÃA]O\s+DO\s+PACIENTE|HIST[ÓO]RICO\s+DE\s+RESULTADOS|RESULTADOS\s+ANTERIORES/i, 'preserva', 'history'],
   // Subseções NEUTRAS: não provam espécime. O que fazer com elas — voltar a
   // sangue ou manter o material vigente — é decisão do perfil.
-  [/COAGULOGRAMA|BIOQU[IÍ]MICA|SOROLOGIA|IMUNOLOGIA|CITOMETRIA|CITOLOGIA|EXAME\s+(MICROSC[ÓO]PICO|QU[IÍ]MICO|F[IÍ]SICO|BIOQU[IÍ]MICO)|CARACTERES\s+F[IÍ]SICOS/i, null, 'examSection'],
+  [/COAGULOGRAMA|BIOQU[IÍ]MICA|SOROLOGIA|IMUNOLOGIA|CITOMETRIA|CITOLOGIA|EXAME\s+(MICROSC[ÓO]PICO|QU[IÍ]MICO|F[IÍ]SICO|BIOQU[IÍ]MICO)|CARACTERES\s+F[IÍ]SICOS/i, 'neutro', 'examSection'],
 ]
 
 /** Espécime declarado pelo próprio laudo — a prova que R6 aceita sem ressalva. */
@@ -55,7 +77,7 @@ function especimeDeclarado(texto: string): SpecimenContext | null {
 }
 
 /** Uma linha é cabeçalho de seção quando casa e não traz valor junto. */
-function cabecalhoDe(linha: TextLine): { specimen: SpecimenContext | null; kind: Segment['kind'] } | null {
+function cabecalhoDe(linha: TextLine): { specimen: EfeitoNoEspecime; kind: Segment['kind'] } | null {
   const texto = linha.text.trim()
   // Um cabeçalho não tem número de resultado colado nele. "Glicose 92" não é
   // cabeçalho de bioquímica só por conter a palavra.
@@ -87,20 +109,43 @@ function cabecalhoDe(linha: TextLine): { specimen: SpecimenContext | null; kind:
  *    corte de coluna do matcher tabular (`separarColunas`, vão geométrico)
  *    para não reinventar onde fica a fronteira.
  *
- * 2. Nenhum dígito na LINHA INTEIRA. Título de exame não traz número; linha
- *    de resultado traz. Sem esta parte, uma linha da PRÓPRIA tabela de
- *    evolução cujo analito é sigla maiúscula ("TGO", "PCR", "RNI") fechava o
- *    segmento history no meio da tabela, e todas as linhas seguintes dela
- *    voltavam a virar resultado de agora — exatamente o defeito que esta
- *    tarefa existe para matar. Medido no HUGO2: duas tabelas de evolução
- *    vazando por siglas.
+ * 2. Nenhuma CÉLULA DE VALOR nas colunas seguintes. É aqui que a rodada 4
+ *    trocou o discriminador: até ela, a regra era "nenhum dígito na LINHA
+ *    INTEIRA", e essa regra erra nos dois sentidos, com uma consequência
+ *    clínica em cada um.
+ *
+ *    C2 — título de exame COM dígito nunca fechava a tabela: "DOSAGEM DE
+ *    VITAMINA B12", "VITAMINA D 25-OH", "T3", "T4 LIVRE", "CD4", "CA 19-9",
+ *    "CA 125", "HEMOGLOBINA A1C", "ANTI-HBS". O exame ficava soterrado dentro
+ *    do history e era descartado inteiro — o mesmo prejuízo das 328 linhas
+ *    do parágrafo acima, só que por analito.
+ *
+ *    C3 — linha da PRÓPRIA tabela SEM dígito fechava a tabela cedo demais.
+ *    Basta o analito não ter sido medido naquelas coletas: "TGO --- ---",
+ *    "PCR NR NR". A partir dali, toda linha da tabela voltava a virar
+ *    resultado DE AGORA, datada de hoje e sem marcador nenhum. É o pior modo
+ *    de falha do projeto — o número é plausível e nada denuncia que ele é de
+ *    outro dia.
+ *
+ *    A diferença entre os dois casos não é de classe de caractere, é de
+ *    ESTRUTURA, e a geometria já está medida: uma linha da tabela de
+ *    tendência é um rótulo seguido de VÁRIAS CÉLULAS DE VALOR (números,
+ *    traços de "não medido", "NR"); um título de bloco não tem célula de
+ *    valor nenhuma depois dele — no máximo o cabeçalho da coluna vizinha
+ *    ("Valores de Referência"), que é prosa. Medido no corpus real: das
+ *    linhas de history com primeira coluna em caixa alta pura, TODA cauda de
+ *    título é prosa e TODA cauda de linha de tabela traz número.
  */
+
 function pareceTituloDeSecao(linha: TextLine): boolean {
-  if (/\d/.test(linha.text)) return false
-  const primeiraColuna = separarColunas(linha)[0]?.texto ?? ''
-  const t = primeiraColuna.trim()
-  if (t.length === 0 || t.length > 60) return false
-  return /[A-ZÀ-Ú]/.test(t) && !/[a-zà-ú]/.test(t)
+  const colunas = separarColunas(linha)
+  const t = colunas[0]?.texto.trim() ?? ''
+  if (t.length > 60) return false
+  // Caixa alta pura: o laudo grafa título de exame em maiúsculas, e o analito
+  // de uma linha de tabela costuma vir em caixa mista ("Creatinina").
+  if (!/[A-ZÀ-Ú]/.test(t) || /[a-zà-ú]/.test(t)) return false
+  if (!pareceRotuloDeExame(t)) return false
+  return colunas.slice(1).every(c => !ehCelulaDeValor(c.texto))
 }
 
 /**
@@ -191,12 +236,19 @@ export function segmentar(
 
     const cabecalho = cabecalhoDe(linha)
     if (cabecalho) {
-      if (cabecalho.specimen !== null) {
+      if (cabecalho.specimen === 'preserva') {
+        // A tabela de evolução NÃO encosta no escopo de espécime — R6. Ver
+        // `EfeitoNoEspecime`: enquanto ela caía no ramo da subseção neutra,
+        // abrir a tabela num laudo de líquor devolvia o escopo a sangue e a
+        // glicose do LCR era gravada como glicemia.
+      } else if (cabecalho.specimen === 'neutro') {
+        if (!herdam.has(especimeCorrente)) {
+          // Subseção neutra num laboratório que não declara herança: volta ao
+          // padrão, que é o comportamento conservador.
+          especimeCorrente = 'blood'
+        }
+      } else {
         especimeCorrente = cabecalho.specimen
-      } else if (!herdam.has(especimeCorrente)) {
-        // Subseção neutra num laboratório que não declara herança: volta ao
-        // padrão, que é o comportamento conservador.
-        especimeCorrente = 'blood'
       }
       atual = abrir(linha.text.trim(), especimeCorrente, cabecalho.kind)
       continue
@@ -214,8 +266,13 @@ export function segmentar(
     // sem descarte (viola R1) e some do alcance dos matchers. Medido: com o
     // `continue`, 12 linhas do corpus real deixavam de ser lidas por esta
     // tarefa, que não é a dona desse assunto.
+    //
+    // O ESPÉCIME não é tocado aqui — nem ao abrir a tabela, nem ao fechá-la.
+    // A linha que fecha foi reconhecida pela FORMA: ela pode ser "DOSAGEM DE
+    // CREATININA" tanto num laudo de sangue quanto num de líquor, e não prova
+    // material nenhum. Zerar para sangue neste ponto era a segunda metade do
+    // mesmo defeito de R6 (ver `EfeitoNoEspecime`).
     if (atual?.kind === 'history' && pareceTituloDeSecao(linha)) {
-      if (!herdam.has(especimeCorrente)) especimeCorrente = 'blood'
       atual = abrir(linha.text.trim(), especimeCorrente, 'examSection')
     }
 

@@ -131,3 +131,66 @@ const RE_TEM_FAIXA =
 export function pareceReferencia(campo: string): boolean {
   return RE_TEM_FAIXA.test(campo.trim())
 }
+
+// ── Rótulo × célula de valor ────────────────────────────────────────────────
+//
+// As duas funções abaixo separam as DUAS COISAS que uma coluna pode ser numa
+// tabela de laudo: o RÓTULO (à esquerda, nomeia o exame) e a CÉLULA DE VALOR
+// (à direita, carrega o resultado daquela coleta).
+//
+// Moram aqui, e não em quem as usa, porque `segmentacao/segmentar.ts` e
+// `extratores/bloco.ts` precisavam exatamente da mesma distinção e cada um
+// tinha escrito a sua — as duas como "a linha tem dígito?". Essa versão erra
+// nos dois sentidos: reprova título legítimo com número no nome ("DOSAGEM DE
+// VITAMINA B12", "CA 19-9", "T4 LIVRE", "HEMOGLOBINA A1C") e aprova linha de
+// tabela cujo analito não foi medido ("TGO --- ---"). Duas cópias da mesma
+// heurística errada é o resíduo 7.B-15 do doador se reinstalando.
+
+/** Rótulos de "não medido" que ocupam uma célula da tabela de tendência. */
+const RE_CELULA_SEM_MEDIDA = /^(?:[-–—*.]+|NR|ND|NA|NT|N\/R|N\/D|N\/A)$/i
+
+/**
+ * A coluna é uma CÉLULA DE VALOR — o que só uma linha de dados tem.
+ *
+ * Célula vazia e traço contam: "TGO --- ---" é linha de tabela de um analito
+ * que não foi medido naquelas coletas, e é justamente ela que fazia a tabela
+ * de evolução "acabar" no meio, devolvendo todo o resto do histórico à tela
+ * como resultado de agora.
+ *
+ * Coluna com letra MINÚSCULA nunca é célula de valor: é cabeçalho ou prosa
+ * ("Valores de Referência", "mg/dL"). É o que distingue o título do HUGO — que
+ * divide a linha física com o cabeçalho da coluna de referência — de uma linha
+ * da tabela.
+ */
+export function ehCelulaDeValor(campo: string): boolean {
+  const t = campo.trim()
+  if (t.length === 0) return true
+  if (RE_CELULA_SEM_MEDIDA.test(t)) return true
+  return /\d/.test(t)
+}
+
+/** Enumerador de nota de rodapé: "1) OBSERVAÇÃO", "2. NOTA". Não nomeia exame. */
+const RE_ENUMERADOR = /^\d+\s*[).\]]\s/
+
+/** Número solto — não colado a letra, como o "12" de "B12" ou o "9" de "19-9". */
+const RE_NUMERO_SOLTO = /(?:^|\s)[+-]?[\d.,]+(?=\s|$)/g
+
+/**
+ * A coluna pode ser o RÓTULO de um exame.
+ *
+ * Aceita número NO NOME, que é o ponto: sem isso, todo exame cujo nome traz
+ * dígito ("VITAMINA B12", "VITAMINA D 25-OH", "T3", "T4 LIVRE", "CD4",
+ * "CA 19-9", "CA 125", "ANTI-HBS") ficava invisível para as duas camadas.
+ *
+ * Recusa o que é valor disfarçado de nome: coluna sem letra nenhuma ("7,370"),
+ * item de nota de rodapé ("1) ...") e coluna com DOIS OU MAIS números soltos —
+ * um nome de exame carrega no máximo um ("CA 125"), enquanto "TGO 88 75" é
+ * linha de tabela cujas células o corte geométrico não chegou a separar.
+ */
+export function pareceRotuloDeExame(campo: string): boolean {
+  const t = campo.trim()
+  if (t.length < 2) return false
+  if (!/[A-Za-zÀ-ÿ]/.test(t)) return false
+  if (RE_ENUMERADOR.test(t)) return false
+  return (t.match(RE_NUMERO_SOLTO) ?? []).length < 2
+}

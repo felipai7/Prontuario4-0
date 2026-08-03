@@ -17,7 +17,7 @@
 // ══════════════════════════════════════════════════════════════════════════
 
 import type { Matcher, MatchOutcome, ParseContext, Segment, SpecimenContext, TextLine } from '../contratos'
-import { separarColunas, separarValorUnidade, pareceReferencia } from './colunas'
+import { separarColunas, separarValorUnidade, pareceReferencia, pareceRotuloDeExame } from './colunas'
 import { resolverAnalito } from '../catalogo'
 import { ehNaoUsadoClinicamente } from '../normalizadores/valor'
 import { ehRotuloDeMetadado } from './metadados'
@@ -63,17 +63,25 @@ function variantesDeNome(texto: string): string[] {
 }
 
 /**
- * Um nome de exame candidato: sem dígito, sem dois-pontos.
+ * Um nome de exame candidato: parece rótulo, e não traz dois-pontos.
  *
  * O limite de comprimento da guarda de metadado (42 caracteres, feito para
  * separar rótulo de prosa) reprova títulos legítimos como o do TTPA, que tem
  * 46. Por isso a guarda é dispensada quando ALGUMA variante do nome resolve no
  * catálogo: constar do vocabulário clínico é evidência mais forte do que o
  * comprimento da linha.
+ *
+ * A recusa era "tem dígito" — a MESMA heurística que `segmentar.ts` usava para
+ * fechar o segmento history, com o mesmo defeito. Consertar só lá deixava o
+ * exame chegar ao matcher e morrer aqui: com a tabela de evolução fechando
+ * certo em "DOSAGEM DE VITAMINA B12", a linha "Resultado: 135 pg/mL" logo
+ * abaixo continuava virando descarte `noValueFound`, porque o título com
+ * dígito não era aceito como nome. Medido nesta correção: o B12 só apareceu
+ * quando as duas camadas passaram a usar `pareceRotuloDeExame`.
  */
 function pareceNomeDeExame(texto: string, especime: SpecimenContext): boolean {
   const t = texto.trim()
-  if (t.length < 2 || /\d/.test(t)) return false
+  if (!pareceRotuloDeExame(t)) return false
   // Dois-pontos desqualifica, EXCETO no rótulo "Exame: <NOME>", que é como o
   // Núcleo apresenta o título do bloco.
   if (t.includes(':') && !/^Exames?\s*[.:]/i.test(t)) return false
