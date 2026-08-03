@@ -279,7 +279,7 @@ describe('não é lacuna · o espécime do líquor não se perde na subseção n
   // laboratório, e a herança de espécime é dado do PERFIL (A3).
   const extrairComoImec = () => extrairExames({
     document: { bytes: pdfDeLinhas(LAUDO), filename: null },
-    hints: { labProfileId: 'imec', expectedCollectedAt: null },
+    hints: { labProfileId: 'imec', expectedCollectedAt: null, expectedPatientName: null },
     options: null,
   })
 

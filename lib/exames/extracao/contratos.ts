@@ -464,11 +464,28 @@ export interface Diagnostics {
 
 // ── Entrada e saída ────────────────────────────────────────────────────────
 
+/**
+ * Veredito da conferência entre o paciente da tela e o nome impresso no laudo.
+ *
+ * Declarado aqui, e não em `paciente/conferir.ts`, porque este arquivo é
+ * importado por `conferir.ts` (para `TextLine`) — declarar o tipo lá e
+ * importar de volta criaria um ciclo, e este módulo tem zero hoje (força
+ * apontada pela auditoria). Um sentido só: `contratos.ts` → `conferir.ts`.
+ */
+export type VeredictoPaciente = 'confere' | 'naoConfere' | 'nomeAusente' | 'naoPerguntado'
+
 export interface ExtractionHints {
   /** Só para conferência — jamais para preencher uma data que não foi lida (R8). */
   expectedCollectedAt: string | null
   /** Força um perfil, ignorando a detecção. */
   labProfileId: string | null
+  /**
+   * O nome do paciente da tela, para conferir se o laudo é dele.
+   *
+   * Vai DE FORA PARA DENTRO de propósito: o módulo devolve só um veredito, e
+   * o nome que está no laudo nunca sai daqui. Ver `paciente/conferir.ts`.
+   */
+  expectedPatientName: string | null
 }
 
 export interface ExtractionOptions {
@@ -494,6 +511,8 @@ export interface ExtractionResult {
   /** A7 — a camada acima decide como mostrar. */
   warnings: Warning[]
   diagnostics: Diagnostics
+  /** Veredito da conferência de paciente. NUNCA carrega o nome do laudo (D8). */
+  patientCheck: VeredictoPaciente
 }
 
 // ── Contexto de parse (A1 — imutável, passado por parâmetro) ───────────────

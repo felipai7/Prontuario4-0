@@ -30,6 +30,7 @@ import { extrairImagem } from './imagem/extrair'
 import { carregarCatalogo } from './catalogo'
 import perfilBase from './perfis/generic/perfil.json'
 import { detectar, perfilPorId } from './deteccao/detectar'
+import { conferirPaciente } from './paciente/conferir'
 
 export type {
   Analyte,
@@ -67,6 +68,7 @@ export type {
   TemporalRef,
   TextItem,
   TextLine,
+  VeredictoPaciente,
   Warning,
   WarningCode,
 } from './contratos'
@@ -269,5 +271,10 @@ export async function extrairExames(req: ExtractionRequest): Promise<ExtractionR
     discarded: [...motor.discarded, ...culturas.discarded, ...imagens.discarded],
     warnings,
     diagnostics,
+    // Único ponto de retorno desta função: cobre também o PDF ilegível, cujo
+    // `texto.lines` fica vazio e resolve sozinho para 'nomeAusente' (havia
+    // pergunta, não havia como responder) ou 'naoPerguntado' (não havia
+    // pergunta) — sem caminho de falha separado para tratar à parte.
+    patientCheck: conferirPaciente(texto.lines, req.hints?.expectedPatientName ?? null),
   }
 }
