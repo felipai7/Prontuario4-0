@@ -30,7 +30,7 @@ export type RespostaExtracao =
       conferenciaPaciente: VeredictoPaciente
       duplicataDe: string | null
     }
-  | { ok: false; erro: string }
+  | { ok: false; erro: string; diagnostico?: Record<string, unknown> }
 
 /**
  * Extrai localmente e GRAVA. Devolve o que de fato aconteceu — nunca "ok"
@@ -60,7 +60,20 @@ export async function processarPdf(
     resultado.cultures.length === 0 &&
     resultado.imaging.length === 0
   ) {
-    return { ok: false, erro: 'NAO_RECONHECIDO' }
+    // O veredito da leitura, para o log da rota. Sem conteúdo de laudo (R10):
+    // um identificador de perfil, códigos de aviso tipados e contagens.
+    return {
+      ok: false,
+      erro: 'NAO_RECONHECIDO',
+      diagnostico: {
+        perfil: resultado.detection.profileId,
+        confianca: Number(resultado.detection.confidence.toFixed(2)),
+        avisos: resultado.warnings.map(w => w.code),
+        paginas: resultado.diagnostics.pageCount,
+        linhas: resultado.diagnostics.lineCount,
+        descartes: resultado.discarded.length,
+      },
+    }
   }
 
   const entrega = montarEntrega(resultado, false)
