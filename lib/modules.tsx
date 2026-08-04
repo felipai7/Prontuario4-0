@@ -206,7 +206,9 @@ export const MODULOS: readonly ModuloDef[] = [
     id: 'plantonista',
     label: '🩺 Médico Plantonista',
     profissaoDona: 'medico',
-    tabs: [painelPlantao, balanco, sinais, hemodinamica, neurologico, ventilatorio, examesLab, examesImagem],
+    // Exames Laboratoriais logo após o Balanço, a pedido do plantonista: são as
+    // duas abas mais consultadas na passagem de plantão, e ficavam nas pontas.
+    tabs: [painelPlantao, balanco, examesLab, sinais, hemodinamica, neurologico, ventilatorio, examesImagem],
   },
   {
     id: 'intensivista',

@@ -123,7 +123,12 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs,
             {ultimoPeriodo && bhUltimo ? (
               <p className="text-sm text-slate-700">
                 Último turno: {bhUltimo.parcial > 0 ? '+' : ''}{bhUltimo.parcial.toFixed(0)} mL
-                (diurese {ultimoPeriodo.diurese} mL{ultimoPeriodo.horas_periodo > 0 && <> → {fmtNum(ultimoPeriodo.diurese / ultimoPeriodo.horas_periodo, 1)} mL/h</>})
+                {/* mL/Kg/h, e não mL/h: é a forma em que se lê oligúria (<0,5) e
+                    anúria (<0,1). Mesma conta e mesmas 2 casas do cartão de
+                    Débito Urinário da aba Balanço, inclusive o fallback de 70 Kg
+                    — que é sinalizado, porque um limiar clínico calculado sobre
+                    peso presumido não pode passar por medido. */}
+                (diurese {ultimoPeriodo.diurese} mL{ultimoPeriodo.horas_periodo > 0 && <> → {fmtNum(ultimoPeriodo.diurese / (paciente.peso_kg ?? 70) / ultimoPeriodo.horas_periodo, 2)} mL/Kg/h{!paciente.peso_kg && ' (peso 70 Kg)'}</>})
                 · Acum. móvel: {bhMovel > 0 ? '+' : ''}{bhMovel.toFixed(0)} mL
               </p>
             ) : <p className="text-sm text-slate-400">Sem balanço registrado.</p>}
