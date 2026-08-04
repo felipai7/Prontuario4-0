@@ -170,11 +170,24 @@ export async function POST(request: NextRequest) {
 
     const resultado = await processarIA(clienteSupabase(supabase), pacienteId, resultadoIA, nomeArquivo ?? null)
     return NextResponse.json(resultado, { status: resultado.ok ? 200 : 500 })
-  } catch {
+  } catch (e) {
     // R10 — a mensagem original de exceção pode carregar trecho do que foi
     // enviado. O módulo local nunca lança (contrato de `extrairExames`), mas
     // o caminho da IA pode (rede, parsing, etc.), e a mensagem dele não é
     // confiável para devolver ao navegador crua.
+    //
+    // O que VAI para o log é o NOME do erro e as três primeiras linhas da
+    // pilha — arquivo e linha, nunca a mensagem. Isso diz ONDE quebrou sem
+    // dizer O QUE estava sendo lido, que é a distinção que R10 exige.
+    //
+    // Existe porque a primeira falha em produção foi impossível de
+    // diagnosticar: a tela dizia "não foi possível ler" e o servidor não
+    // guardava nada. Tirar a mensagem sem pôr um diagnóstico no lugar deixa
+    // o defeito invisível dos dois lados.
+    const err = e as { name?: string; stack?: string }
+    console.error('[extract-exam] falhou:', err?.name ?? 'erro sem nome',
+      (err?.stack ?? '').split('\n').slice(1, 4).join(' | '))
+
     return NextResponse.json(
       { ok: false, erro: 'Não foi possível ler este laudo. Tente novamente ou use outro formato.' },
       { status: 500 },
