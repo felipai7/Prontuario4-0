@@ -243,6 +243,46 @@ describe('R6 · o espécime não vaza de uma seção para a seguinte', () => {
   })
 })
 
+describe('gasometria: o analisador escreve o íon com a carga', () => {
+  // Achado ao subir um laudo pela TELA, não na suíte. O analisador do HOC
+  // escreve "K+", "NA+" e "CA++"; o catálogo herdado tem só "K", "NA", "CA".
+  // Sem as variantes, o sódio de uma gasometria ARTERIAL resolvia para o sódio
+  // SÉRICO — outro analito, outra linha no histórico do paciente, e um valor
+  // que parece certo.
+  const LAUDO = [
+    'GASOMETRIA ARTERIAL',
+    'Coleta: 06/04/2026',
+    'PH   :  7,34   7,35 A 7,45',
+    'K+   :  4,7   mEq/L   3,5 A 5,5 mEq/L',
+    'NA+   :  133,0   mEq/L   135,0 A 150,0 mEq/L',
+  ]
+
+  it('K+ e NA+ ficam no escopo arterial, não no sérico', async () => {
+    const nomes = (await extrair(LAUDO)).observations.map(o => o.canonicalName)
+    expect(nomes).toContain('Potássio (Arterial)')
+    expect(nomes).toContain('Sódio (Arterial)')
+    expect(nomes).not.toContain('Sódio')
+  })
+
+  it('numa gasometria venosa, os mesmos rótulos vão para o escopo venoso', async () => {
+    const r = await extrair([
+      'GASOMETRIA VENOSA',
+      'Coleta: 06/04/2026',
+      'NA+   :  133,0   mEq/L   135,0 A 150,0 mEq/L',
+    ])
+    expect(r.observations[0]?.canonicalName).toBe('Sódio (Venosa)')
+  })
+
+  it('fora de gasometria, "Sódio" continua sendo o sérico', async () => {
+    const r = await extrair([
+      'BIOQUIMICA',
+      'Coleta: 06/04/2026',
+      'Sódio   :  140   mEq/L   135 - 145',
+    ])
+    expect(r.observations[0]?.canonicalName).toBe('Sódio')
+  })
+})
+
 describe('resultado por palavra não é descartado', () => {
   // A F9 mostrou que exigir um DÍGITO no valor jogava fora todo resultado
   // qualitativo — cor, aspecto, sedimento urinário. Exame conhecido com algo
@@ -282,6 +322,100 @@ describe('resultado por palavra não é descartado', () => {
       'Creatinina          1,42     mg/dL      0,60 - 1,30',
     ])
     expect(r.observations).toHaveLength(1)
+  })
+})
+
+describe('leucograma abreviado do PIOX', () => {
+  // Achado na revisão de paridade: dez exames perdidos em cinco laudos, e o
+  // absoluto virando percentual noutros. Três causas somadas, todas nesta
+  // única linha de laudo:
+  //
+  //   "Neutr.Totais..: 59  %   4.307 /mm³   51 a 65 %   2.295 a 6.500 /mm³"
+  //
+  //  1. o ponto DENTRO do nome não era aceito, e a linha inteira sumia;
+  //  2. a regra do diferencial vivia só no matcher tabular, e o PIOX passa
+  //     pelo de dois-pontos — o mesmo campo da tabela vinha em percentual num
+  //     laboratório e em absoluto noutro;
+  //  3. a regra testava o nome BRUTO, e a lista guarda o canônico.
+  // Colunas em POSIÇÃO, copiadas do laudo real. Escrita com espaços, esta
+  // fixture fundia as colunas de outro jeito e o teste provava a coisa errada.
+  const bytes = pdfTabular([
+    ['LEUCOGRAMA'],
+    ['Data de Coleta: 03/04/2026'],
+    ['Relativos', 'Absolutos', 'V.R. Relativos', 'V.R. Absolutos'],
+    ['Bastonetes....: 1', '%', '73 /mm³', '1 a 5 %', '45 a 500 /mm³'],
+    ['Neutr.Totais..: 59', '%', '4.307 /mm³', '51 a 65 %', '2.295 a 6.500 /mm³'],
+    ['Linf.Atípicos.: 0', '%', '0 /mm³', '0 %', '0 /mm³'],
+  ], [50, 145, 175, 260, 360])
+
+  const extrairLeucograma = () =>
+    extrairExames({ document: { bytes, filename: null }, hints: null, options: null })
+
+  it('o nome abreviado com ponto no meio é reconhecido', async () => {
+    const nomes = (await extrairLeucograma()).observations.map(o => o.canonicalName)
+    expect(nomes).toContain('Neutrófilos')
+    expect(nomes).toContain('Linfócitos Atípicos')
+  })
+
+  it('o absoluto vence aqui também, e não só no layout tabular', async () => {
+    const r = await extrairLeucograma()
+    const porNome = new Map(r.observations.map(o => [o.canonicalName, o]))
+    expect(porNome.get('Neutrófilos')?.value).toMatchObject({ value: 4307 })
+    expect(porNome.get('Bastonetes')?.value).toMatchObject({ value: 73 })
+    expect(porNome.get('Neutrófilos')?.unit.canonical).toBe('/mm³')
+  })
+})
+
+describe('título de bloco rotulado (NUCLEO)', () => {
+  // O Núcleo escreve o NOME do exame como valor de um rótulo:
+  //
+  //     Exame: CREATININA
+  //     Material: SORO
+  //     Resultado.............: 6,7   mg/dL
+  //     Valores de referência          ← tabela por faixa etária
+  //     Recém-nascidos: 0.56-1.2 mg/dL
+  //
+  // O candidato a título era "Exame:", que é metadado, e o bloco inteiro
+  // ficava órfão. Cinco exames de rotina — creatinina, ureia, potássio, sódio
+  // e PCR — perdidos num único laudo.
+  const LAUDO = [
+    'Id Exame: 29',
+    'Exame: CREATININA',
+    'Material: SORO',
+    'Coleta: 05/04/2026',
+    'Resultado.............: 6,7   mg/dL',
+    'Valores de referência',
+    'Recém-nascidos: 0.56-1.2 mg/dL',
+    '2 sem. 1 ano: 0.41-0.64 mg/dL',
+    'Id Exame: 31',
+    'Exame: POTASSIO',
+    'Material: SORO',
+    'Resultado.............: 5,5   mmol/L',
+  ]
+
+  it('"Exame: <NOME>" é reconhecido como título do bloco', async () => {
+    const nomes = (await extrair(LAUDO)).observations.map(o => o.canonicalName)
+    expect(nomes).toContain('Creatinina')
+    expect(nomes).toContain('Potássio')
+  })
+
+  it('a tabela de faixas por idade não vira resultado', async () => {
+    const r = await extrair(LAUDO)
+    // "Recém-nascidos: 0.56-1.2" tem a forma de um resultado e não é um.
+    expect(r.observations.map(o => o.rawName)).not.toContain('Recém-nascidos')
+    expect(r.observations.find(o => o.canonicalName === 'Creatinina')?.value)
+      .toMatchObject({ kind: 'numeric', value: 6.7 })
+  })
+
+  it('o rótulo "Exame" sozinho continua sendo metadado', async () => {
+    const r = await extrair([
+      'BIOQUIMICA',
+      'Coleta: 05/04/2026',
+      'Exame: 12345',
+      'Creatinina          1,42     mg/dL      0,60 - 1,30',
+    ])
+    expect(r.observations).toHaveLength(1)
+    expect(r.observations[0]!.canonicalName).toBe('Creatinina')
   })
 })
 

@@ -15,6 +15,7 @@ import analitosJson from './analitos.json'
 import sinonimosJson from './sinonimos.json'
 import qualitativosJson from './qualitativos.json'
 import unidadesJson from './unidades.json'
+import gruposJson from './grupos.json'
 
 /** Chave de busca: NFC, maiúsculo, espaços colapsados. Igual à da migração. */
 export function chaveSinonimo(nome: string): string {
@@ -35,11 +36,18 @@ const CATALOGO: Catalog = congelarProfundo({
   synonyms: sinonimosJson.synonyms as Record<string, string>,
   qualitative: qualitativosJson.codes as unknown as Record<string, QualitativeCode>,
   units: unidadesJson.canonical as Record<string, string>,
+  groupOrder: gruposJson.order,
 })
 
 export function carregarCatalogo(): Catalog {
   return CATALOGO
 }
+
+// Os grupos clínicos vivem em `lib/exames/grupos.ts`, que lê o mesmo
+// `grupos.json` sem arrastar o catálogo inteiro para o bundle do navegador.
+// Reexportados aqui para quem já tem o catálogo em mãos; há teste garantindo
+// que `grupos.json` e `analitos.json` não divirjam.
+export { grupoDoNome, gruposEmOrdem, nomeCanonico } from '../../grupos'
 
 /**
  * Vocabulário restrito a um espécime (R6).

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { carregarCatalogo, chaveSinonimo, resolverAnalito } from './index'
+import { carregarCatalogo, chaveSinonimo, resolverAnalito, grupoDoNome, gruposEmOrdem, nomeCanonico } from './index'
 import analitos from './analitos.json'
 import sinonimos from './sinonimos.json'
 import especimes from './especimes.json'
@@ -198,6 +198,167 @@ describe('R3 · o catálogo carrega vocabulário, não interpretação', () => {
   it('descrição física do líquor não virou código qualitativo', () => {
     for (const termo of qualitativos.physicalDescription) {
       expect(qualitativos.codes, termo).not.toHaveProperty(termo)
+    }
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════
+// GRUPOS CLÍNICOS — revisão da Juliana, 03/08/2026.
+//
+// Até esta data o campo `category` era null nos 285 analitos e o agrupamento
+// vivia em doze expressões regulares dentro de `ExamesTab.tsx`, testadas
+// contra o NOME EXIBIDO. Os testes abaixo travam os defeitos que essa escolha
+// produzia, e que só apareceram quando alguém foi medir.
+// ══════════════════════════════════════════════════════════════════════════
+
+describe('grupos são dado clínico, não regex de tela', () => {
+  const todos = Object.values(catalogo.analytes)
+
+  it('todo analito tem grupo — nenhum fica para trás', () => {
+    const sem = todos.filter(a => !a.category).map(a => a.canonicalName)
+    expect(sem).toEqual([])
+  })
+
+  it('todo grupo usado existe na ordem de exibição', () => {
+    const ordem = new Set(gruposEmOrdem())
+    const forasteiros = [...new Set(todos.map(a => a.category))].filter(g => !ordem.has(g))
+    expect(forasteiros).toEqual([])
+  })
+
+  it('grupos.json e analitos.json não divergem', () => {
+    // grupos.json existe para a tela não carregar os 145 KB do catálogo. Ter
+    // duas cópias do mesmo dado só é aceitável com esta trava.
+    for (const a of todos) {
+      expect(grupoDoNome(a.canonicalName), a.canonicalName).toBe(a.category)
+    }
+  })
+
+  it('a ordem dos grupos não tem repetição nem buraco', () => {
+    const ordem = gruposEmOrdem()
+    expect(new Set(ordem).size).toBe(ordem.length)
+    expect(ordem.length).toBeGreaterThan(0)
+  })
+})
+
+describe('cada material no seu grupo', () => {
+  // O defeito que motivou tudo: agrupar por regex sobre o nome exibido jogava
+  // exame de um material dentro do grupo de outro. "Leucócitos (U)" casava com
+  // /leucócit/ e aparecia entre as células do sangue; "pH (U)" casava com
+  // /\bph\b/ e aparecia na gasometria.
+  it('sedimento urinário NUNCA cai no hemograma', () => {
+    for (const n of ['Leucócitos (U)', 'Hemácias (U)', 'Hemoglobina (U)']) {
+      expect(grupoDoNome(n), n).toBe('🔬 EAS/Urina')
+    }
+  })
+
+  it('pH urinário NUNCA cai na gasometria', () => {
+    expect(grupoDoNome('pH (U)')).toBe('🔬 EAS/Urina')
+  })
+
+  it('citologia do líquor NUNCA cai no hemograma', () => {
+    for (const n of ['Neutrófilos (LCR)', 'Linfócitos (LCR)', 'Hemácias (LCR)',
+                     'Leucócitos (LCR)', 'Monócitos (LCR)', 'Eosinófilos (LCR)']) {
+      expect(grupoDoNome(n), n).toBe('🧠 Líquor')
+    }
+  })
+
+  it('pH e glicose do líquor ficam no líquor', () => {
+    expect(grupoDoNome('pH (LCR)')).toBe('🧠 Líquor')
+    expect(grupoDoNome('Glicose (LCR)')).toBe('🧠 Líquor')
+  })
+
+  it('o que caía em "Outros" por descuido do padrão agora tem grupo', () => {
+    // Índices plaquetários: o padrão procurava "mpv", em inglês.
+    for (const n of ['VPM', 'PDW', 'PCT']) expect(grupoDoNome(n), n).toBe('🩸 Hemograma')
+    // Coagulação: o padrão tinha "tap\b", que não casa com "TP".
+    for (const n of ['TP - Atividade', 'TP (segundos)', 'Tempo de Coagulação',
+                     'Tempo de Sangramento', 'Prova do Laço']) {
+      expect(grupoDoNome(n), n).toBe('🩻 Coagulação')
+    }
+    // Marcador cardíaco: o padrão exigia fronteira de palavra antes de "bnp".
+    expect(grupoDoNome('NT-proBNP')).toBe('🫀 Cardíaco')
+    // Eletrólitos da gasometria: o padrão aceitava "(gaso.)", não "(Venosa)".
+    for (const n of ['Sódio (Venosa)', 'Potássio (Arterial)', 'Glicose (Venosa)']) {
+      expect(grupoDoNome(n), n).toBe('💨 Gasometria')
+    }
+    // Não existia grupo de lipídios nem de sorologias.
+    for (const n of ['Colesterol Total', 'HDL', 'LDL', 'Triglicérides']) {
+      expect(grupoDoNome(n), n).toBe('🫀 Lipídios')
+    }
+    for (const n of ['Influenza A', 'Influenza B', 'COVID-19 Ag']) {
+      expect(grupoDoNome(n), n).toBe('🦠 Sorologias')
+    }
+  })
+})
+
+describe('nomes padronizados · 03/08/2026', () => {
+  // Cinco pares divergiam entre si dentro do próprio catálogo, e três eram o
+  // MESMO exame em dois registros. O banco não foi reescrito — decisão da
+  // Juliana, por ser a opção que não toca em dado de paciente —, então a
+  // grafia antiga PRECISA continuar resolvendo, ou um laudo já processado
+  // deixa de casar com um novo.
+  const antesEDepois: [string, string][] = [
+    ['Lactato Venoso', 'Lactato (Venosa)'],
+    ['O2 Sat (Arterial)', 'SatO2 (Arterial)'],
+    ['O2 Sat (Venosa)', 'SatO2 (Venosa)'],
+    ['Hct (Arterial)', 'Hematócrito (Arterial)'],
+    ['Hct (Venosa)', 'Hematócrito (Venosa)'],
+    ['Pesquisa De Fungos (LCR)', 'Pesquisa de Fungos (LCR)'],
+    ['Cloretos', 'Cloro'],
+    ['pH Urinário', 'pH (U)'],
+    ['DHL', 'LDH'],
+  ]
+
+  it('a grafia antiga continua resolvendo, e chega no analito novo', () => {
+    for (const [antes, depois] of antesEDepois) {
+      expect(resolverAnalito(antes)?.canonicalName, antes).toBe(depois)
+    }
+  })
+
+  it('todo nome canônico resolve para si mesmo', () => {
+    // A renomeação de 03/08 deixou 28 analitos sem sinônimo para o próprio
+    // nome: o campo mudou e a tabela de busca não. O E2 pegou quatro deles;
+    // este teste cobre os 266.
+    for (const a of Object.values(catalogo.analytes)) {
+      expect(resolverAnalito(a.canonicalName)?.id, a.canonicalName).toBe(a.id)
+    }
+  })
+
+  it('o par arterial/venoso usa a mesma base do exame sem sufixo', () => {
+    const base = (n: string) => n.replace(/\s*\((Arterial|Venosa)\)$/, '')
+    for (const a of Object.values(catalogo.analytes)) {
+      if (!/\((Arterial|Venosa)\)$/.test(a.canonicalName)) continue
+      const semSufixo = Object.values(catalogo.analytes)
+        .find(x => x.canonicalName === base(a.canonicalName))
+      // Nem todo par tem versão sem sufixo; quando tem, os nomes têm que bater.
+      if (semSufixo) expect(base(a.canonicalName), a.canonicalName).toBe(semSufixo.canonicalName)
+    }
+  })
+
+  it('pH urinário deixou de estar catalogado como exame de sangue', () => {
+    // "pH Urinário" era `ph.urinario.serum`: pH de urina com espécime sangue.
+    // Ao fundir com `pH (U)` isso caiu junto.
+    expect(resolverAnalito('pH Urinário')?.defaultSpecimen).toBe('urine')
+  })
+})
+
+describe('grupos.json carrega a grafia canônica, não só o grupo', () => {
+  it('a busca ignora caixa e devolve a grafia do catálogo', () => {
+    // Sem isto, "Pesquisa De Fungos (LCR)" (grafia antiga, ainda no banco) e
+    // "Pesquisa de Fungos (LCR)" viravam duas linhas da tabela de exames.
+    expect(nomeCanonico('PESQUISA DE FUNGOS (LCR)')).toBe('Pesquisa de Fungos (LCR)')
+    expect(nomeCanonico('pesquisa de fungos (lcr)')).toBe('Pesquisa de Fungos (LCR)')
+    expect(nomeCanonico('Pesquisa De Fungos (LCR)')).toBe('Pesquisa de Fungos (LCR)')
+  })
+
+  it('nome fora do catálogo devolve null, e não um chute', () => {
+    expect(nomeCanonico('Xisantopina Refratada')).toBeNull()
+    expect(grupoDoNome('Xisantopina Refratada')).toBeNull()
+  })
+
+  it('todo analito se encontra pela própria grafia', () => {
+    for (const a of Object.values(catalogo.analytes)) {
+      expect(nomeCanonico(a.canonicalName), a.canonicalName).toBe(a.canonicalName)
     }
   })
 })

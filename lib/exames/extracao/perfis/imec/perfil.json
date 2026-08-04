@@ -37,7 +37,9 @@
   },
   "referenceBlocks": [],
   "specimen": {
-    "inherit": [],
+    "inherit": [
+      "csf"
+    ],
     "fromMaterialLine": false
   }
 }

@@ -201,6 +201,12 @@ const NAO_USADOS = ['IMUNE', 'NÃO IMUNE', 'NAO IMUNE']
 const SINONIMOS_EXTRA: Record<string, string> = {
   'O2SAT': 'O2 Sat', '02SAT': 'O2 Sat', 'SATO2': 'O2 Sat', 'SAT O2': 'O2 Sat',
   'MIELOBLASTOS': 'Mieloblastos',
+  // Abreviações do leucograma do PIOX, que escreve o diferencial encurtado
+  // para caber na coluna: "Neutr.Totais..:", "Linf.Atípicos.:".
+  'NEUTR.TOTAIS': 'Neutrófilos', 'NEUTR TOTAIS': 'Neutrófilos',
+  'NEUTROFILOS TOTAIS': 'Neutrófilos', 'NEUTRÓFILOS TOTAIS': 'Neutrófilos',
+  'LINF.ATÍPICOS': 'Linfócitos Atípicos', 'LINF.ATIPICOS': 'Linfócitos Atípicos',
+  'LINF ATÍPICOS': 'Linfócitos Atípicos', 'LINF ATIPICOS': 'Linfócitos Atípicos',
 }
 
 // ── Diferencial leucocitário (decisão clínica de 31/07/2026) ────────────────
@@ -413,6 +419,15 @@ for (const [contexto, especime] of [['Arterial', 'arterialBlood'], ['Venosa', 'v
   for (const [bruto, canonico] of Object.entries(D.GASO_PARAMS as Record<string, string | null>)) {
     if (!canonico) continue
     registrarPorEspecime(especime, bruto, `${canonico} (${contexto})`, 'GASO_PARAMS')
+    // O analisador escreve o ÍON, com a carga: "K+", "NA+", "CL-". O catálogo
+    // herdado tem só "K", "NA", "CL". Sem estas variantes, o sódio de uma
+    // gasometria arterial resolvia para o sódio SÉRICO — outro analito, outra
+    // linha no histórico do paciente.
+    if (bruto.length <= 3) {
+      for (const carga of ['+', '++', '-']) {
+        registrarPorEspecime(especime, `${bruto}${carga}`, `${canonico} (${contexto})`, 'GASO_PARAMS')
+      }
+    }
   }
   for (const [bruto, canonico] of Object.entries((D.GASO_SPECIAL_NAMES as any)[contexto] ?? {})) {
     registrarPorEspecime(especime, bruto, canonico as string, 'GASO_SPECIAL_NAMES')
@@ -441,7 +456,35 @@ for (const ctx of ['Arterial', 'Venosa']) {
     geradosPorRegra.push(especial as string)
   }
 }
+/**
+ * Correção clínica de 01/08/2026 nos materiais de cultura.
+ *
+ * O doador colapsa TODA cultura de vigilância em "MRSA". Nos laudos do corpus,
+ * "CULTURA DE VIGILÂNCIA EPIDEMIOLÓGICA - SWAB ANAL" declara textualmente que
+ * pesquisou "Enterococcus resistentes a Vancomicina" — é VRE, e MRSA é
+ * Staphylococcus aureus. Rotular um pelo outro no prontuário afirma um germe
+ * que o exame não procurou.
+ *
+ * A correção não substitui um palpite por outro: a vigilância genérica passa a
+ * se chamar apenas "Cultura de Vigilância", sem afirmar alvo nenhum. Só quando
+ * o laudo DIZ "pesquisa de MRSA" é que o nome carrega o germe.
+ */
+const CULTURAS_CORRIGIDAS: Record<string, string> = {
+  ...(D.CULTURE_TYPES as Record<string, string>),
+  'CULTURA DE VIGILÂNCIA': 'Cultura de Vigilância',
+  'CULTURA DE VIGILANCIA': 'Cultura de Vigilância',
+  'CULTURA DE VIGILÂNCIA EPIDEMIOLÓGICA': 'Cultura de Vigilância',
+  'CULTURA DE VIGILANCIA EPIDEMIOLOGICA': 'Cultura de Vigilância',
+  'CULTURA DE VIGILÂNCIA - PESQUISA DE MRSA': 'Vigilância MRSA',
+  'PESQUISA DE MRSA': 'Vigilância MRSA',
+  'SWAB ANAL': 'Swab Anal',
+  'SWAB NASAL': 'Swab Nasal',
+  'VIGILÂNCIA': 'Cultura de Vigilância',
+  'VIGILANCIA': 'Cultura de Vigilância',
+}
+
 for (const nome of Object.values(D.CULTURE_TYPES as Record<string, string>)) geradosPorRegra.push(nome)
+for (const nome of Object.values(CULTURAS_CORRIGIDAS)) geradosPorRegra.push(nome)
 
 for (const nome of geradosPorRegra) {
   const id = registrarAnalito(nome, 'regra')
@@ -474,9 +517,16 @@ for (const [, nomes] of porChaveFrouxa) {
 // Esperado hoje: zero. Se um dia aparecer item aqui, é uma regra nova emitindo
 // nome que ninguém cadastrou — a família exata do E2.
 const vocabularioDoador = new Set([...(D.PARAM_WHITELIST as Set<string>)].map(chaveSinonimo))
+// Vocabulário NOVO, autorado aqui por decisão clínica: não estar no doador é o
+// esperado, não um conflito. O que este cheque procura é regra emitindo nome
+// que NINGUÉM cadastrou.
+const autorados = new Set(
+  ['Cultura de Vigilância', 'Vigilância MRSA', 'Swab Anal', 'Swab Nasal']
+    .map(chaveSinonimo),
+)
 for (const nome of [...new Set(geradosPorRegra)].sort()) {
   const k = chaveSinonimo(nome)
-  if (!vocabularioDoador.has(k)) {
+  if (!vocabularioDoador.has(k) && !autorados.has(k)) {
     conflitos.push({ tipo: 'geradoPorRegraForaDoVocabulario', detalhe: `"${nome}"` })
   }
 }
@@ -510,7 +560,38 @@ const analitosLimpos = Object.fromEntries(
   }),
 )
 
-escrever('analitos.json', { version: VERSAO, analytes: analitosLimpos })
+// ── Não destruir a revisão clínica ────────────────────────────────────────
+// `category` é decisão da médica, tomada exame por exame fora deste script, e
+// `analitos.json` é sobrescrito inteiro aqui. Sem esta preservação, rodar a
+// migração de novo devolveria os 265 analitos a `category: null` e o
+// agrupamento inteiro sumiria em silêncio — o arquivo continuaria válido, a
+// suíte continuaria verde, e a tela perderia os grupos.
+//
+// O mesmo vale para analitos EXCLUÍDOS na revisão: ressuscitá-los traria de
+// volta duplicatas que ela já resolveu ("Cloro" e "Cloretos", "DHL" e "LDH").
+const anterior: Record<string, any> = existsSync(join(DESTINO, 'analitos.json'))
+  ? JSON.parse(readFileSync(join(DESTINO, 'analitos.json'), 'utf8')).analytes
+  : {}
+let categoriasPreservadas = 0
+let ressurreicoesBloqueadas = 0
+const analitosFinais: Record<string, any> = {}
+for (const [id, a] of Object.entries(analitosLimpos) as [string, any][]) {
+  const velho = anterior[id]
+  if (Object.keys(anterior).length > 0 && !velho) {
+    // Analito que não existe no arquivo revisado: ou é novo de verdade, ou foi
+    // removido na revisão. Não dá para distinguir aqui, e ressuscitar é o erro
+    // mais caro — entra sem grupo e o teste de cobertura acusa.
+    ressurreicoesBloqueadas++
+  }
+  analitosFinais[id] = velho?.category ? { ...a, category: velho.category } : a
+  if (velho?.category) categoriasPreservadas++
+}
+console.log(`  categorias preservadas: ${categoriasPreservadas}`)
+if (ressurreicoesBloqueadas > 0) {
+  console.log(`  ⚠ ${ressurreicoesBloqueadas} analito(s) sem correspondência no arquivo revisado — confira antes de commitar`)
+}
+
+escrever('analitos.json', { version: VERSAO, analytes: analitosFinais })
 escrever('sinonimos.json', {
   version: VERSAO,
   synonyms: sinonimos,
@@ -531,7 +612,7 @@ escrever('qualitativos.json', {
   // Continua visível em `discarded[]` com motivo `notUsedClinically` (R1).
   notUsedClinically: NAO_USADOS,
 })
-escrever('culturas.json', { version: VERSAO, materials: D.CULTURE_TYPES })
+escrever('culturas.json', { version: VERSAO, materials: CULTURAS_CORRIGIDAS })
 escrever('descartes.json', { version: VERSAO, skipNames: [...(D.SKIP_NAMES as Set<string>)].sort() })
 // Marcadores acrescentados a partir do corpus de culturas, que o doador não
 // cobria: "Coletado em (20/07/2026 16:54)" e "Coleta...: 27/07/2026 - 08:40".

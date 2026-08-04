@@ -24,16 +24,43 @@ import type {
 } from '../contratos'
 import { marcadorDeColeta } from '../normalizadores/data'
 import { separarColunas } from '../extratores/colunas'
+import { ehRotuloDeMetadado } from '../extratores/metadados'
 import culturas from '../catalogo/culturas.json'
 
 const MATERIAIS = culturas.materials as Record<string, string>
+
+/**
+ * As chaves ordenadas da mais longa para a mais curta.
+ *
+ * Casar por prefixo exige escolher a mais específica: senão "CULTURA DE
+ * VIGILÂNCIA - PESQUISA DE MRSA" cai em "CULTURA DE VIGILÂNCIA" e o exame
+ * perde o germe que de fato procurou.
+ */
+const CHAVES_POR_ESPECIFICIDADE = Object.entries(MATERIAIS)
+  .sort((a, b) => b[0].length - a[0].length)
 
 /** Cabeçalho que abre um bloco de cultura. */
 const RE_CABECALHO_CULTURA =
   /^(?:hemocultura|urocultura|urinocultura|coprocultura|cultura\b|swab\b|aspirado\b|secre[çc][ãa]o\b|pesquisa\s+de\s+mrsa)/i
 
-/** Layout A: o isolado vem rotulado. */
-const RE_ISOLADO_A = /^(?:bact[ée]ria\s+isolada|micro-?organismo\s+isolado|agente\s+isolado)\s*[.:]+\s*(.+)$/i
+/**
+ * Layout A: o isolado vem rotulado.
+ *
+ * `Resultado` entra na lista porque a cultura de VIGILÂNCIA do IMEC usa esse
+ * rótulo para o germe: "Resultado...........: Klebsiella pneumoniae". Sem ele,
+ * uma vigilância POSITIVA para enterobactéria produtora de ESBL era registrada
+ * como indeterminada e sem isolado — e vigilância positiva define precaução de
+ * contato.
+ *
+ * Só vale DENTRO de um bloco de cultura, e só quando o valor não é número:
+ * "Resultado: 154,1" num laudo bioquímico é valor de exame, e pertence ao
+ * matcher de bloco.
+ */
+const RE_ISOLADO_A =
+  /^(?:bact[ée]ria\s+isolada|micro-?organismo\s+isolado|agente\s+isolado|resultados?)\s*[.:]+\s*(.+)$/i
+
+/** Um organismo é texto, não número. Barra "Resultado: 154,1" de virar isolado. */
+const RE_NAO_ORGANISMO = /^[<>=]?\s*[\d.,]+\s*[A-Za-zµ%/³]*\s*$/
 
 /** Layout B: isolados numerados, com a contagem colada. */
 const RE_ISOLADO_B = /^micro-?organismo\s*\[(\d+)\]\s*[.:]+\s*(.+)$/i
@@ -137,12 +164,13 @@ function materialDe(titulo: string): string {
     .replace(/\s*\+\s*TSA\s*$/, '')
     .replace(/\s+/g, ' ')
     .trim()
-  for (const [chave, canonico] of Object.entries(MATERIAIS)) {
-    if (alvo.startsWith(chave)) return canonico
-  }
+  // Da chave MAIS ESPECÍFICA para a mais genérica. "CULTURA DE VIGILÂNCIA -
+  // PESQUISA DE MRSA" casa com duas entradas, e a genérica ("CULTURA DE
+  // VIGILÂNCIA") vinha primeiro por acaso da ordem do objeto — o exame que
+  // procurou MRSA perdia o nome do germe que procurou.
   const original = titulo.toUpperCase().replace(/\s+/g, ' ').trim()
-  for (const [chave, canonico] of Object.entries(MATERIAIS)) {
-    if (original.startsWith(chave)) return canonico
+  for (const [chave, canonico] of CHAVES_POR_ESPECIFICIDADE) {
+    if (original.startsWith(chave) || alvo.startsWith(chave)) return canonico
   }
   return titulo.trim()
 }
@@ -337,6 +365,13 @@ export function extrairCulturas(
       const bruto = a?.[1] ?? b?.[2]
       if (!bruto) continue
       const organismo = bruto.replace(/\s{2,}.*$/, '').trim()
+      // Nome de organismo não é número nem rótulo do laudo. Sem esta guarda,
+      // "Resultado:   Valor de referência :" — o cabeçalho de duas colunas da
+      // tabela — virava um isolado chamado "Valor de referência", e a cultura
+      // saía POSITIVA por causa dele.
+      if (RE_NAO_ORGANISMO.test(organismo)) continue
+      if (ehRotuloDeMetadado(organismo)) continue
+      if (RE_SEM_CRESCIMENTO.test(organismo)) { linhasUsadas.add(linha.index); continue }
       linhasUsadas.add(linha.index)
       if (!organismo || vistos.has(organismo)) continue
       // "Bactéria isolada: NÃO HOUVE CRESCIMENTO DE BACTÉRIAS." — o campo do

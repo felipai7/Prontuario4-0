@@ -152,10 +152,93 @@ for (const arquivo of arquivos) {
   const porNomeNovo = new Map<string, any>()
   for (const o of novo.observations) if (o.canonicalName) porNomeNovo.set(chave(o.canonicalName), o)
 
+  // O clinBoard nao tem campo para cultura: ele emite "Hemocultura = 1" como se
+  // fosse um exame de valor. Aqui a cultura vive em `cultures[]`, com material,
+  // isolados e antibiograma. O dado E extraido — muda o lugar, nao a presenca.
+  // Sem isto, seis culturas contavam como regressao.
+  // O doador rotula o exame de LÍQUOR sem sufixo: a glicose do liquor sai como
+  // "Glicose", igual à glicemia. Quando temos o mesmo exame COM sufixo de
+  // espécime, não é ausência — é o mesmo dado, mais preciso. Sem esta regra a
+  // paridade PREMIA a resposta errada, e foi o que quase me fez desligar a
+  // herança de líquor no IMEC.
+  const comSufixo = new Map<string, any>()
+  for (const o of novo.observations) {
+    if (!o.canonicalName) continue
+    const m = o.canonicalName.match(/^(.*?)\s*\((LCR|U|Arterial|Venosa)\)\s*$/)
+    if (m) comSufixo.set(chave(m[1]!), o)
+  }
+
+  // Nomes padronizados em 03/08/2026 dentro do PRÓPRIO catálogo, para não
+  // haver duas grafias do mesmo exame. O doador ficou com a grafia antiga, e
+  // o comparador casa por nome — sem esta tabela, cada padronização aparece
+  // como exame perdido. É a mesma armadilha do líquor: paridade não é
+  // correção. O dado continua sendo extraído; o que mudou foi o rótulo.
+  // Chaveado por `chave()`, não pela grafia literal: ela normaliza caixa e
+  // acento, e escrever as chaves à mão já custou uma rodada em silêncio.
+  const RENOMEADOS = new Map<string, string>(([
+    ['Lactato Venoso', 'Lactato (Venosa)'],
+    ['O2 Sat (Arterial)', 'SatO2 (Arterial)'],
+    ['O2 Sat (Venosa)', 'SatO2 (Venosa)'],
+    ['Hct (Arterial)', 'Hematócrito (Arterial)'],
+    ['Hct (Venosa)', 'Hematócrito (Venosa)'],
+    ['Pesquisa De Fungos (LCR)', 'Pesquisa de Fungos (LCR)'],
+    ['Cloretos', 'Cloro'],
+    ['pH Urinário', 'pH (U)'],
+    ['DHL', 'LDH'],
+    // Task 2a: o doador não sabia ligar "Resultado:" ao título de bloco do
+    // HUGO e este exame nunca tinha sido extraído por nenhum dos dois lados
+    // até agora — o doador lê pelo texto corrido, sem o mesmo problema de
+    // coluna. Ele guarda o nome por extenso; o catálogo daqui só tem a sigla.
+    ['Dosagem De Gama Gt', 'GGT'],
+  ] as [string, string][]).map(([antes, depois]) => [chave(antes), depois]))
+
+  const materiaisDeCultura = new Set(novo.cultures.map((c: any) => chave(c.specimen)))
+  const ehCultura = (nome: string) => {
+    const k = chave(nome)
+    if (materiaisDeCultura.has(k)) return true
+    // "MRSA" do doador corresponde a "Vigilância MRSA" daqui, e assim por diante.
+    return [...materiaisDeCultura].some(m => m.includes(k) || k.includes(m))
+  }
+
   for (const [k, a] of porNomeDoador) {
     const b = porNomeNovo.get(k)
     if (!b) {
       soDoador++
+      const renomeado = RENOMEADOS.get(k)
+      const equivalente = renomeado ? porNomeNovo.get(chave(renomeado)) : undefined
+      if (equivalente) {
+        divergencias.push({
+          arquivo: rotulo, exame: a.name,
+          unidade: '', referencia: '', data: a.date ?? '',
+          categoria: 'correcaoIntencional',
+          motivo: `padronizado no catálogo: agora é "${renomeado}"`,
+          clinboard: `${a.value ?? '—'}`,
+          novo: equivalente.value?.kind === 'numeric' ? String(equivalente.value.value) : String(equivalente.value?.kind),
+        })
+        continue
+      }
+      const maisPreciso = comSufixo.get(k)
+      if (maisPreciso) {
+        divergencias.push({
+          arquivo: rotulo, exame: a.name,
+          unidade: '', referencia: '', data: a.date ?? '',
+          categoria: 'correcaoIntencional',
+          motivo: `o doador não sufixa o espécime; aqui é "${maisPreciso.canonicalName}"`,
+          clinboard: `${a.value ?? '—'}`,
+          novo: maisPreciso.value?.kind === 'numeric' ? String(maisPreciso.value.value) : String(maisPreciso.value?.kind),
+        })
+        continue
+      }
+      if (novo.cultures.length > 0 && ehCultura(a.name)) {
+        divergencias.push({
+          arquivo: rotulo, exame: a.name,
+          unidade: '', referencia: '', data: a.date ?? '',
+          categoria: 'diferencaDeForma',
+          motivo: 'cultura: extraída em cultures[], com isolado e antibiograma, e não como exame de valor',
+          clinboard: `${a.value ?? '—'}`, novo: 'em cultures[]',
+        })
+        continue
+      }
       const { categoria, motivo } = classificar(a, null)
       // Ausência no novo é PERDA DE DADO CLÍNICO, e não uma divergência a
       // discutir: o clinBoard entrega o exame e o novo não. Só não conta como

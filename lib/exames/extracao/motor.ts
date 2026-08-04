@@ -14,6 +14,7 @@ import type {
   ReviewReason, TemporalRef,
 } from './contratos'
 import { carregarCatalogo, resolverAnalito } from './catalogo'
+import { checarPlausibilidade } from './validacao/plausibilidade'
 import { segmentar } from './segmentacao/segmentar'
 import { matchers } from './extratores/registro'
 import { suprimir } from './extratores/supressao'
@@ -79,6 +80,18 @@ export function extrairDoTexto(
     for (const linha of segmento.lines) {
       if (linhasConsumidas.has(linha.index)) continue
 
+      // R1 — a tabela de evolução não vira resultado, mas também não some.
+      if (segmento.kind === 'history') {
+        discarded.push({
+          page: linha.page,
+          lineIndex: linha.index,
+          rawLine: opcoes.retainRawText ? linha.text : '',
+          reason: 'historicalResult',
+          detail: 'linha de tabela de resultados anteriores',
+        })
+        continue
+      }
+
       const supressao = suprimir(linha.text)
       if (supressao) {
         // Linha em branco não interessa a ninguém; as demais supressões sim.
@@ -122,11 +135,28 @@ export function extrairDoTexto(
           if (bruta.rawUnit && unidade.canonical === null) motivos.push('unknownUnit')
           if (referencia.kind === 'rejected') motivos.push('referenceRejected')
 
+          const valor = interpretarValor(bruta.rawValue, ctxNorm)
+          // I3 — faixa AUSENTE também pede conferência, mas só para valor
+          // numérico: é ele que fica sem opinião possível, e "sem opinião"
+          // é indistinguível de "normal confirmado" na tela. Qualitativo e
+          // semiquantitativo ("Negativo", "+++") são interpretáveis sozinhos
+          // e marcá-los encheria a lista de pendências de linhas sem defeito
+          // — lista de alarme que sempre toca é lista que ninguém lê.
+          if (referencia.kind === 'absent' && valor.kind === 'numeric') {
+            motivos.push('referenceAbsent')
+          }
+          // Erro de ESCALA, não de saúde: potássio 7,2 lido como 0,72. Marca
+          // para revisão e nunca descarta — se a faixa estiver errada,
+          // descartar apaga justamente o valor extremo, que é o que importa.
+          if (checarPlausibilidade(valor, unidade, analito).veredito === 'implausivel') {
+            motivos.push('implausibleValue')
+          }
+
           observations.push({
             analyteId: analito?.id ?? null,
             canonicalName: analito?.canonicalName ?? null,
             rawName: bruta.rawName,
-            value: interpretarValor(bruta.rawValue, ctxNorm),
+            value: valor,
             unit: unidade,
             reference: referencia,
             collectedAt: bruta.date,

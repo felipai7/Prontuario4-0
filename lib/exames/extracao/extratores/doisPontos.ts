@@ -18,11 +18,20 @@ import { resolverAnalito } from '../catalogo'
 import { ehNaoUsadoClinicamente } from '../normalizadores/valor'
 import descartes from '../catalogo/descartes.json'
 import { ehRotuloDeMetadado } from './metadados'
+import { absolutoDoDiferencial } from './diferencial'
 
 const NOMES_DE_DESCARTE = new Set(descartes.skipNames)
 
-/** "Nome...........: valor" — o pontilhado é alinhamento, não parte do nome. */
-const RE_NOME_VALOR = /^([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9\s()%/+-]*?)[.\s]*:\s*(.+)$/
+/**
+ * "Nome...........: valor" — o pontilhado é alinhamento, não parte do nome.
+ *
+ * O ponto entra na classe do NOME, e não só no pontilhado final, porque o
+ * leucograma do PIOX abrevia para caber na coluna: "Neutr.Totais..:",
+ * "Linf.Atípicos.:". Sem isso a linha inteira não casava e o exame sumia — e
+ * some também "V.C.M.", "C.H.C.M." e afins. O `*?` preguiçoso garante que o
+ * pontilhado final continue sendo comido pelo `[.\s]*`.
+ */
+const RE_NOME_VALOR = /^([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9\s.()%/+-]*?)[.\s]*:\s*(.+)$/
 
 export const matcherDoisPontos: Matcher = {
   id: 'doisPontos',
@@ -79,13 +88,21 @@ export const matcherDoisPontos: Matcher = {
       }
     }
 
+    // O PIOX diagrama o diferencial com dois-pontos: "Bastonetes....: 1 % 73
+    // /mm³". Sem esta chamada, este laboratório entregava o PERCENTUAL e os
+    // demais o ABSOLUTO — a mesma coluna da tabela com duas grandezas.
+    // O nome CANÔNICO, não o bruto: o PIOX escreve "Neutr.Totais" e a lista
+    // do diferencial guarda "Neutrófilos". Testar o bruto fazia o laudo
+    // abreviado receber o percentual enquanto os outros recebiam o absoluto.
+    const absoluto = absolutoDoDiferencial(analito?.canonicalName ?? nome, [valorBruto, ...seguintes])
+
     return {
       kind: 'observations',
       observations: [{
         rawName: nome,
-        rawValue: valorBruto,
-        rawUnit: unidadeBruta,
-        rawReference: referenciaBruta,
+        rawValue: absoluto?.valor ?? valorBruto,
+        rawUnit: absoluto?.unidade ?? unidadeBruta,
+        rawReference: absoluto?.referencia ?? referenciaBruta,
         specimen: analito.defaultSpecimen,
         date: segment.date,
         provenance: {

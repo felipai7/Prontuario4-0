@@ -247,6 +247,16 @@ export type ReviewReason =
   | 'unknownAnalyte'
   | 'unknownUnit'
   | 'referenceRejected'
+  /**
+   * O laudo não trouxe faixa nenhuma para um valor NUMÉRICO.
+   *
+   * Sem faixa, `interpretarNumerico` não opina — e "não opinei" tem a mesma
+   * forma de "conferi, está normal" (`alterado:false`, `direcao:'normal'`).
+   * Sem esta marcação, um valor de gasometria sem coluna de referência
+   * chegava à tela como texto cinza comum, idêntico a um normal confirmado,
+   * enquanto o MESMO exame colado como print voltava vermelho da IA.
+   */
+  | 'referenceAbsent'
   | 'implausibleValue'
   | 'lowDetectionConfidence'
   | 'fallbackExtracted'
@@ -464,11 +474,28 @@ export interface Diagnostics {
 
 // ── Entrada e saída ────────────────────────────────────────────────────────
 
+/**
+ * Veredito da conferência entre o paciente da tela e o nome impresso no laudo.
+ *
+ * Declarado aqui, e não em `paciente/conferir.ts`, porque este arquivo é
+ * importado por `conferir.ts` (para `TextLine`) — declarar o tipo lá e
+ * importar de volta criaria um ciclo, e este módulo tem zero hoje (força
+ * apontada pela auditoria). Um sentido só: `contratos.ts` → `conferir.ts`.
+ */
+export type VeredictoPaciente = 'confere' | 'naoConfere' | 'nomeAusente' | 'naoPerguntado'
+
 export interface ExtractionHints {
   /** Só para conferência — jamais para preencher uma data que não foi lida (R8). */
   expectedCollectedAt: string | null
   /** Força um perfil, ignorando a detecção. */
   labProfileId: string | null
+  /**
+   * O nome do paciente da tela, para conferir se o laudo é dele.
+   *
+   * Vai DE FORA PARA DENTRO de propósito: o módulo devolve só um veredito, e
+   * o nome que está no laudo nunca sai daqui. Ver `paciente/conferir.ts`.
+   */
+  expectedPatientName: string | null
 }
 
 export interface ExtractionOptions {
@@ -494,6 +521,8 @@ export interface ExtractionResult {
   /** A7 — a camada acima decide como mostrar. */
   warnings: Warning[]
   diagnostics: Diagnostics
+  /** Veredito da conferência de paciente. NUNCA carrega o nome do laudo (D8). */
+  patientCheck: VeredictoPaciente
 }
 
 // ── Contexto de parse (A1 — imutável, passado por parâmetro) ───────────────
@@ -505,11 +534,29 @@ export interface Catalog {
   analytes: Readonly<Record<string, Analyte>>
   qualitative: Readonly<Record<string, QualitativeCode>>
   units: Readonly<Record<string, string>>
+  /**
+   * Os grupos clínicos na ordem em que devem ser exibidos.
+   *
+   * A ordem é decisão clínica (Juliana, 03/08/2026) e por isso é dado, não a
+   * ordem de um array num componente de tela.
+   */
+  groupOrder: readonly string[]
 }
 
 export interface Analyte {
   id: string
   canonicalName: string
+  /**
+   * Grupo clínico a que o exame pertence, em `catalogo/grupos.json`.
+   *
+   * É DADO, não código. Antes de 03/08/2026 este campo era null nos 285
+   * analitos e o agrupamento vivia em doze expressões regulares dentro de
+   * `ExamesTab.tsx`, testadas contra o nome exibido. Bastava o extrator mudar
+   * um nome para o exame trocar de grupo sem ninguém saber — foi assim que o
+   * sedimento urinário passou a aparecer dentro do hemograma.
+   *
+   * Nunca vazio: há teste que falha se algum analito ficar sem grupo.
+   */
   category: string
   defaultSpecimen: SpecimenContext
   defaultUnit: string | null
@@ -540,7 +587,32 @@ export interface ParseContext {
 // ── Matchers (A2) ──────────────────────────────────────────────────────────
 
 export interface Segment {
-  kind: 'examSection' | 'table' | 'culture' | 'antibiogram' | 'eas' | 'notes' | 'footer' | 'imaging'
+  /**
+   * `history` — tabela de resultados anteriores que o próprio laudo imprime
+   * ("Evolução do paciente" no HUGO). NENHUM matcher se aplica a ela: os três
+   * aceitam apenas examSection, eas e culture. As linhas viram descarte com
+   * motivo, e não observação.
+   *
+   * Antes de 03/08/2026 essa tabela era lida como resultado de agora, e o
+   * extrator pegava a coluna mais antiga: a gasometria de 08/04 aparecia com
+   * os valores de 04/04.
+   *
+   * O segmento tem que FECHAR sozinho: `segmentar.ts` fecha um `history` ao
+   * ver qualquer linha com cara de título de exame (`pareceTituloDeSecao`),
+   * não só ao ver um cabeçalho de `CABECALHOS`. A primeira versão desta
+   * correção só fechava em CABECALHOS, e no HUGO os títulos entre exames
+   * ("DOSAGEM DE AMILASE", "DOSAGEM DE CREATININA", ...) não estão nessa
+   * lista — o segmento engolia o resto do laudo (328 linhas medidas em um
+   * único segmento history no corpus real, com resultados de verdade
+   * descartados como se fossem a tabela de evolução).
+   *
+   * A linha que fecha o history NÃO é consumida como título: ela continua
+   * dentro do segmento novo. Cabeçalho de `CABECALHOS` pode ser engolido
+   * porque a lista garante que ali não há resultado; a fronteira do history é
+   * reconhecida pela FORMA, e engolir uma linha reconhecida por forma some com
+   * ela sem descarte — viola R1 e tira a linha do alcance dos matchers.
+   */
+  kind: 'examSection' | 'table' | 'culture' | 'antibiogram' | 'eas' | 'notes' | 'footer' | 'imaging' | 'history'
   title: string | null
   lines: TextLine[]
   specimen: SpecimenContext

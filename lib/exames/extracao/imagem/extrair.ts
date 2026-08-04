@@ -29,13 +29,24 @@ const MODALIDADES = imagem.modalities.map(m => ({
   re: new RegExp(m.pattern, m.flags),
 }))
 
-/** Palavras que identificam a linha-título do exame. */
+/**
+ * Palavras que identificam a linha-título do exame.
+ *
+ * `\bPET\b` com fronteira de palavra NÃO é decoração: sem ela, "PET" casa
+ * dentro de "re-PET-ido", e a linha "Nota: EXAME REPETIDO E CONFIRMADO." de um
+ * laudo LABORATORIAL virava um laudo de imagem inteiro, com o documento
+ * classificado como `mixed`. Mesma família do D2: padrão não ancorado
+ * capturando texto que só se parece com o alvo.
+ *
+ * Apareceu ao rodar o extrator contra um laudo de cada laboratório, não na
+ * suíte — nenhuma fixture sintética tinha a palavra "repetido".
+ */
 const RE_TITULO =
-  /TOMOGRAFIA|ANGIOTOMOGRAFIA|RESS?ON|ANGIORR?ESS?ON|ULTRASSON|ULTRA[-\s]?SOM|RADIOGRAFIA|RAIO[-\s]?X|ECOCARDIOGRA|ECODOPPLER|D[ÚU]PLEX|MAPEAMENTO|DOPPLER|ENDOSCOPIA|COLONOSCOPIA|CINTILOGRAFIA|ESCANOMETRIA|PET|COLANGIORR/i
+  /TOMOGRAFIA|ANGIOTOMOGRAFIA|RESS?ON|ANGIORR?ESS?ON|ULTRASSON|ULTRA[-\s]?SOM|RADIOGRAFIA|RAIO[-\s]?X|ECOCARDIOGRA|ECODOPPLER|D[ÚU]PLEX|MAPEAMENTO|DOPPLER|ENDOSCOPIA|COLONOSCOPIA|CINTILOGRAFIA|ESCANOMETRIA|\bPET\b|COLANGIORR/i
 
 /** Metadados que nunca são título, ainda que contenham a palavra. */
 const RE_NAO_TITULO =
-  /INDICA|HIST[ÓO]RICO|T[ÉE]CNICA|M[ÉE]TODO|^\s*NOME\b|DATA\s+DO\s+EXAME|SOLICITA|\bM[ÉE]D\b|\bCRM\b|NASCIMENTO/i
+  /INDICA|HIST[ÓO]RICO|T[ÉE]CNICA|M[ÉE]TODO|^\s*NOME\b|DATA\s+DO\s+EXAME|SOLICITA|\bM[ÉE]D\b|\bCRM\b|NASCIMENTO|^\s*(?:Nota|Obs|Observa)/i
 
 /**
  * Ruído repetido por página: cabeçalho do paciente, assinatura do radiologista,

@@ -53,8 +53,10 @@ describe('saturação de O2 grafada sem separador', () => {
     expect(nomes(await extrair(LAUDO))).toContain('pH (Arterial)')
   })
 
-  it('"O2SAT" colado resolve para O2 Sat (Arterial)', async () => {
-    expect(nomes(await extrair(LAUDO))).toContain('O2 Sat (Arterial)')
+  it('"O2SAT" colado resolve para SatO2 (Arterial)', async () => {
+    // Renomeado em 03/08/2026: era "O2 Sat (Arterial)", que divergia do
+    // "SatO2" sem sufixo do mesmo catálogo. A grafia antiga segue resolvendo.
+    expect(nomes(await extrair(LAUDO))).toContain('SatO2 (Arterial)')
   })
 })
 
@@ -251,5 +253,293 @@ describe('não é lacuna · cultura vive em cultures[], não em observations[]',
     expect(r.cultures).toHaveLength(1)
     expect(r.cultures[0]!.isolates[0]!.organism).toBe('Escherichia coli')
     expect(nomes(r)).not.toContain('Hemocultura')
+  })
+})
+
+// ── 8. O doador está ERRADO e divergimos de propósito ──────────────────────
+// A contrapartida do arquivo: aqui a paridade acusa "regressão" e a regressão
+// é dele. O clinBoard não sufixa o espécime, então a glicose do LÍQUOR sai
+// como "Glicose" — indistinguível de glicemia. Num laudo real do IMEC isso
+// gravava 166 mg/dL de LCR como se fosse a glicemia do paciente.
+//
+// Ligar a herança de espécime no IMEC custou 11 "regressões" de paridade, e
+// as 11 são este acerto. Por isso a decisão está no perfil e o guarda está
+// aqui: se alguém desligar a herança para "melhorar a paridade", quebra.
+describe('não é lacuna · o espécime do líquor não se perde na subseção neutra', () => {
+  const LAUDO = [
+    'ROTINA DE LÍQUOR',
+    'Material: Liquor   Coleta...: 12/05/2026 - 19:10',
+    'Aspecto:   Límpido.   Límpido',
+    'BIOQUIMICA',
+    'Glicose:   166   mg/dL   40 - 70',
+    'Proteínas:   28   mg/dL   15 - 45',
+  ]
+
+  // `hints` porque a fixture sintética não carrega a impressão digital do
+  // laboratório, e a herança de espécime é dado do PERFIL (A3).
+  const extrairComoImec = () => extrairExames({
+    document: { bytes: pdfDeLinhas(LAUDO), filename: null },
+    hints: { labProfileId: 'imec', expectedCollectedAt: null, expectedPatientName: null },
+    options: null,
+  })
+
+  it('a glicose do líquor NUNCA é gravada como glicemia', async () => {
+    const r = await extrairComoImec()
+    expect(nomes(r)).toContain('Glicose (LCR)')
+    expect(nomes(r)).not.toContain('Glicose')
+  })
+
+  it('a subseção neutra não interrompe o contexto de líquor', async () => {
+    const r = await extrairComoImec()
+    expect(nomes(r)).toContain('Proteínas (LCR)')
+  })
+})
+
+// ── 9. Tabela de evolução lida como resultado de agora ─────────────────────
+// Achado A-01 da auditoria de 03/08. Os laudos do HUGO trazem, depois do
+// resultado, uma seção "Evolução do paciente" com uma coluna por data. O
+// extrator lia essa tabela como resultado novo e pegava a PRIMEIRA coluna —
+// a data mais antiga. Na tela, esse valor apagava o verdadeiro.
+describe('tabela de evolução do paciente não vira resultado', () => {
+  const COLUNAS = [50, 170, 240, 310, 380]
+  const bytes = pdfTabular([
+    ['GASOMETRIA ARTERIAL', 'Valores de referência'],
+    ['Coleta: 08/04/2026'],
+    ['pH', ':', '7,370', '7,350 - 7,450'],
+    ['pCO2', ':', '47,0 mmHg', '35,0 - 45,0 mmHg'],
+    ['Evolução do paciente'],
+    ['Data', '04/04/2026', '05/04/2026', '06/04/2026', '08/04/2026'],
+    ['pH', '7,460', '7,420', '7,400', '7,370'],
+    ['pCO2', '33,0', '38,0', '41,0', '47,0'],
+  ], COLUNAS)
+
+  const extrair = () =>
+    extrairExames({ document: { bytes, filename: null }, hints: null, options: null })
+
+  it('o resultado de verdade é extraído', async () => {
+    const r = await extrair()
+    const ph = r.observations.filter(o => o.canonicalName === 'pH (Arterial)')
+    expect(ph).toHaveLength(1)
+    expect(ph[0]!.value).toMatchObject({ kind: 'numeric', value: 7.37 })
+  })
+
+  it('a linha da tabela de evolução NÃO vira observação', async () => {
+    const r = await extrair()
+    const pco2 = r.observations.filter(o => o.canonicalName === 'PCO2 (Arterial)')
+    expect(pco2).toHaveLength(1)
+    expect(pco2[0]!.value).toMatchObject({ kind: 'numeric', value: 47 })
+  })
+
+  it('R1 · a linha descartada aparece com motivo, não some', async () => {
+    const r = await extrair()
+    expect(r.discarded.some(d => d.reason === 'historicalResult')).toBe(true)
+  })
+})
+
+// ── 10. O segmento history tem que FECHAR sozinho ───────────────────────────
+// Rodada 1 de correção sobre a tarefa acima. `CABECALHOS` nunca vai listar
+// "DOSAGEM DE AMILASE", "DOSAGEM DE CREATININA" e o resto dos títulos de
+// exame de um laudo — são título de EXAME, não de SEÇÃO. Sem um jeito de
+// fechar o segmento history nessas linhas, ele engolia o resto do laudo: no
+// corpus real do HUGO um único segmento history chegou a ter 328 linhas,
+// e todo exame de verdade depois da tabela de evolução virava descarte por
+// engano.
+//
+// Rodada 2: no laudo de verdade o título vem em DUAS colunas na MESMA linha
+// física — "DOSAGEM DE AMILASE" | "Valores de Referência" — porque é também
+// o cabeçalho da coluna de referência do bloco que se abre. "Valores de
+// Referência" tem letra minúscula, e testar a LINHA INTEIRA (rodada 1) nunca
+// fechava nada, porque a segunda coluna sempre reprovava o teste de maiúscula
+// pura. A fixture tem que carregar as duas colunas separadas — uma só coluna
+// passava com a heurística quebrada e esse teste não provava nada. As
+// colunas aqui são mais largas que nos outros blocos deste arquivo: com o
+// espaçamento do bloco 9, "DOSAGEM DE AMILASE" (19 caracteres) já não cabia
+// antes da coluna seguinte, e o vão medido (6,08pt) ficava ABAIXO do limiar
+// de corte de `separarColunas` (~7,3pt) — a linha nunca se partia em duas
+// colunas de verdade, e o teste passava sem exercitar o corte.
+//
+// Rodada 3: a forma de título também exige que a LINHA INTEIRA não tenha
+// dígito. A linha "TGO 88 75 60 41" é linha da PRÓPRIA tabela de evolução —
+// o analito é sigla, e sigla é maiúscula pura. Com o teste só na primeira
+// coluna, ela fechava o segmento no meio da tabela e tudo dali para baixo
+// voltava a virar resultado de agora. Medido no HUGO2: duas tabelas vazando
+// por sigla.
+describe('history não engole o exame que vem depois da tabela de evolução', () => {
+  const COLUNAS = [50, 210, 280, 350, 420]
+  const bytes = pdfTabular([
+    ['GASOMETRIA ARTERIAL', 'Valores de referência'],
+    ['Coleta: 08/04/2026'],
+    ['pH', ':', '7,370', '7,350 - 7,450'],
+    ['Evolução do paciente'],
+    ['Data', '04/04/2026', '05/04/2026', '06/04/2026', '08/04/2026'],
+    ['pH', '7,460', '7,420', '7,400', '7,370'],
+    ['TGO', '88', '75', '60', '41'],
+    ['DOSAGEM DE AMILASE', 'Valores de Referência'],
+    ['Amilase', ':', '45,0 U/L', '28,0 - 100,0 U/L'],
+  ], COLUNAS)
+
+  const extrair = () =>
+    extrairExames({ document: { bytes, filename: null }, hints: null, options: null })
+
+  it('o exame depois da tabela de evolução ainda é extraído', async () => {
+    const r = await extrair()
+    // O laudo real repete o nome do analito no título de duas colunas
+    // ("DOSAGEM DE AMILASE   Valores de Referência"), e HOJE essa linha também
+    // vira uma observação — com "Valores de Referência" no lugar do valor.
+    // Esse é o achado A-02, dono da Tarefa 2. Aqui a asserção é só a desta
+    // tarefa: o resultado NUMÉRICO de depois da tabela de evolução existe.
+    // Deixar a linha de título no segmento, em vez de engoli-la como título,
+    // é deliberado — ver a nota em `segmentar.ts`.
+    const amilase = r.observations.filter(o => o.canonicalName === 'Amilase')
+    expect(amilase.some(o => o.value.kind === 'numeric' && o.value.value === 45)).toBe(true)
+  })
+
+  it('sigla maiúscula DENTRO da tabela não reabre a extração', async () => {
+    const r = await extrair()
+    expect(r.observations.filter(o => o.canonicalName === 'TGO (AST)')).toHaveLength(0)
+    expect(r.discarded.filter(d => d.reason === 'historicalResult').length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('R1 · a linha que fecha o history não some — vira observação ou descarte', async () => {
+    const r = await extrairExames({
+      document: { bytes, filename: null },
+      hints: null,
+      options: { retainRawText: true },
+    })
+    const apareceu =
+      r.observations.some(o => o.provenance.rawLine.includes('DOSAGEM DE AMILASE')) ||
+      r.discarded.some(d => d.rawLine.includes('DOSAGEM DE AMILASE'))
+    expect(apareceu).toBe(true)
+  })
+
+  it('a tabela de evolução continua descartada com motivo', async () => {
+    const r = await extrair()
+    expect(r.discarded.some(d => d.reason === 'historicalResult')).toBe(true)
+  })
+})
+
+// ── 11. Nome do exame vem da PRIMEIRA COLUNA do título (Task 2a) ───────────
+// `bloco.ts` achava o nome do exame olhando a linha ANTERIOR à de
+// "Resultado:" INTEIRA, colada. No HUGO o título do bloco divide a linha
+// física com o cabeçalho da coluna de referência — "DOSAGEM DE AMILASE
+// Valores de Referência" — e a linha inteira nunca resolve no catálogo (a
+// comparação é exata, sem aparar sufixo). O resultado numérico de verdade
+// nunca chegou a ser extraído por este caminho — nem antes da Tarefa 1, nem
+// depois dela: a tabela de evolução era a ÚNICA fonte que esses exames
+// tinham. Medido no corpus real (HUGO2): Amilase, Creatinina, Sódio,
+// Fósforo, Gama GT e Lipase caíam em `unrecognizedAnalyte` ou
+// `noValueFound`, e só pareciam "extraídos" porque o achado A-06 (Tarefa 2)
+// deixava uma observação errada no lugar, com o nome certo por acidente.
+//
+// `separarColunas` — o mesmo corte GEOMÉTRICO que `segmentar.ts` já usa em
+// `pareceTituloDeSecao` para fechar o segmento history — resolve os dois
+// problemas de uma vez: o nome vem só da primeira coluna, e a faixa de
+// referência (que no HUGO é a SEGUNDA coluna da própria linha "Resultado:",
+// não uma linha à parte como no HOC) passa a ser lida em vez de descartada
+// sem uso.
+describe('nome do exame vem da primeira coluna do título (HUGO)', () => {
+  const COLUNAS = [50, 240, 380]
+  const bytes = pdfTabular([
+    ['DOSAGEM DE AMILASE', 'Valores de Referência'],
+    ['Resultado: 135 U/L', '0 - 110 U/L'],
+    ['DOSAGEM DE GAMA GT', 'Valores de Referência'],
+    ['Resultado: 67 U/L', '8 - 61 U/L'],
+  ], COLUNAS)
+
+  const extrair = () =>
+    extrairExames({ document: { bytes, filename: null }, hints: null, options: null })
+
+  // Filtra por `matcherId: 'bloco'` (não só por nome): a Tarefa 2 ainda
+  // suprime a linha de título por outro motivo (A-06), e este teste tem que
+  // valer isolado dela — a ordem de trabalho pediu as duas tarefas
+  // verificadas em separado antes de uma se apoiar na outra.
+  it('o resultado numérico é extraído com valor, unidade e referência', async () => {
+    const r = await extrair()
+    const amilase = r.observations.find(
+      o => o.canonicalName === 'Amilase' && o.provenance.matcherId === 'bloco',
+    )
+    expect(amilase?.value).toMatchObject({ kind: 'numeric', value: 135 })
+    expect(amilase?.unit.canonical).toBe('U/L')
+    expect(amilase?.reference).toMatchObject({ kind: 'range', min: 0, max: 110 })
+  })
+
+  it('"DOSAGEM DE GAMA GT" resolve mesmo sem sinônimo próprio no catálogo', async () => {
+    // O catálogo tem "GAMA GT", não "DOSAGEM DE GAMA GT" — variantesDeNome
+    // precisa saber tirar o prefixo "Dosagem de", sem o catálogo ganhar
+    // entrada nova só por causa deste exame.
+    const r = await extrair()
+    const ggt = r.observations.find(
+      o => o.canonicalName === 'GGT' && o.provenance.matcherId === 'bloco',
+    )
+    expect(ggt?.value).toMatchObject({ kind: 'numeric', value: 67 })
+  })
+})
+
+// ── 12. Título de coluna não vira valor de exame ────────────────────────────
+// Achado A-06, fechado nesta tarefa. "DOSAGEM DE AMILASE   Valores de
+// Referência" é o título do bloco E o título da coluna de referência, lado a
+// lado na MESMA linha física — igual ao bloco 10 acima, só que aqui a
+// asserção é sobre o VALOR, não sobre o segmento history. O matcher tabular
+// lia a segunda coluna como se fosse o resultado da primeira, e gravava o
+// exame com valor "Valores de Referência". Na tela ficava escondido porque o
+// valor verdadeiro, numa linha própria mais abaixo, chegava depois e
+// sobrescrevia — mas os dois ficavam no banco, e bastaria a ordem de leitura
+// mudar para o valor errado aparecer.
+//
+// A regra do plano original ("^valor de referência$", ancorada só no INÍCIO)
+// cobre a forma de UMA coluna, não esta: aqui o título do exame vem ANTES,
+// então a âncora que importa é o FIM da linha — não o início. Ver a nota ao
+// lado da regra em supressao.ts. As duas grafias do corpus real aparecem
+// aqui: "Valores de Referência" (maiúscula, na amilase) e "valores de
+// referência" (minúscula, na creatinina) — a regra tem que pegar as duas.
+//
+// Nota: "GASOMETRIA ARTERIAL/VENOSA" NÃO entra neste teste porque já é título
+// de SEÇÃO — está em `CABECALHOS` (segmentar.ts) e por isso é consumida como
+// título de segmento antes de chegar aqui, nunca vira linha de exame nem
+// candidata a valor. O defeito desta tarefa só existe para título de EXAME
+// (fora de `CABECALHOS`), como "DOSAGEM DE AMILASE" e "DOSAGEM DE CREATININA".
+//
+// A Tarefa 2a (bloco acima) já faz o resultado NUMÉRICO ser extraído sem
+// depender desta supressão — aqui a asserção é só sobre a Tarefa 2: o valor
+// errado ("Valores de Referência") não pode aparecer em NENHUMA observação,
+// nem quando o exame também tem um resultado numérico de verdade.
+describe('título de coluna de referência não vira valor de exame', () => {
+  const COLUNAS = [50, 210, 280, 350, 420]
+  const bytes = pdfTabular([
+    ['DOSAGEM DE AMILASE', 'Valores de Referência'],
+    ['Coleta: 08/04/2026'],
+    ['Amilase', ':', '45,0 U/L', '28,0 - 100,0 U/L'],
+    ['DOSAGEM DE CREATININA', 'valores de referência'],
+    ['Coleta: 08/04/2026'],
+    ['Creatinina', ':', '1,10 mg/dL', '0,60 - 1,30 mg/dL'],
+  ], COLUNAS)
+
+  const extrair = () =>
+    extrairExames({ document: { bytes, filename: null }, hints: null, options: null })
+
+  it('nenhuma observação carrega o título da coluna como valor', async () => {
+    const r = await extrair()
+    const valores = r.observations.map(o => o.value.raw)
+    expect(valores).not.toContain('Valores de Referência')
+    expect(valores).not.toContain('valores de referência')
+  })
+
+  it('os resultados numéricos verdadeiros continuam sendo extraídos', async () => {
+    const r = await extrair()
+    const amilase = r.observations.filter(o => o.canonicalName === 'Amilase')
+    const creatinina = r.observations.filter(o => o.canonicalName === 'Creatinina')
+    expect(amilase.some(o => o.value.kind === 'numeric' && o.value.value === 45)).toBe(true)
+    expect(creatinina.some(o => o.value.kind === 'numeric' && o.value.value === 1.1)).toBe(true)
+  })
+
+  it('R1 · as duas linhas de título aparecem como descarte, não somem', async () => {
+    const r = await extrairExames({
+      document: { bytes, filename: null },
+      hints: null,
+      options: { retainRawText: true },
+    })
+    const titulos = r.discarded.filter(d => d.reason === 'referenceTable')
+    expect(titulos.some(d => d.rawLine.includes('DOSAGEM DE AMILASE'))).toBe(true)
+    expect(titulos.some(d => d.rawLine.includes('DOSAGEM DE CREATININA'))).toBe(true)
   })
 })

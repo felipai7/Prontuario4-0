@@ -17,7 +17,7 @@
 // ══════════════════════════════════════════════════════════════════════════
 
 import type { Matcher, MatchOutcome, ParseContext, Segment, SpecimenContext, TextLine } from '../contratos'
-import { separarColunas, separarValorUnidade, pareceReferencia } from './colunas'
+import { separarColunas, separarValorUnidade, pareceReferencia, pareceRotuloDeExame } from './colunas'
 import { resolverAnalito } from '../catalogo'
 import { ehNaoUsadoClinicamente } from '../normalizadores/valor'
 import { ehRotuloDeMetadado } from './metadados'
@@ -39,28 +39,52 @@ const ALCANCE = 6
  * sigla, não a frase. Testar só o texto inteiro perdia o bloco todo.
  */
 function variantesDeNome(texto: string): string[] {
-  const t = texto.trim()
+  let t = texto.trim()
+  // O Núcleo escreve o NOME do exame como valor de um rótulo:
+  // "Exame: CREATININA". Sem desembrulhar, o candidato a título é "Exame:",
+  // que é metadado — e o bloco inteiro ficava órfão.
+  const rotulado = t.match(/^Exames?\s*[.:]+\s*(.+)$/i)
+  if (rotulado) t = rotulado[1]!.trim()
   const variantes = [t]
   const sigla = t.match(/\(([^)]{2,12})\)\s*$/)
   if (sigla) {
     variantes.push(sigla[1]!.trim())
     variantes.push(t.replace(/\s*\([^)]*\)\s*$/, '').trim())
   }
+  // "DOSAGEM DE X" é o exame escrito por extenso, e a maioria já tem sinônimo
+  // próprio no catálogo — mas nem todos ("DOSAGEM DE GAMA GT" não tem,
+  // só "GAMA GT" tem). Não é para o catálogo GANHAR uma entrada por causa
+  // disso: precisaria de uma entrada "DOSAGEM DE X" por exame, para sempre.
+  // Mais barato ensinar aqui, no mesmo lugar que já desembrulha "(SIGLA)" e
+  // "Exame: X" — é a mesma ideia, "o mesmo exame escrito de outro jeito".
+  const semPrefixo = t.match(/^Dosagem\s+de\s+(.+)$/i)
+  if (semPrefixo) variantes.push(semPrefixo[1]!.trim())
   return variantes.filter(Boolean)
 }
 
 /**
- * Um nome de exame candidato: sem dígito, sem dois-pontos.
+ * Um nome de exame candidato: parece rótulo, e não traz dois-pontos.
  *
  * O limite de comprimento da guarda de metadado (42 caracteres, feito para
  * separar rótulo de prosa) reprova títulos legítimos como o do TTPA, que tem
  * 46. Por isso a guarda é dispensada quando ALGUMA variante do nome resolve no
  * catálogo: constar do vocabulário clínico é evidência mais forte do que o
  * comprimento da linha.
+ *
+ * A recusa era "tem dígito" — a MESMA heurística que `segmentar.ts` usava para
+ * fechar o segmento history, com o mesmo defeito. Consertar só lá deixava o
+ * exame chegar ao matcher e morrer aqui: com a tabela de evolução fechando
+ * certo em "DOSAGEM DE VITAMINA B12", a linha "Resultado: 135 pg/mL" logo
+ * abaixo continuava virando descarte `noValueFound`, porque o título com
+ * dígito não era aceito como nome. Medido nesta correção: o B12 só apareceu
+ * quando as duas camadas passaram a usar `pareceRotuloDeExame`.
  */
 function pareceNomeDeExame(texto: string, especime: SpecimenContext): boolean {
   const t = texto.trim()
-  if (t.length < 2 || /\d/.test(t) || t.includes(':')) return false
+  if (!pareceRotuloDeExame(t)) return false
+  // Dois-pontos desqualifica, EXCETO no rótulo "Exame: <NOME>", que é como o
+  // Núcleo apresenta o título do bloco.
+  if (t.includes(':') && !/^Exames?\s*[.:]/i.test(t)) return false
   if (variantesDeNome(t).some(v => resolverAnalito(v, especime))) return true
   return !ehRotuloDeMetadado(t)
 }
@@ -82,9 +106,18 @@ export const matcherBloco: Matcher = {
     if (posicao < 0) return { kind: 'noMatch' }
 
     // ── O nome do exame: a linha-título mais próxima acima ────────────────
+    //
+    // A candidata é sempre a PRIMEIRA COLUNA da linha, nunca a linha inteira
+    // colada. No HUGO o título do bloco divide a linha física com o
+    // cabeçalho da coluna de referência — "DOSAGEM DE AMILASE   Valores de
+    // Referência" — e testar a linha inteira nunca resolve no catálogo (a
+    // comparação é exata, sem aparar sufixo). `segmentar.ts` já precisou
+    // cortar a mesma linha pelo mesmo motivo para fechar o segmento history
+    // (`pareceTituloDeSecao`); aqui é o mesmo corte GEOMÉTRICO de
+    // `separarColunas` — não uma terceira variante da mesma ideia.
     let nome: string | null = null
     for (let i = posicao - 1; i >= 0 && i >= posicao - ALCANCE; i--) {
-      const candidato = segment.lines[i]!.text.trim()
+      const candidato = (separarColunas(segment.lines[i]!)[0]?.texto ?? '').trim()
       if (!pareceNomeDeExame(candidato, segment.specimen)) continue
       const reconhecida = variantesDeNome(candidato)
         .find(v => resolverAnalito(v, segment.specimen))
@@ -132,15 +165,26 @@ export const matcherBloco: Matcher = {
     const { valor: valorBruto, unidade: unidadeColada } = separarValorUnidade(depoisDoRotulo[0]!)
     let unidadeBruta = unidadeColada || depoisDoRotulo[1] || ''
 
-    // ── A referência: a linha "VALOR DE REFERÊNCIA:" logo abaixo ──────────
-    let referenciaBruta = ''
-    for (let i = posicao + 1; i < segment.lines.length && i <= posicao + ALCANCE; i++) {
-      const abaixo = segment.lines[i]!.text
-      // Outra linha de resultado significa que o bloco acabou.
-      if (RE_LINHA_RESULTADO.test(abaixo)) break
-      if (RE_LINHA_REFERENCIA.test(abaixo)) {
-        referenciaBruta = abaixo.replace(RE_LINHA_REFERENCIA, '').trim()
-        break
+    // ── A referência: MESMA linha primeiro, "VALOR DE REFERÊNCIA:" abaixo depois ──
+    //
+    // O HUGO traz a faixa como MAIS UMA coluna da própria linha de resultado —
+    // "Resultado: 135 U/L   0 - 110 U/L", duas colunas geométricas — sem
+    // nenhuma linha "VALOR DE REFERÊNCIA:" separada. O que sobra de
+    // `depoisDoRotulo` depois de tirar valor e (se coladas) unidade é onde essa
+    // faixa mora; sem isto ela ficava lida e depois jogada fora sem uso.
+    const restante = unidadeColada ? depoisDoRotulo.slice(1) : depoisDoRotulo.slice(2)
+    let referenciaBruta = restante.find(pareceReferencia) ?? ''
+
+    // O HOC, ao contrário, traz a faixa numa linha PRÓPRIA logo abaixo.
+    if (!referenciaBruta) {
+      for (let i = posicao + 1; i < segment.lines.length && i <= posicao + ALCANCE; i++) {
+        const abaixo = segment.lines[i]!.text
+        // Outra linha de resultado significa que o bloco acabou.
+        if (RE_LINHA_RESULTADO.test(abaixo)) break
+        if (RE_LINHA_REFERENCIA.test(abaixo)) {
+          referenciaBruta = abaixo.replace(RE_LINHA_REFERENCIA, '').trim()
+          break
+        }
       }
     }
     // A faixa costuma trazer a unidade colada ("135,0 A 148,0 mmol/L"); ela

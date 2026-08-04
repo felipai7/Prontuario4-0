@@ -209,6 +209,98 @@ describe('ausência de crescimento no campo do isolado', () => {
   })
 })
 
+describe('o isolado pode vir rotulado como "Resultado"', () => {
+  // Encontrado abrindo o laudo com a Juliana, no fim da integração. A cultura
+  // de vigilância do IMEC escreve "Resultado...: Klebsiella pneumoniae", e eu
+  // só reconhecia "Bactéria isolada:". Duas vigilâncias POSITIVAS — uma delas
+  // com cepa presuntiva de ESBL — estavam registradas como indeterminadas e
+  // sem isolado nenhum. Vigilância positiva define precaução de contato.
+  it('"Resultado: <organismo>" cria o isolado e a cultura fica positiva', async () => {
+    const r = await extrair([
+      'CULTURA DE VIGILÂNCIA EPIDEMIOLÓGICA - SWAB ANAL',
+      'Material: Swab anal   Coleta...: 28/07/2026 - 09:38',
+      'Identificação',
+      'Resultado...........: Klebsiella pneumoniae',
+      'Valor de referência.....: Negativo',
+    ])
+    expect(r.cultures[0]!.growth).toBe('positive')
+    expect(r.cultures[0]!.isolates.map(i => i.organism)).toEqual(['Klebsiella pneumoniae'])
+  })
+
+  it('"Resultado: Não houve desenvolvimento" não cria isolado', async () => {
+    const r = await extrair([
+      'CULTURA DE VIGILÂNCIA - PESQUISA DE MRSA',
+      'Material: Swab nasal   Coleta...: 28/07/2026 - 09:38',
+      'Resultado:   Não houve desenvolvimento de micro-organismos',
+    ])
+    expect(r.cultures[0]!.isolates).toEqual([])
+    expect(r.cultures[0]!.growth).toBe('noGrowth')
+  })
+
+  it('rótulo do laudo não vira nome de organismo', async () => {
+    // "Resultado:   Valor de referência :" é o cabeçalho de duas colunas da
+    // tabela. Virava um isolado chamado "Valor de referência", e a cultura
+    // saía POSITIVA por causa dele.
+    const r = await extrair([
+      'CULTURA DE VIGILÂNCIA - PESQUISA DE MRSA',
+      'Material: Swab nasal   Coleta...: 28/07/2026 - 09:38',
+      'Resultado:   Valor de referência :',
+      'Não houve desenvolvimento de Staphylococcus aureus resistente a meticilina',
+    ])
+    expect(r.cultures[0]!.isolates).toEqual([])
+    expect(r.cultures[0]!.growth).toBe('noGrowth')
+  })
+
+  it('"Resultado: 154,1" de laudo bioquímico não vira isolado', async () => {
+    const r = await extrair([
+      'SÓDIO',
+      'Coleta: 28/07/2026',
+      'Resultado   :  154,1   mmol/L',
+    ])
+    expect(r.cultures).toEqual([])
+  })
+})
+
+describe('vigilância epidemiológica não é sinônimo de MRSA', () => {
+  // Correção clínica de 01/08/2026. O catálogo do clinBoard colapsa TODA
+  // cultura de vigilância em "MRSA". Nos laudos do corpus, a vigilância por
+  // swab anal declara textualmente que pesquisou "Enterococcus resistentes a
+  // Vancomicina" — é VRE, e MRSA é Staphylococcus aureus. Rotular um pelo
+  // outro no prontuário afirma um germe que o exame não procurou.
+  it('vigilância por swab anal NÃO vira MRSA', async () => {
+    const r = await extrair([
+      'CULTURA DE VIGILÂNCIA EPIDEMIOLÓGICA - SWAB ANAL',
+      'Material: Swab anal   Coleta...: 28/07/2026 - 10:00',
+      'Neste exame foram pesquisados:',
+      'Enterococcus resistentes a Vancomicina',
+    ])
+    expect(r.cultures[0]!.specimen).toBe('Cultura de Vigilância')
+    expect(r.cultures[0]!.specimen).not.toMatch(/MRSA/)
+  })
+
+  it('quando o laudo DIZ pesquisa de MRSA, o nome carrega o germe', async () => {
+    const r = await extrair([
+      'CULTURA DE VIGILÂNCIA - PESQUISA DE MRSA',
+      'Material: Swab nasal   Coleta...: 28/07/2026 - 10:00',
+      'Não houve desenvolvimento de Staphylococcus aureus resistente a meticilina',
+    ])
+    expect(r.cultures[0]!.specimen).toBe('Vigilância MRSA')
+    expect(r.cultures[0]!.growth).toBe('noGrowth')
+  })
+
+  it('a chave mais específica vence a mais genérica', async () => {
+    // "CULTURA DE VIGILÂNCIA - PESQUISA DE MRSA" casa com duas entradas do
+    // catálogo. Escolher a primeira do objeto fazia o exame que procurou MRSA
+    // perder o nome do germe que procurou.
+    const generico = await extrair([
+      'CULTURA DE VIGILÂNCIA EPIDEMIOLÓGICA',
+      'Material: Swab anal   Coleta...: 28/07/2026 - 10:00',
+      'Bactéria isolada....: Escherichia coli',
+    ])
+    expect(generico.cultures[0]!.specimen).toBe('Cultura de Vigilância')
+  })
+})
+
 describe('camada de texto corrompida', () => {
   it('R1 · texto ilegível é reconhecido como tal', () => {
     // Reproduz o estrago real de um laudo do corpus: bytes UTF-16 com a ordem

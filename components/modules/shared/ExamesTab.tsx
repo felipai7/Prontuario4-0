@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { agruparExamesPorHorario, parseExameTimestamp, type ClusterExames } from '@/lib/exames/agrupamento'
+import { grupoDoNome, gruposEmOrdem, nomeCanonico } from '@/lib/exames/grupos'
 import type { Exame, Paciente, ResultadoExame, ToastData } from '@/types'
 
 interface Props {
@@ -36,6 +37,21 @@ const ALIASES: Array<[RegExp, string]> = [
   [/^ph[_\s]*gasometria.*$/i,              'pH'],
   [/^pco2[_\s]*gasometria.*$/i,            'PCO2'],
   [/^po2[_\s]*gasometria.*$/i,             'PO2'],
+  // ── Grafias antigas do próprio catálogo ────────────────────────────────
+  // Padronizadas em 03/08/2026. O banco NÃO foi reescrito — decisão da
+  // Juliana, por ser a opção que não toca em dado de paciente. Sem estas
+  // linhas, um exame gravado antes e outro gravado depois viram DUAS linhas
+  // na tabela, e a evolução do paciente aparece partida ao meio.
+  [/^lactato\s+venoso$/i,                  'Lactato (Venosa)'],
+  [/^o2\s*sat\s*\(arterial\)$/i,           'SatO2 (Arterial)'],
+  [/^o2\s*sat\s*\(venosa\)$/i,             'SatO2 (Venosa)'],
+  [/^hct\s*\(arterial\)$/i,                'Hematócrito (Arterial)'],
+  [/^hct\s*\(venosa\)$/i,                  'Hematócrito (Venosa)'],
+  [/^pesquisa\s+de\s+fungos\s*\(lcr\)$/i,  'Pesquisa de Fungos (LCR)'],
+  // Estes três eram o MESMO exame em dois registros do catálogo.
+  [/^cloretos$/i,                          'Cloro'],
+  [/^ph\s+urinário$/i,                     'pH (U)'],
+  [/^dhl$/i,                               'LDH'],
   // Hemograma
   [/^hematócrit[oa]?$|^hct$/i,                                 'Hematócrito'],
   [/^hemoglob[ia]n[ao]?s?$/i,                                  'Hemoglobina'],
@@ -96,6 +112,22 @@ const ALIASES: Array<[RegExp, string]> = [
 
 function canonicalize(name: string): string {
   const trimmed = name.trim()
+  // Nome que JÁ é canônico no catálogo passa intacto.
+  //
+  // As ALIASES acima nasceram quando todo exame vinha da IA, que entregava o
+  // diferencial em PERCENTUAL — daí os sufixos "(%)". O extrator local entrega
+  // o valor ABSOLUTO (decisão da Juliana), e sem esta guarda a tela carimbava
+  // "Segmentados (%)" numa linha cujo valor é 8.500 /mm³.
+  //
+  // O que sobra das ALIASES continua servindo ao que elas sempre serviram:
+  // traduzir os nomes LEGADOS do banco ("na_gasometria", "segmentados_%").
+  // Registro antigo em percentual segue numa linha própria, de propósito — o
+  // valor dele não é comparável com o absoluto, e juntá-los na mesma linha
+  // esconderia isso.
+  // Volta a grafia DO CATÁLOGO, não a recebida: senão "Pesquisa De Fungos
+  // (LCR)" e "Pesquisa de Fungos (LCR)" viram duas linhas da tabela.
+  const doCatalogo = nomeCanonico(trimmed)
+  if (doCatalogo) return doCatalogo
   for (const [pattern, canonical] of ALIASES) {
     if (pattern.test(trimmed)) return canonical
   }
@@ -103,6 +135,20 @@ function canonicalize(name: string): string {
 }
 
 // ── Category grouping ─────────────────────────────────────────────────────────
+//
+// O grupo de cada exame é DADO CLÍNICO, e mora em
+// `lib/exames/extracao/catalogo/grupos.json`, revisado exame por exame pela
+// Juliana em 03/08/2026. A ordem dos grupos também é dela.
+//
+// A lista de regex abaixo era, até então, o único agrupamento que existia — e
+// agrupava pelo NOME EXIBIDO, o que fazia o sedimento urinário cair dentro do
+// hemograma (`Leucócitos (U)` casa com `leucócit`), o pH urinário cair na
+// gasometria, e os índices plaquetários caírem em "Outros" porque o padrão
+// procurava `mpv`, em inglês, e o extrator emite `VPM`.
+//
+// Ela sobrevive como SEGUNDA opção, para nomes que não estão no catálogo:
+// registros antigos gravados pela IA e, principalmente, os antimicrobianos do
+// antibiograma, que não são analitos e não têm entrada no catálogo.
 type Category = { label: string; test: (n: string) => boolean }
 
 const CATEGORIES: Category[] = [
@@ -143,6 +189,8 @@ const CATEGORIES: Category[] = [
 ]
 
 function getCategoryLabel(name: string): string {
+  const doCatalogo = grupoDoNome(name)
+  if (doCatalogo) return doCatalogo
   for (const cat of CATEGORIES) {
     if (cat.test(name)) return cat.label
   }
@@ -160,10 +208,11 @@ function buildTableRows(allParams: string[]): TableRow[] {
     groupMap.get(cat)!.push(p)
   }
   const rows: TableRow[] = []
-  for (const cat of CATEGORIES) {
-    const params = groupMap.get(cat.label)
+  // A ordem dos grupos vem do catálogo, não da ordem deste array.
+  for (const label of gruposEmOrdem()) {
+    const params = groupMap.get(label)
     if (params?.length) {
-      rows.push({ kind: 'header', label: cat.label })
+      rows.push({ kind: 'header', label })
       params.forEach(p => rows.push({ kind: 'param', name: p }))
     }
   }
@@ -173,6 +222,33 @@ function buildTableRows(allParams: string[]): TableRow[] {
     outros.forEach(p => rows.push({ kind: 'param', name: p }))
   }
   return rows
+}
+
+// ── R3.1 · canal "o laudo não trouxe" ────────────────────────────────────────
+//
+// `notasLaudo` chega com o texto INTEIRO de `entrega.ts` (MOTIVOS), pensado
+// para um item de lista âmbar — verboso demais para uma nota que precisa ser
+// visualmente subordinada. Esta função reduz para uma contagem por tipo,
+// sem aprender nomes de `ReviewReason`: só reconhece os DOIS textos que o
+// canal "nota" pode produzir hoje (`referenceAbsent`, `unknownUnit`), pelo
+// mesmo trecho que já identifica o motivo para a médica.
+function resumoNotasLaudo(notas: { nome: string; motivo: string }[]): string {
+  const semReferencia = notas.filter(n => n.motivo.includes('faixa de referência')).length
+  const semUnidade = notas.filter(n => n.motivo.includes('unidade não reconhecida')).length
+  const partes: string[] = []
+  if (semReferencia > 0) {
+    partes.push(
+      semReferencia === 1
+        ? '1 resultado deste laudo veio sem faixa de referência'
+        : `${semReferencia} resultados deste laudo vieram sem faixa de referência`,
+    )
+  }
+  if (semUnidade > 0) {
+    partes.push(
+      semUnidade === 1 ? '1 resultado com unidade não reconhecida' : `${semUnidade} resultados com unidade não reconhecida`,
+    )
+  }
+  return partes.join(' · ')
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -193,6 +269,28 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
   const [savingM,    setSavingM]    = useState(false)
   const [rawText,    setRawText]    = useState('')
   const [pastedImgs, setPastedImgs] = useState<{ base64: string; mediaType: string; preview: string }[]>([])
+  // Achado A-04 (Tarefa 7): o extrator marcava, o adaptador traduzia, o banco
+  // guardava — e nenhum componente lia. `pendencias` e `conferenciaPaciente`
+  // são o que a rota devolve em `RespostaExtracao`, guardados aqui só para a
+  // tela renderizar a lista (D9) e o aviso (D8) do ÚLTIMO envio.
+  const [pendencias, setPendencias] = useState<{ nome: string; motivo: string }[]>([])
+  // R3.1 — canal "o laudo não trouxe" (decisão da Juliana, 03/08/2026): o
+  // MESMO formato de `pendencias`, o mesmo ciclo de vida (M3), mas nunca a
+  // mesma lista. `pendencias` é "confira este valor" (⚠ + âmbar); isto é "o
+  // laudo está incompleto" — nota discreta, sem ⚠, sem âmbar.
+  const [notasLaudo, setNotasLaudo] = useState<{ nome: string; motivo: string }[]>([])
+  const [conferenciaPaciente, setConferenciaPaciente] = useState<string>('naoPerguntado')
+
+  // M3 — os três descrevem o ÚLTIMO envio, e por isso precisam morrer com
+  // ele. Sem esta limpeza, a faixa "⚠ N resultados deste laudo pedem
+  // conferência" e o aviso de paciente divergente continuavam na tela depois
+  // de um envio que FALHOU, e depois de o painel ser fechado — atribuídos a
+  // nada, e do mesmo jeito que estariam se o envio tivesse dado certo.
+  const limparAvisosDoLaudo = () => {
+    setPendencias([])
+    setNotasLaudo([])
+    setConferenciaPaciente('naoPerguntado')
+  }
 
   // ── Pivot table data ─────────────────────────────────────────────────────
   const comRes  = exames.filter(ex => ex.resultados && ex.resultados.length > 0)
@@ -309,17 +407,31 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
     try {
       const resp = await fetch('/api/extract-exam', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ images: pastedImgs.map(i => ({ base64: i.base64, mediaType: i.mediaType })) }),
+        body: JSON.stringify({
+          images: pastedImgs.map(i => ({ base64: i.base64, mediaType: i.mediaType })),
+          pacienteId: paciente.id, pacienteNome: paciente.nome,
+          nomeArquivo: 'print-colado',
+        }),
       })
       const data = await resp.json()
-      if (!resp.ok) throw new Error(data.error)
-      await supabase.from('exames').insert({
-        paciente_id: paciente.id, tipo_exame: data.tipo_exame,
-        data_exame: data.data_exame, resultados: data.resultados,
-        observacoes: data.observacoes, raw_text: data.raw_text, nome_arquivo: 'print-colado',
-      })
-      resetAdding(); onRefresh(); showToast('Exame extraído e salvo!')
-    } catch (e: any) { setLocalErr(e.message) }
+      if (!resp.ok || !data.ok) throw new Error(data.erro ?? 'Não foi possível salvar')
+
+      // `resetAdding()` limpa os avisos do laudo anterior (M3), então ele
+      // vem ANTES: invertido, apagaria justamente os avisos que acabaram de
+      // chegar. A ordem é parte do conserto, não estilo.
+      resetAdding()
+      setPendencias(data.pendencias ?? [])
+      setNotasLaudo(data.notasLaudo ?? [])
+      setConferenciaPaciente(data.conferenciaPaciente ?? 'naoPerguntado')
+      onRefresh()
+      showToast(
+        data.duplicataDe
+          ? `Salvo. Atenção: este mesmo arquivo já foi enviado em ${data.duplicataDe}.`
+          : data.registros > 1
+            ? `Laudo com ${data.registros} datas de coleta: ${data.registros} exames salvos!`
+            : 'Exame extraído e salvo!',
+      )
+    } catch (e: any) { setLocalErr(e.message); limparAvisosDoLaudo() }
     setExtracting(false)
   }
 
@@ -329,17 +441,31 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
     try {
       const resp = await fetch('/api/extract-exam', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rawText: rawText.trim() }),
+        body: JSON.stringify({
+          rawText: rawText.trim(),
+          pacienteId: paciente.id, pacienteNome: paciente.nome,
+          nomeArquivo: null,
+        }),
       })
       const data = await resp.json()
-      if (!resp.ok) throw new Error(data.error)
-      await supabase.from('exames').insert({
-        paciente_id: paciente.id, tipo_exame: data.tipo_exame,
-        data_exame: data.data_exame, resultados: data.resultados,
-        observacoes: data.observacoes, raw_text: data.raw_text, nome_arquivo: null,
-      })
-      resetAdding(); onRefresh(); showToast('Exame extraído e salvo!')
-    } catch (e: any) { setLocalErr(e.message) }
+      if (!resp.ok || !data.ok) throw new Error(data.erro ?? 'Não foi possível salvar')
+
+      // `resetAdding()` limpa os avisos do laudo anterior (M3), então ele
+      // vem ANTES: invertido, apagaria justamente os avisos que acabaram de
+      // chegar. A ordem é parte do conserto, não estilo.
+      resetAdding()
+      setPendencias(data.pendencias ?? [])
+      setNotasLaudo(data.notasLaudo ?? [])
+      setConferenciaPaciente(data.conferenciaPaciente ?? 'naoPerguntado')
+      onRefresh()
+      showToast(
+        data.duplicataDe
+          ? `Salvo. Atenção: este mesmo arquivo já foi enviado em ${data.duplicataDe}.`
+          : data.registros > 1
+            ? `Laudo com ${data.registros} datas de coleta: ${data.registros} exames salvos!`
+            : 'Exame extraído e salvo!',
+      )
+    } catch (e: any) { setLocalErr(e.message); limparAvisosDoLaudo() }
     setExtracting(false)
   }
 
@@ -362,19 +488,37 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
         reader.onerror = rej
         reader.readAsDataURL(file)
       })
+      // Gravação agora acontece no servidor (Tarefa 7 — achado A-04): tanto o
+      // caminho local (`processarPdf`) quanto o da IA (`processarIA`)
+      // devolvem o mesmo formato `RespostaExtracao`, então este handler não
+      // precisa mais saber por qual dos dois o laudo passou.
       const resp = await fetch('/api/extract-exam', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base64: b64, mediaType: file.type }),
+        body: JSON.stringify({
+          base64: b64, mediaType: file.type,
+          pacienteId: paciente.id, pacienteNome: paciente.nome,
+          nomeArquivo: file.name,
+        }),
       })
       const data = await resp.json()
-      if (!resp.ok) throw new Error(data.error)
-      await supabase.from('exames').insert({
-        paciente_id: paciente.id, tipo_exame: data.tipo_exame,
-        data_exame: data.data_exame, resultados: data.resultados,
-        observacoes: data.observacoes, raw_text: data.raw_text, nome_arquivo: file.name,
-      })
-      resetAdding(); onRefresh(); showToast('Exame extraído e salvo!')
-    } catch (e: any) { setLocalErr(e.message) }
+      if (!resp.ok || !data.ok) throw new Error(data.erro ?? 'Não foi possível salvar')
+
+      // `resetAdding()` limpa os avisos do laudo anterior (M3), então ele
+      // vem ANTES: invertido, apagaria justamente os avisos que acabaram de
+      // chegar. A ordem é parte do conserto, não estilo.
+      resetAdding()
+      setPendencias(data.pendencias ?? [])
+      setNotasLaudo(data.notasLaudo ?? [])
+      setConferenciaPaciente(data.conferenciaPaciente ?? 'naoPerguntado')
+      onRefresh()
+      showToast(
+        data.duplicataDe
+          ? `Salvo. Atenção: este mesmo arquivo já foi enviado em ${data.duplicataDe}.`
+          : data.registros > 1
+            ? `Laudo com ${data.registros} datas de coleta: ${data.registros} exames salvos!`
+            : 'Exame extraído e salvo!',
+      )
+    } catch (e: any) { setLocalErr(e.message); limparAvisosDoLaudo() }
     setExtracting(false)
   }
 
@@ -390,12 +534,28 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
       }))
     let dataFmt: string | null = null
     if (mData) { const [y, m, d] = mData.split('-'); dataFmt = `${d}/${m}/${y}` }
-    await supabase.from('exames').insert({
+    // A-05, o último ponto que sobrou (I1). Este insert jogava fora o retorno,
+    // mostrava "Exame salvo!" e chamava `resetAdding()`, que apaga o
+    // formulário. `handleDeleteExame` e `handleSaveEditExame`, no mesmo
+    // arquivo, sempre conferiram — o que mostra que aqui foi descuido, e não
+    // política.
+    //
+    // É o caminho de quando os automáticos falharam: a médica digitou os
+    // valores à mão. Perder isso e ainda dizer que salvou é o pior dos dois
+    // mundos, porque ela não tem como desconfiar nem como redigitar do que
+    // não está mais na tela. Por isso o erro sai ANTES do reset.
+    const { error } = await supabase.from('exames').insert({
       paciente_id: paciente.id, tipo_exame: mTipo.trim(), data_exame: dataFmt,
       resultados: resultados.length > 0 ? resultados : null,
       observacoes: mObs.trim() || null, raw_text: null, nome_arquivo: null,
     })
-    resetAdding(); onRefresh(); showToast('Exame salvo!'); setSavingM(false)
+    setSavingM(false)
+    if (error) {
+      setLocalErr('Não foi possível salvar: ' + error.message + ' — os valores digitados continuam aqui.')
+      showToast('Erro ao salvar o exame', 'error')
+      return
+    }
+    resetAdding(); onRefresh(); showToast('Exame salvo!')
   }
 
   const resetAdding = () => {
@@ -403,6 +563,10 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
     setPastedImgs([]); setRawText('')
     if (fileRef.current) fileRef.current.value = ''
     setMTipo(''); setMData(''); setMObs(''); setMRows([emptyResultado()])
+    // M3 — fechar o painel também encerra o laudo anterior. Quem chama isto
+    // e QUER mostrar avisos novos (os três handlers de extração) chama-o
+    // ANTES de `setPendencias`, nunca depois.
+    limparAvisosDoLaudo()
   }
 
   const updateRow = (i: number, p: Partial<ManualResultado>) =>
@@ -609,6 +773,42 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
         <p className="text-slate-400 text-sm italic text-center py-8">Nenhum exame registrado</p>
       )}
 
+      {/* D8 — aviso quando o nome do laudo não bate com o do paciente da tela.
+          Avisa, nunca bloqueia: o exame já foi salvo mesmo assim. */}
+      {conferenciaPaciente === 'naoConfere' && (
+        <div className="mb-3 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <b>Atenção:</b> o nome no laudo enviado não parece ser o deste paciente.
+          O exame foi salvo — confira antes de usar.
+        </div>
+      )}
+
+      {/* D9 — lista de pendências do ÚLTIMO laudo enviado, acima da tabela.
+          Escolhida entre três formas (símbolo só / um valor + aviso / símbolo
+          na célula + lista) com as três à vista da Juliana. */}
+      {pendencias.length > 0 && (
+        <div className="mb-3 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <b>⚠ {pendencias.length} resultado{pendencias.length > 1 ? 's' : ''} deste laudo
+          {pendencias.length > 1 ? ' pedem' : ' pede'} conferência</b>
+          <ul className="mt-1.5 space-y-0.5">
+            {pendencias.map((p, i) => (
+              <li key={`${p.nome}-${i}`} className="text-amber-800">
+                {p.nome} · {p.motivo}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* D9.1 — canal "o laudo não trouxe" (R3.1, decisão da Juliana,
+          03/08/2026): o laudo está incompleto, o VALOR não é suspeito. Sem
+          ⚠, sem âmbar — texto discreto, visualmente subordinado à lista
+          acima. `referenceAbsent` e `unknownUnit` continuam visíveis; só
+          pararam de soar como alarme (49% da tabela, no acervo real, antes
+          desta divisão). */}
+      {notasLaudo.length > 0 && (
+        <p className="mb-3 text-xs text-slate-400">{resumoNotasLaudo(notasLaudo)}</p>
+      )}
+
       {/* Pivot table */}
       {comRes.length > 0 && (
         <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
@@ -624,6 +824,19 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
                     <th key={cl.key} className="px-2 py-2 text-center bg-slate-100 border-b-2 border-r border-slate-200 font-semibold min-w-[80px] whitespace-nowrap">
                       <p className="text-slate-700 font-semibold text-xs leading-tight">{cl.dataLabel ?? `Exame ${idx + 1}`}</p>
                       {cl.horaLabel && <p className="text-slate-400 font-normal text-xs mt-0.5">{cl.horaLabel}</p>}
+                      {/* D10 — o marcador do laudo lido por IA vive em
+                          `observacoes` do registro, mas a maioria dos exames
+                          da IA TEM resultados estruturados e por isso cai
+                          aqui na tabela pivô, não na lista "sem
+                          estruturação" (onde `observacoes` já era exibido).
+                          Sem isto, o marcador nunca aparecia na tela — a
+                          única leitura que a Juliana de fato usa. */}
+                      {cl.exames.some(ex => ex.observacoes?.includes('Lido por IA')) && (
+                        <p className="text-[10px] text-slate-400 font-normal mt-0.5"
+                          title={cl.exames.map(ex => ex.observacoes).filter(Boolean).join(' · ')}>
+                          💬 Lido por IA
+                        </p>
+                      )}
                       {!solo && (
                         <p className="text-[10px] text-indigo-500 font-semibold mt-0.5"
                           title={`${cl.exames.length} exames desta coleta agrupados nesta coluna`}>
@@ -802,12 +1015,25 @@ function PivotCell({ r, rowBg }: { r: ResultadoExame | undefined; rowBg: string 
     r.alterado                          ? 'bg-amber-50 text-amber-700' :
                                           'text-slate-600'
   const arrow = r.direcao === 'alto' ? ' ↑' : r.direcao === 'baixo' ? ' ↓' : r.alterado ? ' !' : ''
+  // R3.1 — só o canal "confira" acende o ⚠ (decisão da Juliana, 03/08/2026):
+  // `revisar` sozinho mistura os dois canais e foi o que marcava 49% da
+  // tabela no acervo real. `confere_valor` é `undefined` numa linha gravada
+  // ANTES desta divisão — sem informação de canal, cai no comportamento
+  // antigo (`revisar`, qualquer motivo), para não apagar o ⚠ de um
+  // resultado já gravado só porque ele não tem o campo novo.
+  const confere = r.confere_valor ?? r.revisar ?? false
   return (
     <td className={`px-2 py-2 text-center border-r border-b border-slate-100 whitespace-nowrap text-xs ${cls}`}
       title={r.referencia ? `Ref: ${r.referencia}` : undefined}>
       <span className="font-semibold">{r.valor}</span>
       {r.unidade && <span className="ml-0.5 opacity-60">{r.unidade}</span>}
       {arrow && <span className="font-black">{arrow}</span>}
+      {/* D9 — marca na célula. D5 — quando é conflito (dois valores na mesma
+          coleta), `r.valor` já chega pronto como "47,0 / 33,0" de entrega.ts;
+          aqui não há nada para escolher, só marcar. */}
+      {confere && (
+        <span className="ml-1 text-amber-600" title={(r.motivos_confere ?? r.motivos_revisao ?? []).join(' · ')}>⚠</span>
+      )}
     </td>
   )
 }
