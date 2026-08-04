@@ -79,6 +79,17 @@ export async function POST(request: NextRequest) {
         pacienteNome ?? null,
       )
 
+      // Por que um laudo de laboratório conhecido cairia na IA? O log de
+      // 03/08 mostrou um IMEC indo para o Gemini sem explicação, porque o
+      // diagnóstico cobria só a exceção e não o CAMINHO. Aqui vai o veredito
+      // da leitura local: qual perfil foi detectado, que avisos saíram e
+      // quanto foi lido. Nada disso é conteúdo de laudo (R10) — são códigos
+      // tipados, um identificador de perfil e contagens.
+      if (!resultado.ok && resultado.erro === 'NAO_RECONHECIDO') {
+        console.error('[extract-exam] local nao reconheceu:',
+          JSON.stringify(resultado.diagnostico ?? { semDiagnostico: true }))
+      }
+
       // 'NAO_RECONHECIDO' não é uma falha de gravação — é o sinal de que o
       // laudo não foi lido aqui, e por isso segue para a IA (Q6). Qualquer
       // outro `ok: false` É falha de verdade (ex.: A-05, erro do banco) e
@@ -184,8 +195,11 @@ export async function POST(request: NextRequest) {
     // diagnosticar: a tela dizia "não foi possível ler" e o servidor não
     // guardava nada. Tirar a mensagem sem pôr um diagnóstico no lugar deixa
     // o defeito invisível dos dois lados.
-    const err = e as { name?: string; stack?: string }
+    const err = e as { name?: string; stack?: string; status?: number; code?: string | number }
+    // `status` e `code` do SDK do Google dizem SE foi chave, modelo ou cota —
+    // são números e códigos, nunca conteúdo. A mensagem continua de fora.
     console.error('[extract-exam] falhou:', err?.name ?? 'erro sem nome',
+      'status=' + String(err?.status ?? '-'), 'code=' + String(err?.code ?? '-'),
       (err?.stack ?? '').split('\n').slice(1, 4).join(' | '))
 
     return NextResponse.json(
