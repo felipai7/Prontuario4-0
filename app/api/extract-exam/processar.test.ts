@@ -7,7 +7,7 @@
 // ══════════════════════════════════════════════════════════════════════════
 
 import { describe, it, expect } from 'vitest'
-import { processarPdf, processarIA, type ResultadoIA } from './processar'
+import { processarPdf, MENSAGEM_NAO_RECONHECIDO } from './processar'
 // Relativo, não pelo alias `@/lib/exames/extracao/...`: o teste estrutural
 // `fronteira.test.ts` proíbe código de fora do módulo de importar um caminho
 // interno pelo alias — só o índice público (`@/lib/exames/extracao`) pode. O
@@ -82,12 +82,6 @@ describe('R3.1 · a nota discreta ("o laudo não trouxe") viaja separada das pen
       expect(r.pendencias.length).toBe(0)
     }
   })
-
-  it('caminho da IA devolve notasLaudo vazio — mesmo contrato do local', async () => {
-    const r = await processarIA(cliente(), 'pac-1', RESULTADO_IA(), 'print-colado.png')
-    expect(r.ok).toBe(true)
-    if (r.ok) expect(r.notasLaudo).toEqual([])
-  })
 })
 
 describe('A-03 · cultura conta na decisão local-vs-IA', () => {
@@ -128,39 +122,10 @@ describe('I5 · imagem conta na decisão local-vs-IA', () => {
   })
 })
 
-// ══════════════════════════════════════════════════════════════════════════
-// Tarefa 6b — `processarIA`: o mesmo contrato de resposta, mas para o
-// resultado que já veio pronto da IA (prints, texto colado, ou PDF que o
-// extrator local não reconheceu). NÃO passa por `montarEntrega`/
-// `adaptarParaExames`: esse caminho recalcularia `alterado`/`direcao` a
-// partir de `referenciaEstruturada`, campo que a IA nunca preenche (ela só
-// devolve texto livre de referência), e apagaria sinal que a IA já acertou.
-// ══════════════════════════════════════════════════════════════════════════
-
-const RESULTADO_IA = (): ResultadoIA => ({
-  tipo_exame: 'Bioquímica',
-  data_exame: '12/05/2026',
-  resultados: [
-    { nome: 'Potássio', valor: '6,2', unidade: 'mEq/L', referencia: '3,5 - 5,0', alterado: true, direcao: 'alto' },
-  ],
-  observacoes: null,
-})
-
-describe('D7 · o caminho da IA também para de fingir sucesso', () => {
-  it('falha de gravação vira resultado explícito, não sucesso', async () => {
-    const r = await processarIA(
-      cliente({ inserir: async () => ({ erro: 'permissão negada' }) }),
-      'pac-1', RESULTADO_IA(), 'print-colado.png')
-    expect(r.ok).toBe(false)
-    if (!r.ok) expect(r.erro).toMatch(/permissão negada/)
-  })
-})
-
-// C1 — o caminho da IA nomeia `impressao_digital` (vazia) na linha inserida,
-// e por isso morre exatamente igual ao caminho local enquanto a coluna não
-// existe. É o caminho de quem colou um print porque o PDF não foi reconhecido:
-// falhar aqui é falhar na última alternativa que a plantonista tinha.
-describe('C1 · os DOIS caminhos gravam com e sem a coluna impressao_digital', () => {
+// C1 — a coluna `impressao_digital` só existe depois do ALTER TABLE, que é
+// pendência externa. Sem esta tolerância, TODA gravação falharia hoje — e
+// agora que o caminho local é o único, falhar aqui é não gravar exame nenhum.
+describe('C1 · o caminho local grava com e sem a coluna impressao_digital', () => {
   const bancoSemAColuna = () => {
     const gravadas: any[] = []
     return {
@@ -177,63 +142,72 @@ describe('C1 · os DOIS caminhos gravam com e sem a coluna impressao_digital', (
     }
   }
 
-  it('coluna AUSENTE · caminho da IA grava assim mesmo', async () => {
-    const { cliente: c, gravadas } = bancoSemAColuna()
-    const r = await processarIA(c, 'pac-1', RESULTADO_IA(), 'print-colado.png')
-    expect(r.ok).toBe(true)
-    expect(gravadas[0].resultados[0].nome).toBe('Potássio')
-  })
-
-  it('coluna AUSENTE · caminho local do PDF grava assim mesmo', async () => {
+  it('coluna AUSENTE · grava assim mesmo', async () => {
     const { cliente: c, gravadas } = bancoSemAColuna()
     const r = await processarPdf(c, 'pac-1', PDF(), 'laudo.pdf', 'Maria das Dores Silva')
     expect(r.ok).toBe(true)
     expect(gravadas).toHaveLength(1)
   })
 
-  it('coluna PRESENTE · caminho da IA continua enviando o campo', async () => {
+  it('coluna PRESENTE · o campo continua sendo enviado', async () => {
     let gravado: any = null
-    await processarIA(
+    await processarPdf(
       cliente({ inserir: async l => { gravado = l; return { erro: null } } }),
-      'pac-1', RESULTADO_IA(), 'print-colado.png')
+      'pac-1', PDF(), 'laudo.pdf', 'Maria das Dores Silva')
     expect('impressao_digital' in gravado[0]).toBe(true)
   })
 })
 
-describe('flags da IA sobrevivem sem recálculo', () => {
-  it('alterado e direcao chegam ao inserir EXATAMENTE como a IA devolveu', async () => {
-    let gravado: any = null
-    await processarIA(
-      cliente({ inserir: async linhas => { gravado = linhas; return { erro: null } } }),
-      'pac-1', RESULTADO_IA(), 'print-colado.png')
-    const r = gravado[0].resultados[0]
-    expect(r.alterado).toBe(true)
-    expect(r.direcao).toBe('alto')
-    // Continua sendo o MESMO valor da IA, não um recálculo que por acaso bateu.
-    expect(r.valor).toBe('6,2')
-    expect(r.referencia).toBe('3,5 - 5,0')
-  })
-})
+// ══════════════════════════════════════════════════════════════════════════
+// 03/08/2026 — a IA saiu da rota. O que antes era o sinal interno
+// `NAO_RECONHECIDO` ("manda para o Google") passou a ser a ÚNICA coisa que a
+// médica vê quando o leitor local não dá conta, e por isso virou mensagem de
+// verdade. Sem estes testes, a remoção deixaria o caso mudo: o envio falharia
+// e a tela mostraria o nome de um sinal interno.
+// ══════════════════════════════════════════════════════════════════════════
 
-describe('D10 · o marcador de IA é do registro, não do valor', () => {
-  it('observações do registro carregam o marcador; nenhum resultado individual carrega', async () => {
-    let gravado: any = null
-    await processarIA(
-      cliente({ inserir: async linhas => { gravado = linhas; return { erro: null } } }),
-      'pac-1', RESULTADO_IA(), 'print-colado.png')
-    expect(gravado[0].observacoes).toMatch(/Lido por IA/)
-    for (const r of gravado[0].resultados) {
-      expect(JSON.stringify(r)).not.toMatch(/Lido por IA/)
+describe('laudo que o leitor local não reconhece', () => {
+  // Laboratório fora da lista: o texto é legível, mas não casa com perfil
+  // nenhum e não tem linha de resultado que o extrator saiba montar. É o
+  // caso do antibiograma solto medido no acervo (1 de 50).
+  const PDF_LAB_DESCONHECIDO = () => pdfDeLinhas([
+    'CLINICA POPULAR SAO JORGE',
+    'Documento interno - conferencia de estoque',
+    'Item 4471 conferido por AMANDA P. em 02/08',
+  ])
+
+  it('devolve a falha honesta em vez de sumir com o envio', async () => {
+    const r = await processarPdf(cliente(), 'pac-1', PDF_LAB_DESCONHECIDO(), 'laudo.pdf', null)
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      expect(r.erro).toBe(MENSAGEM_NAO_RECONHECIDO)
+      // Diz o que fazer, não só que deu errado — é o caminho manual.
+      expect(r.erro).toMatch(/Manual/)
+      // E não é mais o nome de um sinal interno na cara da médica.
+      expect(r.erro).not.toMatch(/NAO_RECONHECIDO/)
     }
   })
 
-  it('sucesso devolve o mesmo formato de resposta do caminho local', async () => {
-    const r = await processarIA(cliente(), 'pac-1', RESULTADO_IA(), 'print-colado.png')
-    expect(r.ok).toBe(true)
-    if (r.ok) {
-      expect(r.via).toBe('ia')
-      expect(r.registros).toBe(1)
-      expect(r.duplicataDe).toBeNull()
+  it('R10 · a mensagem não carrega nada do que estava no documento', async () => {
+    const r = await processarPdf(cliente(), 'pac-1', PDF_LAB_DESCONHECIDO(), 'laudo.pdf', 'Maria das Dores Silva')
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      expect(r.erro).not.toMatch(/SAO JORGE|AMANDA|4471|Maria|laudo\.pdf/i)
+      // O diagnóstico existe para o LOG, e também não carrega conteúdo: só
+      // perfil, códigos de aviso e contagens.
+      expect(JSON.stringify(r.diagnostico ?? {})).not.toMatch(/SAO JORGE|AMANDA|4471|Maria/i)
     }
+  })
+
+  it('não é confundida com falha de gravação: só este caso traz diagnóstico', async () => {
+    const naoReconhecido = await processarPdf(cliente(), 'pac-1', PDF_LAB_DESCONHECIDO(), 'laudo.pdf', null)
+    const bancoFalhou = await processarPdf(
+      cliente({ inserir: async () => ({ erro: 'permissão negada' }) }),
+      'pac-1', PDF(), 'laudo.pdf', 'Maria das Dores Silva')
+    expect(naoReconhecido.ok).toBe(false)
+    expect(bancoFalhou.ok).toBe(false)
+    // É por esta diferença que a rota escolhe 422 (documento) ou 500 (nós).
+    if (!naoReconhecido.ok) expect(naoReconhecido.diagnostico).toBeDefined()
+    if (!bancoFalhou.ok) expect(bancoFalhou.diagnostico).toBeUndefined()
   })
 })
