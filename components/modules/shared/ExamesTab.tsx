@@ -249,6 +249,16 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
   const [pendencias, setPendencias] = useState<{ nome: string; motivo: string }[]>([])
   const [conferenciaPaciente, setConferenciaPaciente] = useState<string>('naoPerguntado')
 
+  // M3 — os dois descrevem o ÚLTIMO envio, e por isso precisam morrer com
+  // ele. Sem esta limpeza, a faixa "⚠ N resultados deste laudo pedem
+  // conferência" e o aviso de paciente divergente continuavam na tela depois
+  // de um envio que FALHOU, e depois de o painel ser fechado — atribuídos a
+  // nada, e do mesmo jeito que estariam se o envio tivesse dado certo.
+  const limparAvisosDoLaudo = () => {
+    setPendencias([])
+    setConferenciaPaciente('naoPerguntado')
+  }
+
   // ── Pivot table data ─────────────────────────────────────────────────────
   const comRes  = exames.filter(ex => ex.resultados && ex.resultados.length > 0)
   const semRes  = [...exames].filter(ex => !ex.resultados || ex.resultados.length === 0)
@@ -373,9 +383,13 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
       const data = await resp.json()
       if (!resp.ok || !data.ok) throw new Error(data.erro ?? 'Não foi possível salvar')
 
+      // `resetAdding()` limpa os avisos do laudo anterior (M3), então ele
+      // vem ANTES: invertido, apagaria justamente os avisos que acabaram de
+      // chegar. A ordem é parte do conserto, não estilo.
+      resetAdding()
       setPendencias(data.pendencias ?? [])
       setConferenciaPaciente(data.conferenciaPaciente ?? 'naoPerguntado')
-      resetAdding(); onRefresh()
+      onRefresh()
       showToast(
         data.duplicataDe
           ? `Salvo. Atenção: este mesmo arquivo já foi enviado em ${data.duplicataDe}.`
@@ -383,7 +397,7 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
             ? `Laudo com ${data.registros} datas de coleta: ${data.registros} exames salvos!`
             : 'Exame extraído e salvo!',
       )
-    } catch (e: any) { setLocalErr(e.message) }
+    } catch (e: any) { setLocalErr(e.message); limparAvisosDoLaudo() }
     setExtracting(false)
   }
 
@@ -402,9 +416,13 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
       const data = await resp.json()
       if (!resp.ok || !data.ok) throw new Error(data.erro ?? 'Não foi possível salvar')
 
+      // `resetAdding()` limpa os avisos do laudo anterior (M3), então ele
+      // vem ANTES: invertido, apagaria justamente os avisos que acabaram de
+      // chegar. A ordem é parte do conserto, não estilo.
+      resetAdding()
       setPendencias(data.pendencias ?? [])
       setConferenciaPaciente(data.conferenciaPaciente ?? 'naoPerguntado')
-      resetAdding(); onRefresh()
+      onRefresh()
       showToast(
         data.duplicataDe
           ? `Salvo. Atenção: este mesmo arquivo já foi enviado em ${data.duplicataDe}.`
@@ -412,7 +430,7 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
             ? `Laudo com ${data.registros} datas de coleta: ${data.registros} exames salvos!`
             : 'Exame extraído e salvo!',
       )
-    } catch (e: any) { setLocalErr(e.message) }
+    } catch (e: any) { setLocalErr(e.message); limparAvisosDoLaudo() }
     setExtracting(false)
   }
 
@@ -450,9 +468,13 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
       const data = await resp.json()
       if (!resp.ok || !data.ok) throw new Error(data.erro ?? 'Não foi possível salvar')
 
+      // `resetAdding()` limpa os avisos do laudo anterior (M3), então ele
+      // vem ANTES: invertido, apagaria justamente os avisos que acabaram de
+      // chegar. A ordem é parte do conserto, não estilo.
+      resetAdding()
       setPendencias(data.pendencias ?? [])
       setConferenciaPaciente(data.conferenciaPaciente ?? 'naoPerguntado')
-      resetAdding(); onRefresh()
+      onRefresh()
       showToast(
         data.duplicataDe
           ? `Salvo. Atenção: este mesmo arquivo já foi enviado em ${data.duplicataDe}.`
@@ -460,7 +482,7 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
             ? `Laudo com ${data.registros} datas de coleta: ${data.registros} exames salvos!`
             : 'Exame extraído e salvo!',
       )
-    } catch (e: any) { setLocalErr(e.message) }
+    } catch (e: any) { setLocalErr(e.message); limparAvisosDoLaudo() }
     setExtracting(false)
   }
 
@@ -476,12 +498,28 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
       }))
     let dataFmt: string | null = null
     if (mData) { const [y, m, d] = mData.split('-'); dataFmt = `${d}/${m}/${y}` }
-    await supabase.from('exames').insert({
+    // A-05, o último ponto que sobrou (I1). Este insert jogava fora o retorno,
+    // mostrava "Exame salvo!" e chamava `resetAdding()`, que apaga o
+    // formulário. `handleDeleteExame` e `handleSaveEditExame`, no mesmo
+    // arquivo, sempre conferiram — o que mostra que aqui foi descuido, e não
+    // política.
+    //
+    // É o caminho de quando os automáticos falharam: a médica digitou os
+    // valores à mão. Perder isso e ainda dizer que salvou é o pior dos dois
+    // mundos, porque ela não tem como desconfiar nem como redigitar do que
+    // não está mais na tela. Por isso o erro sai ANTES do reset.
+    const { error } = await supabase.from('exames').insert({
       paciente_id: paciente.id, tipo_exame: mTipo.trim(), data_exame: dataFmt,
       resultados: resultados.length > 0 ? resultados : null,
       observacoes: mObs.trim() || null, raw_text: null, nome_arquivo: null,
     })
-    resetAdding(); onRefresh(); showToast('Exame salvo!'); setSavingM(false)
+    setSavingM(false)
+    if (error) {
+      setLocalErr('Não foi possível salvar: ' + error.message + ' — os valores digitados continuam aqui.')
+      showToast('Erro ao salvar o exame', 'error')
+      return
+    }
+    resetAdding(); onRefresh(); showToast('Exame salvo!')
   }
 
   const resetAdding = () => {
@@ -489,6 +527,10 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
     setPastedImgs([]); setRawText('')
     if (fileRef.current) fileRef.current.value = ''
     setMTipo(''); setMData(''); setMObs(''); setMRows([emptyResultado()])
+    // M3 — fechar o painel também encerra o laudo anterior. Quem chama isto
+    // e QUER mostrar avisos novos (os três handlers de extração) chama-o
+    // ANTES de `setPendencias`, nunca depois.
+    limparAvisosDoLaudo()
   }
 
   const updateRow = (i: number, p: Partial<ManualResultado>) =>

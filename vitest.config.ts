@@ -12,7 +12,11 @@ export default defineConfig({
     // de propósito (não pode importar `next/server`/Supabase no processo de
     // teste), e sem este padrão o arquivo de teste correspondente não roda —
     // passa "verde" por nunca ser coletado, não por passar de verdade.
-    include: ['lib/**/*.test.ts', 'app/**/*.test.ts'],
+    // 'components/**' entrou na revisão final, pela mesma razão que 'app/**':
+    // um arquivo de teste que o padrão não coleta passa "verde" por nunca ter
+    // rodado. Os testes de `components/` são ESTRUTURAIS (leem o fonte) — não
+    // há jsdom nem testing-library aqui, e o ambiente segue sendo 'node'.
+    include: ['lib/**/*.test.ts', 'app/**/*.test.ts', 'components/**/*.test.ts'],
     // O pdfjs avisa sobre canvas e fontes padrão a cada documento lido. Não
     // afeta a extração de texto (as larguras medidas são idênticas com e sem
     // as fontes), mas afogaria a saída dos testes. Filtra só esse ruído
