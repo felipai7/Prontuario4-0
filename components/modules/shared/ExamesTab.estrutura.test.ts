@@ -92,8 +92,11 @@ describe('M3 · os avisos do laudo anterior não sobrevivem ao próximo envio', 
   })
 
   it('todo ramo de erro de extração limpa os avisos', () => {
+    // Eram três ramos (arquivo, print colado, texto colado) até 03/08/2026;
+    // com a saída da IA sobrou só o do arquivo. O piso continua sendo "todos
+    // os que existem", não "três".
     const ramos = [...FONTE.matchAll(/catch\s*\(e: any\)\s*\{([^}]*)\}/g)]
-    expect(ramos.length).toBeGreaterThanOrEqual(3)
+    expect(ramos.length).toBeGreaterThanOrEqual(1)
     for (const r of ramos) expect(r[1]).toMatch(/limparAvisosDoLaudo\(\)/)
   })
 
@@ -101,7 +104,7 @@ describe('M3 · os avisos do laudo anterior não sobrevivem ao próximo envio', 
     // Armadilha real: `resetAdding()` agora limpa os avisos, então chamá-lo
     // DEPOIS de `setPendencias(...)` apagaria justamente o que acabou de
     // chegar. A ordem é parte do conserto, não estilo.
-    const handlers = ['handleExtractPasted', 'handleExtractText', 'handleExtract']
+    const handlers = ['handleExtract']
     for (const h of handlers) {
       const i = FONTE.indexOf(`const ${h} =`)
       expect(i, h).toBeGreaterThan(-1)
@@ -126,7 +129,7 @@ describe('R3.1 · a nota discreta ("o laudo não trouxe") é um estado à parte,
   })
 
   it('nos handlers de extração, notasLaudo é posto DEPOIS do reset, junto com pendências', () => {
-    const handlers = ['handleExtractPasted', 'handleExtractText', 'handleExtract']
+    const handlers = ['handleExtract']
     for (const h of handlers) {
       const i = FONTE.indexOf(`const ${h} =`)
       expect(i, h).toBeGreaterThan(-1)
@@ -136,6 +139,43 @@ describe('R3.1 · a nota discreta ("o laudo não trouxe") é um estado à parte,
       expect(iReset, h).toBeGreaterThan(-1)
       expect(iNotas, h).toBeGreaterThan(iReset)
     }
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════
+// 03/08/2026 — a IA saiu. Estes testes garantem que ela saiu INTEIRA da tela:
+// um estado que ninguém mais alimenta, ou uma aba que posta para um caminho
+// que o servidor não atende mais, é como um leitor futuro conclui que o
+// recurso continua existindo.
+// ══════════════════════════════════════════════════════════════════════════
+
+describe('a tela não guarda restos do caminho da IA', () => {
+  it('não sobrou estado nem handler dos modos que só a IA lia', () => {
+    for (const morto of ['pastedImgs', 'setPastedImgs', 'rawText', 'setRawText',
+                         'handleExtractPasted', 'handleExtractText']) {
+      expect(FONTE, morto).not.toMatch(new RegExp(morto))
+    }
+  })
+
+  it('a aba de upload aceita só PDF', () => {
+    const i = FONTE.indexOf('id="exam-file"')
+    expect(i).toBeGreaterThan(-1)
+    const corpo = FONTE.slice(i, i + 200)
+    expect(corpo).toMatch(/accept="[^"]*pdf/i)
+    // `image/*` aqui deixaria a médica escolher um print que o servidor
+    // recusa — erro depois do envio, em vez de opção que nunca aparece.
+    expect(corpo).not.toMatch(/image\/\*/)
+  })
+
+  it('o modo de arquivo não se chama mais "ia"', () => {
+    expect(FONTE).not.toMatch(/addMode === 'ia'/)
+    expect(FONTE).not.toMatch(/addMode === 'texto'/)
+    expect(FONTE).toMatch(/addMode === 'pdf'/)
+  })
+
+  it('a entrada manual continua inteira — é o destino de tudo que o leitor não lê', () => {
+    expect(FONTE).toMatch(/addMode === 'manual'/)
+    expect(FONTE).toMatch(/const handleManualSave/)
   })
 })
 
