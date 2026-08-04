@@ -101,6 +101,33 @@ describe('A-03 · cultura conta na decisão local-vs-IA', () => {
   })
 })
 
+// I5 — a mesma lacuna que fazia o laudo de imagem sumir calado (ver
+// `lib/exames/imagem-vira-registro.test.ts`) também mandava o documento para
+// a IA sem necessidade: `observations` e `cultures` vazios, mas `imaging`
+// não. Vinte de cinquenta PDFs do acervo real caíam aqui — dezessete deles
+// eram laudo de imagem que o extrator local JÁ tinha lido.
+describe('I5 · imagem conta na decisão local-vs-IA', () => {
+  const PDF_SO_IMAGEM = () => pdfDeLinhas([
+    'TOMOGRAFIA COMPUTADORIZADA DO CRÂNIO',
+    'Data do exame: 29/06/2026',
+    'INDICAÇÃO: Cefaleia súbita.',
+    'TÉCNICA: Cortes axiais sem contraste.',
+    'ACHADOS:',
+    'Não há evidência de hemorragia intracraniana.',
+    'CONCLUSÃO:',
+    'Exame dentro dos limites da normalidade.',
+  ])
+
+  it('laudo só de imagem (zero observações, zero culturas) é processado localmente, não cai como não reconhecido', async () => {
+    const r = await processarPdf(cliente(), 'pac-1', PDF_SO_IMAGEM(), 'laudo.pdf', null)
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.via).toBe('local')
+      expect(r.registros).toBe(1)
+    }
+  })
+})
+
 // ══════════════════════════════════════════════════════════════════════════
 // Tarefa 6b — `processarIA`: o mesmo contrato de resposta, mas para o
 // resultado que já veio pronto da IA (prints, texto colado, ou PDF que o

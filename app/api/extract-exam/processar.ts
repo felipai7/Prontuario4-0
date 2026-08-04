@@ -49,10 +49,17 @@ export async function processarPdf(
     options: null,
   })
 
-  // A-03 — cultura conta. Um laudo só de cultura não tem observação
-  // numérica nenhuma, e antes disso caía na IA mesmo tendo sido lido aqui:
-  // doze culturas no acervo, seis delas em laudos sem nenhum exame numérico.
-  if (resultado.observations.length === 0 && resultado.cultures.length === 0) {
+  // A-03/I5 — cultura E imagem contam. Um laudo só de cultura ou só de
+  // imagem não tem observação numérica nenhuma, e antes disso caía na IA
+  // mesmo tendo sido lido aqui: doze culturas no acervo, e vinte de
+  // cinquenta PDFs medidos indo para a IA — dezessete deles laudo de imagem
+  // que este extrator já lia localmente (ver `lib/exames/entrega.ts`,
+  // `deImagem`).
+  if (
+    resultado.observations.length === 0 &&
+    resultado.cultures.length === 0 &&
+    resultado.imaging.length === 0
+  ) {
     return { ok: false, erro: 'NAO_RECONHECIDO' }
   }
 

@@ -148,6 +148,73 @@ describe('R3.1 · dois canais de aviso — "confira" e "o laudo não trouxe"', (
   })
 })
 
+describe('I5 · o laudo de imagem vira registro na tabela (deImagem)', () => {
+  // Mesma fixture de `lib/exames/extracao/imagem/imagem.test.ts` ("extração
+  // de um laudo de imagem") — a que já prova que o extrator separa as quatro
+  // seções corretamente. Este bloco prova a etapa seguinte: que `montarEntrega`
+  // não descarta mais o que `extrairImagem` produziu (I5 — antes disto,
+  // `imaging` era lido e IGNORADO aqui, e o documento cheio de laboratório +
+  // imagem confundia `processarPdf`, que só olhava `observations`/`cultures`).
+  const LAUDO = [
+    'Nome: PACIENTE DE TESTE   Data do exame: 29/06/2026',
+    'Méd. Solicitante: FULANO DE TAL   ID: 000000',
+    'TOMOGRAFIA COMPUTADORIZADA DO CRÂNIO',
+    'INDICAÇÃO: Cefaleia súbita.',
+    'TÉCNICA: Cortes axiais sem contraste.',
+    'ACHADOS:',
+    'Não há evidência de hemorragia intracraniana.',
+    'Sistema ventricular de dimensões normais.',
+    'CONCLUSÃO:',
+    'Exame dentro dos limites da normalidade.',
+    'DRA. FULANA DE TAL',
+    'CRM 00000 / RQE 00000',
+  ]
+
+  it('a entrega tem um valor cujo nome é o título do laudo e cujo texto traz a conclusão', async () => {
+    const e = await entregar(pdfDeLinhas(LAUDO))
+    const valores = e.linhas.flatMap(l => l.valores)
+    const imagem = valores.find(v => v.nome === 'TOMOGRAFIA COMPUTADORIZADA DO CRÂNIO')
+    expect(imagem).toBeDefined()
+    expect(imagem!.valor).toMatch(/Exame dentro dos limites da normalidade/)
+  })
+
+  it('a data do registro vem de `performedAt`, pela mesma data que agrupa o resto', async () => {
+    const e = await entregar(pdfDeLinhas(LAUDO))
+    const linha = e.linhas.find(l => l.valores.some(v => v.nome === 'TOMOGRAFIA COMPUTADORIZADA DO CRÂNIO'))!
+    expect(linha.dataColeta).toBe('29/06/2026')
+  })
+
+  it('o registro pede conferência — mesma honestidade que `deCultura` já aplica', async () => {
+    const e = await entregar(pdfDeLinhas(LAUDO))
+    const imagem = e.linhas.flatMap(l => l.valores).find(v => v.nome === 'TOMOGRAFIA COMPUTADORIZADA DO CRÂNIO')!
+    expect(imagem.confereValor).toBe(true)
+    expect(imagem.precisaConferencia).toBe(true)
+    // O motivo precisa deixar claro que o laudo completo está no PDF e que
+    // isto é um resumo — não pode soar como se fosse o laudo inteiro.
+    expect(imagem.motivosConfere.join(' ')).toMatch(/PDF/)
+    expect(e.pendencias.some(p => p.nome === 'TOMOGRAFIA COMPUTADORIZADA DO CRÂNIO')).toBe(true)
+  })
+
+  it('sem CONCLUSÃO, o texto cai para ACHADOS', async () => {
+    const e = await entregar(pdfDeLinhas([
+      'RADIOGRAFIA DOS SEIOS DA FACE',
+      'Data do exame: 10/02/2026',
+      'ACHADOS:',
+      'Velamento do seio maxilar direito.',
+    ]))
+    const imagem = e.linhas.flatMap(l => l.valores).find(v => v.nome === 'RADIOGRAFIA DOS SEIOS DA FACE')!
+    expect(imagem.valor).toMatch(/Velamento do seio maxilar direito/)
+  })
+
+  it('sem laudo de imagem, nenhum registro de imagem é inventado', async () => {
+    const e = await entregar(pdfDeLinhas([
+      'BIOQUIMICA', 'Coleta: 12/05/2026',
+      'Glicose              92    mg/dL      70 - 99',
+    ]))
+    expect(e.linhas.flatMap(l => l.valores).some(v => /TOMOGRAFIA|RADIOGRAFIA/i.test(v.nome))).toBe(false)
+  })
+})
+
 describe('a origem de cada número viaja junto', () => {
   it('cada valor sabe de que página e linha veio', async () => {
     const e = await entregar(pdfDeLinhas([

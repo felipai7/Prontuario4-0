@@ -11,7 +11,7 @@
 // lugar em `lib/exames/` que pode importar `@/types`.
 // ══════════════════════════════════════════════════════════════════════════
 
-import type { ExtractionResult, Observation, Reference, ReviewReason, VeredictoPaciente } from './extracao'
+import type { ExtractionResult, ImagingReport, Observation, Reference, ReviewReason, VeredictoPaciente } from './extracao'
 
 export interface ValorEntregue {
   nome: string
@@ -273,6 +273,56 @@ function deCultura(c: ExtractionResult['cultures'][number]): ValorEntregue {
   }
 }
 
+const MOTIVO_IMAGEM = 'resumo automático do laudo de imagem — confira o laudo completo no PDF'
+
+/**
+ * Um laudo de imagem vira uma linha de texto, na tabela que já existe (D3),
+ * mesmo padrão de `deCultura` acima.
+ *
+ * I5 — até 03/08/2026 `montarEntrega` lia só `observations` e `cultures`;
+ * `imaging` era produzido pelo extrator e IGNORADO aqui. Um PDF com
+ * laboratório e imagem no mesmo arquivo então "resolvia" localmente (porque
+ * `observations` não estava vazio) e o laudo de imagem desaparecia — nem ia
+ * ao prontuário, nem virava pendência, nem contava em `discarded[]`.
+ *
+ * Uma tela dedicada de imagem está fora de escopo (design, 8.1). Isto é o
+ * mínimo: o texto que a médica leria primeiro (a conclusão) chega até ela,
+ * sem round-trip pela IA e sem sumir.
+ */
+function deImagem(im: ImagingReport): ValorEntregue | null {
+  // A conclusão é o que se lê primeiro; na ausência dela, os achados; na
+  // ausência dos dois, o texto que não coube em seção nenhuma (R1 — nada
+  // fica de fora só porque o laudo não tinha cabeçalho de seção).
+  const texto = (im.sections.conclusion || im.sections.findings || im.unsectionedText || '').trim()
+  // Nunca string vazia: um registro de imagem sem texto nenhum é pior do que
+  // nenhum registro — a médica veria uma linha em branco e não saberia se é
+  // falha de extração ou se o laudo realmente não trouxe nada.
+  if (!texto) return null
+  return {
+    nome: im.title,
+    valor: texto,
+    unidade: null,
+    referencia: null,
+    // Laudo de imagem não tem faixa de referência numérica — nunca teve o
+    // que rejeitar, mesmo raciocínio de `deCultura`.
+    referenciaEstruturada: { kind: 'absent' },
+    valorNumerico: null,
+    censura: null,
+    valorQualitativo: null,
+    cruzes: null,
+    analitoId: null,
+    precisaConferencia: true,
+    motivos: [MOTIVO_IMAGEM],
+    // Canal "confira" (R3.1): o texto é um resumo automático de um laudo
+    // maior, nunca "o laudo não trouxe um dado" — mesma família de `deCultura`.
+    confereValor: true,
+    motivosConfere: [MOTIVO_IMAGEM],
+    motivosNota: [],
+    conflito: false,
+    origem: { pagina: im.provenance.page, linha: im.provenance.lineIndex, regra: im.provenance.matcherId },
+  }
+}
+
 /**
  * Avisos do extrator em texto, no campo que a tela já exibe.
  *
@@ -285,21 +335,6 @@ function resumoDeAvisos(resultado: ExtractionResult, lidoPorIA: boolean): string
   const partes: string[] = []
 
   if (lidoPorIA) partes.push('Lido por IA — não conferido pelo extrator local')
-
-  // I5 — o laudo de imagem que veio no mesmo arquivo NÃO é importado (o
-  // recurso está fora de escopo, design 8.1), mas ele também não pode sumir
-  // calado. Até 03/08/2026 `montarEntrega` lia `observations` e `cultures` e
-  // ignorava `imaging`; como a rota só recorre à IA quando as duas primeiras
-  // estão vazias, um PDF com laboratório E imagem era resolvido aqui e o
-  // texto da imagem não chegava nem ao prontuário nem a `discarded[]`.
-  // R10 — só o contador, nunca uma linha do laudo.
-  const imagens = resultado.imaging.length
-  if (imagens > 0) {
-    partes.push(
-      `${imagens} laudo${imagens > 1 ? 's' : ''} de imagem neste arquivo ` +
-      `não foi${imagens > 1 ? 'ram' : ''} importado${imagens > 1 ? 's' : ''} — leia no PDF original`,
-    )
-  }
 
   const descartados = resultado.discarded.length
   if (descartados > 0) {
@@ -340,21 +375,19 @@ export function montarEntrega(resultado: ExtractionResult, lidoPorIA: boolean): 
 
   for (const o of resultado.observations) guardar(iso(o), deObservacao(o))
   for (const c of resultado.cultures) guardar(c.collectedAt.iso ?? '', deCultura(c))
+  // I5 — o laudo de imagem entra na mesma tabela, pelo mesmo caminho de
+  // cultura: `deImagem` devolve `null` quando não há texto nenhum para
+  // mostrar (conclusão, achados e texto sem seção todos vazios), e nesse
+  // caso nada é guardado — sem linha em branco.
+  for (const im of resultado.imaging) {
+    const v = deImagem(im)
+    if (v) guardar(im.performedAt.iso ?? '', v)
+  }
 
   const linhas: LinhaEntregue[] = []
   const pendencias: { nome: string; motivo: string }[] = []
   const notasLaudo: { nome: string; motivo: string }[] = []
 
-  // I5 — a mesma perda, na lista que a tela mostra por cima da tabela (D9).
-  // Duas vias de propósito: a pendência é da sessão e some no refresh; a nota
-  // em `observacoes` vai para o banco junto com o registro e sobrevive.
-  if (resultado.imaging.length > 0) {
-    const n = resultado.imaging.length
-    pendencias.push({
-      nome: n > 1 ? `${n} laudos de imagem` : 'Laudo de imagem',
-      motivo: 'laudo de imagem não importado — este módulo só lê exames de laboratório; leia no PDF original',
-    })
-  }
   const chaves = [...porData.keys()].sort((a, b) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b)))
   const observacoes = resumoDeAvisos(resultado, lidoPorIA)
 
