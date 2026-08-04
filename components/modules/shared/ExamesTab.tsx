@@ -224,6 +224,33 @@ function buildTableRows(allParams: string[]): TableRow[] {
   return rows
 }
 
+// ── R3.1 · canal "o laudo não trouxe" ────────────────────────────────────────
+//
+// `notasLaudo` chega com o texto INTEIRO de `entrega.ts` (MOTIVOS), pensado
+// para um item de lista âmbar — verboso demais para uma nota que precisa ser
+// visualmente subordinada. Esta função reduz para uma contagem por tipo,
+// sem aprender nomes de `ReviewReason`: só reconhece os DOIS textos que o
+// canal "nota" pode produzir hoje (`referenceAbsent`, `unknownUnit`), pelo
+// mesmo trecho que já identifica o motivo para a médica.
+function resumoNotasLaudo(notas: { nome: string; motivo: string }[]): string {
+  const semReferencia = notas.filter(n => n.motivo.includes('faixa de referência')).length
+  const semUnidade = notas.filter(n => n.motivo.includes('unidade não reconhecida')).length
+  const partes: string[] = []
+  if (semReferencia > 0) {
+    partes.push(
+      semReferencia === 1
+        ? '1 resultado deste laudo veio sem faixa de referência'
+        : `${semReferencia} resultados deste laudo vieram sem faixa de referência`,
+    )
+  }
+  if (semUnidade > 0) {
+    partes.push(
+      semUnidade === 1 ? '1 resultado com unidade não reconhecida' : `${semUnidade} resultados com unidade não reconhecida`,
+    )
+  }
+  return partes.join(' · ')
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Props) {
   const supabase = createClient()
@@ -247,15 +274,21 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
   // são o que a rota devolve em `RespostaExtracao`, guardados aqui só para a
   // tela renderizar a lista (D9) e o aviso (D8) do ÚLTIMO envio.
   const [pendencias, setPendencias] = useState<{ nome: string; motivo: string }[]>([])
+  // R3.1 — canal "o laudo não trouxe" (decisão da Juliana, 03/08/2026): o
+  // MESMO formato de `pendencias`, o mesmo ciclo de vida (M3), mas nunca a
+  // mesma lista. `pendencias` é "confira este valor" (⚠ + âmbar); isto é "o
+  // laudo está incompleto" — nota discreta, sem ⚠, sem âmbar.
+  const [notasLaudo, setNotasLaudo] = useState<{ nome: string; motivo: string }[]>([])
   const [conferenciaPaciente, setConferenciaPaciente] = useState<string>('naoPerguntado')
 
-  // M3 — os dois descrevem o ÚLTIMO envio, e por isso precisam morrer com
+  // M3 — os três descrevem o ÚLTIMO envio, e por isso precisam morrer com
   // ele. Sem esta limpeza, a faixa "⚠ N resultados deste laudo pedem
   // conferência" e o aviso de paciente divergente continuavam na tela depois
   // de um envio que FALHOU, e depois de o painel ser fechado — atribuídos a
   // nada, e do mesmo jeito que estariam se o envio tivesse dado certo.
   const limparAvisosDoLaudo = () => {
     setPendencias([])
+    setNotasLaudo([])
     setConferenciaPaciente('naoPerguntado')
   }
 
@@ -388,6 +421,7 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
       // chegar. A ordem é parte do conserto, não estilo.
       resetAdding()
       setPendencias(data.pendencias ?? [])
+      setNotasLaudo(data.notasLaudo ?? [])
       setConferenciaPaciente(data.conferenciaPaciente ?? 'naoPerguntado')
       onRefresh()
       showToast(
@@ -421,6 +455,7 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
       // chegar. A ordem é parte do conserto, não estilo.
       resetAdding()
       setPendencias(data.pendencias ?? [])
+      setNotasLaudo(data.notasLaudo ?? [])
       setConferenciaPaciente(data.conferenciaPaciente ?? 'naoPerguntado')
       onRefresh()
       showToast(
@@ -473,6 +508,7 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
       // chegar. A ordem é parte do conserto, não estilo.
       resetAdding()
       setPendencias(data.pendencias ?? [])
+      setNotasLaudo(data.notasLaudo ?? [])
       setConferenciaPaciente(data.conferenciaPaciente ?? 'naoPerguntado')
       onRefresh()
       showToast(
@@ -763,6 +799,16 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
         </div>
       )}
 
+      {/* D9.1 — canal "o laudo não trouxe" (R3.1, decisão da Juliana,
+          03/08/2026): o laudo está incompleto, o VALOR não é suspeito. Sem
+          ⚠, sem âmbar — texto discreto, visualmente subordinado à lista
+          acima. `referenceAbsent` e `unknownUnit` continuam visíveis; só
+          pararam de soar como alarme (49% da tabela, no acervo real, antes
+          desta divisão). */}
+      {notasLaudo.length > 0 && (
+        <p className="mb-3 text-xs text-slate-400">{resumoNotasLaudo(notasLaudo)}</p>
+      )}
+
       {/* Pivot table */}
       {comRes.length > 0 && (
         <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
@@ -969,6 +1015,13 @@ function PivotCell({ r, rowBg }: { r: ResultadoExame | undefined; rowBg: string 
     r.alterado                          ? 'bg-amber-50 text-amber-700' :
                                           'text-slate-600'
   const arrow = r.direcao === 'alto' ? ' ↑' : r.direcao === 'baixo' ? ' ↓' : r.alterado ? ' !' : ''
+  // R3.1 — só o canal "confira" acende o ⚠ (decisão da Juliana, 03/08/2026):
+  // `revisar` sozinho mistura os dois canais e foi o que marcava 49% da
+  // tabela no acervo real. `confere_valor` é `undefined` numa linha gravada
+  // ANTES desta divisão — sem informação de canal, cai no comportamento
+  // antigo (`revisar`, qualquer motivo), para não apagar o ⚠ de um
+  // resultado já gravado só porque ele não tem o campo novo.
+  const confere = r.confere_valor ?? r.revisar ?? false
   return (
     <td className={`px-2 py-2 text-center border-r border-b border-slate-100 whitespace-nowrap text-xs ${cls}`}
       title={r.referencia ? `Ref: ${r.referencia}` : undefined}>
@@ -978,8 +1031,8 @@ function PivotCell({ r, rowBg }: { r: ResultadoExame | undefined; rowBg: string 
       {/* D9 — marca na célula. D5 — quando é conflito (dois valores na mesma
           coleta), `r.valor` já chega pronto como "47,0 / 33,0" de entrega.ts;
           aqui não há nada para escolher, só marcar. */}
-      {r.revisar && (
-        <span className="ml-1 text-amber-600" title={(r.motivos_revisao ?? []).join(' · ')}>⚠</span>
+      {confere && (
+        <span className="ml-1 text-amber-600" title={(r.motivos_confere ?? r.motivos_revisao ?? []).join(' · ')}>⚠</span>
       )}
     </td>
   )

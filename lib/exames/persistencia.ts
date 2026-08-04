@@ -139,6 +139,12 @@ export async function gravarEntrega(
           ...r,
           revisar: true,
           motivos_revisao: [...(r.motivos_revisao ?? []), DUPLICATA],
+          // R3.1 — coleta duplicada é dúvida sobre O VALOR (pode já estar
+          // gravado), não "o laudo não trouxe um dado": entra no canal
+          // "confira" também, senão a duplicata some do ⚠ da tela mesmo
+          // continuando em `motivos_revisao`.
+          confere_valor: true,
+          motivos_confere: [...(r.motivos_confere ?? []), DUPLICATA],
         }))
       : l.resultados,
     observacoes: l.observacoes,

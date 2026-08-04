@@ -66,8 +66,12 @@ function converter(v: ValorEntregue): ResultadoExame {
     valor_num: v.valorNumerico,
     censura: v.censura,
     analito_id: v.analitoId,
+    // Sentido inalterado (D9/R3.1): QUALQUER motivo, dos dois canais.
     revisar: v.precisaConferencia,
     motivos_revisao: v.motivos,
+    // Novo par: só o canal "confira" — o que a tela usa para o ⚠ da célula.
+    confere_valor: v.confereValor,
+    motivos_confere: v.motivosConfere,
   }
 }
 

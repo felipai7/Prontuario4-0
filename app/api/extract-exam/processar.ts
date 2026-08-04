@@ -23,7 +23,10 @@ export type RespostaExtracao =
       ok: true
       via: 'local' | 'ia'
       registros: number
+      /** Canal "confira este valor" (R3.1) — o que vira a lista âmbar. */
       pendencias: { nome: string; motivo: string }[]
+      /** Canal "o laudo não trouxe" (R3.1) — o que vira a nota discreta. */
+      notasLaudo: { nome: string; motivo: string }[]
       conferenciaPaciente: VeredictoPaciente
       duplicataDe: string | null
     }
@@ -64,6 +67,7 @@ export async function processarPdf(
     via: 'local',
     registros: gravacao.registros,
     pendencias: entrega.pendencias,
+    notasLaudo: entrega.notasLaudo,
     conferenciaPaciente: entrega.conferenciaPaciente,
     duplicataDe: gravacao.duplicataDe,
   }
@@ -167,6 +171,7 @@ export async function processarIA(
     // O caminho da IA não roda a conferência de pendência por valor (isso
     // exigiria a mesma reinterpretação que este caminho evita de propósito).
     pendencias: [],
+    notasLaudo: [],
     // Idem para a conferência de nome do paciente: ela lê a geometria do
     // texto do PDF local (`conferirPaciente` sobre `texto.lines`), camada
     // que este caminho não tem. 'naoPerguntado' é o mesmo default que a

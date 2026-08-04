@@ -11,7 +11,7 @@
 // lugar em `lib/exames/` que pode importar `@/types`.
 // ══════════════════════════════════════════════════════════════════════════
 
-import type { ExtractionResult, Observation, Reference, VeredictoPaciente } from './extracao'
+import type { ExtractionResult, Observation, Reference, ReviewReason, VeredictoPaciente } from './extracao'
 
 export interface ValorEntregue {
   nome: string
@@ -47,8 +47,31 @@ export interface ValorEntregue {
   /** Cruzes ("+++"), quando o valor é semiquantitativo. `null` nos demais casos. */
   cruzes: 1 | 2 | 3 | 4 | null
   analitoId: string | null
+  /**
+   * QUALQUER motivo de revisão, dos dois canais. Vira `revisar` no banco
+   * (adaptador.ts) — e `revisar` não muda de sentido nesta correção: linhas
+   * já gravadas têm este campo com este significado, e `motivos_revisao` já
+   * guarda o texto traduzido. Ver `confereValor` para o canal que decide o ⚠.
+   */
   precisaConferencia: boolean
+  /** Todos os motivos traduzidos, dos dois canais — o que já ia para o banco. */
   motivos: string[]
+  /**
+   * Canal "confira este valor" (R3.1, decisão da Juliana de 03/08/2026):
+   * algo sobre ESTE RESULTADO é duvidoso. Só estes ganham ⚠ na célula e
+   * entram na lista âmbar acima da tabela.
+   */
+  confereValor: boolean
+  /** Motivos traduzidos do canal "confira" — o que alimenta o ⚠ e a lista âmbar. */
+  motivosConfere: string[]
+  /**
+   * Canal "o laudo não trouxe": o laudo está incompleto (sem faixa, sem
+   * unidade reconhecida), o que não é o mesmo que o VALOR ser duvidoso. Sem
+   * ⚠, sem lista âmbar — uma nota discreta (D9.1). Continua existindo:
+   * `referenceAbsent` não pode virar invisível (ver o comentário em
+   * `contratos.ts:250-259` sobre por que ele existe).
+   */
+  motivosNota: string[]
   conflito: boolean
   /** Rastreabilidade: de onde saiu este número. Sem texto do laudo (R10). */
   origem: { pagina: number; linha: number; regra: string }
@@ -63,8 +86,17 @@ export interface LinhaEntregue {
 
 export interface Entrega {
   linhas: LinhaEntregue[]
-  /** Pronta para a lista acima da tabela (D9). Vazia, nunca nula. */
+  /**
+   * Pronta para a lista âmbar acima da tabela (D9). Só canal "confira" —
+   * ver `CANAL` abaixo. Vazia, nunca nula.
+   */
   pendencias: { nome: string; motivo: string }[]
+  /**
+   * Pronta para a nota discreta (D9.1, R3.1): só canal "o laudo não trouxe".
+   * Mesma forma de `pendencias` de propósito — a tela não precisa aprender
+   * um formato novo, só onde e como exibir cada um. Vazia, nunca nula.
+   */
+  notasLaudo: { nome: string; motivo: string }[]
   conferenciaPaciente: VeredictoPaciente
   impressaoDigital: string
 }
@@ -81,6 +113,52 @@ const MOTIVOS: Record<string, string> = {
   lowDetectionConfidence: 'laboratório não identificado com segurança',
   fallbackExtracted: 'lido por IA, não pelo extrator local',
   duplicateCollection: 'coleta possivelmente duplicada',
+}
+
+/**
+ * R3.1 — a que PERGUNTA cada `ReviewReason` responde, decisão da Juliana em
+ * 03/08/2026.
+ *
+ * Não é severidade. É o que o marcador é SOBRE:
+ *   'confere' — "confira este valor": algo sobre ESTE RESULTADO é duvidoso.
+ *   'nota'    — "o laudo não trouxe": o laudo está incompleto, o valor em si
+ *               não é suspeito. `interpretarNumerico` continua sem opinião
+ *               nenhuma quando a referência falta — a distinção aqui é só
+ *               COMO A TELA AVISA, nunca o que o extrator decidiu.
+ *
+ * Medido no acervo real em 03/08/2026: 427 de 879 resultados (49%) ganhavam
+ * ⚠ só por `referenceAbsent` (265) ou `unknownUnit` (183) — metade da tabela
+ * com aviso é fadiga de alarme, e uma lista que sempre toca é lista que
+ * ninguém lê.
+ *
+ * Um `Record` exaustivo, não um `Set`: se `ReviewReason` ganhar um membro
+ * novo, o TypeScript recusa compilar até este mapa dizer de que canal ele é.
+ * Mover um motivo de canal — decisão futura, não desta correção — vira a
+ * troca de uma linha só.
+ */
+const CANAL: Record<ReviewReason, 'confere' | 'nota'> = {
+  dateFromProximity: 'confere',
+  dateFromDocumentFallback: 'confere',
+  dateAbsent: 'confere',
+  unknownAnalyte: 'confere',
+  // Os dois únicos do canal "nota": o laudo não trouxe um dado, o valor em
+  // si não está sob suspeita.
+  unknownUnit: 'nota',
+  referenceAbsent: 'nota',
+  referenceRejected: 'confere',
+  implausibleValue: 'confere',
+  duplicateCollection: 'confere',
+  // `lowDetectionConfidence` e `fallbackExtracted`: nenhum matcher os produz
+  // como `reviewReasons` de uma `Observation` hoje (grep em 03/08/2026 —
+  // `lowDetectionConfidence` só existe como `WarningCode` de documento, e
+  // `fallbackExtracted` não é emitido em lugar nenhum). Sem instrução
+  // explícita da Juliana sobre o canal de nenhum dos dois, ficam em
+  // 'confere': dúvida sobre a extração em si — "não confiei no que li" — é
+  // da família de `implausibleValue`/`unknownAnalyte`, não da família "o
+  // laudo não trouxe um dado". Se um deles passar a ser produzido de fato,
+  // vale confirmar esta escolha com ela antes de deixar estar.
+  lowDetectionConfidence: 'confere',
+  fallbackExtracted: 'confere',
 }
 
 const CONFLITO = 'dois valores no mesmo laudo'
@@ -110,6 +188,8 @@ function textoDaReferencia(o: Observation): string | null {
 
 function deObservacao(o: Observation): ValorEntregue {
   const v = o.value
+  const confere = o.reviewReasons.filter(m => CANAL[m] === 'confere')
+  const nota = o.reviewReasons.filter(m => CANAL[m] === 'nota')
   return {
     nome: o.canonicalName ?? o.rawName,
     valor: v.raw.trim() || '—',
@@ -123,6 +203,9 @@ function deObservacao(o: Observation): ValorEntregue {
     analitoId: o.analyteId,
     precisaConferencia: o.requiresReview,
     motivos: o.reviewReasons.map(m => MOTIVOS[m] ?? m),
+    confereValor: confere.length > 0,
+    motivosConfere: confere.map(m => MOTIVOS[m] ?? m),
+    motivosNota: nota.map(m => MOTIVOS[m] ?? m),
     conflito: false,
     origem: { pagina: o.provenance.page, linha: o.provenance.lineIndex, regra: o.provenance.matcherId },
   }
@@ -145,6 +228,13 @@ function fundirConflito(iguais: ValorEntregue[]): ValorEntregue {
     conflito: true,
     precisaConferencia: true,
     motivos: [...new Set([...iguais.flatMap(v => v.motivos), CONFLITO])],
+    // Dois valores no mesmo laudo é dúvida sobre O VALOR — canal "confira"
+    // (R3.1): a lista de motivosNota de cada metade sobrevive à fusão (ex.:
+    // as duas leituras vieram sem referência), mas o conflito em si entra no
+    // canal que dispara ⚠.
+    confereValor: true,
+    motivosConfere: [...new Set([...iguais.flatMap(v => v.motivosConfere), CONFLITO])],
+    motivosNota: [...new Set(iguais.flatMap(v => v.motivosNota))],
   }
 }
 
@@ -173,6 +263,11 @@ function deCultura(c: ExtractionResult['cultures'][number]): ValorEntregue {
     analitoId: null,
     precisaConferencia: true,
     motivos: ['cultura — confira o antibiograma no laudo'],
+    // Cultura sempre pede leitura humana do antibiograma — canal "confira",
+    // nunca "o laudo não trouxe" (ela não é sobre completude do laudo).
+    confereValor: true,
+    motivosConfere: ['cultura — confira o antibiograma no laudo'],
+    motivosNota: [],
     conflito: false,
     origem: { pagina: c.provenance.page, linha: c.provenance.lineIndex, regra: c.provenance.matcherId },
   }
@@ -248,6 +343,7 @@ export function montarEntrega(resultado: ExtractionResult, lidoPorIA: boolean): 
 
   const linhas: LinhaEntregue[] = []
   const pendencias: { nome: string; motivo: string }[] = []
+  const notasLaudo: { nome: string; motivo: string }[] = []
 
   // I5 — a mesma perda, na lista que a tela mostra por cima da tabela (D9).
   // Duas vias de propósito: a pendência é da sessão e some no refresh; a nota
@@ -273,8 +369,12 @@ export function montarEntrega(resultado: ExtractionResult, lidoPorIA: boolean): 
       iguais.length === 1 ? iguais[0]! : fundirConflito(iguais))
 
     for (const v of valores) {
-      if (!v.precisaConferencia) continue
-      for (const motivo of v.motivos) pendencias.push({ nome: v.nome, motivo })
+      // D9 — só o canal "confira" (R3.1) alimenta a lista âmbar.
+      for (const motivo of v.motivosConfere) pendencias.push({ nome: v.nome, motivo })
+      // D9.1 — o canal "o laudo não trouxe" alimenta a nota discreta, nunca
+      // a lista âmbar. `referenceAbsent` continua chegando até aqui — só
+      // muda ONDE a tela mostra, nunca SE mostra.
+      for (const motivo of v.motivosNota) notasLaudo.push({ nome: v.nome, motivo })
     }
 
     linhas.push({
@@ -288,6 +388,7 @@ export function montarEntrega(resultado: ExtractionResult, lidoPorIA: boolean): 
   return {
     linhas,
     pendencias,
+    notasLaudo,
     conferenciaPaciente: resultado.patientCheck,
     impressaoDigital: resultado.diagnostics.documentHash,
   }

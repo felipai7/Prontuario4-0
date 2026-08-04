@@ -69,6 +69,27 @@ describe('a rota entrega o que o módulo produz', () => {
   })
 })
 
+describe('R3.1 · a nota discreta ("o laudo não trouxe") viaja separada das pendências', () => {
+  it('caminho local devolve notasLaudo, canal separado de pendencias', async () => {
+    const r = await processarPdf(cliente(), 'pac-1', pdfDeLinhas([
+      'Paciente: MARIA DAS DORES SILVA',
+      'GASOMETRIA ARTERIAL', 'Coleta: 12/05/2026',
+      'pH............:  7,38',
+    ]), 'laudo.pdf', 'Maria das Dores Silva')
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.notasLaudo.length).toBeGreaterThan(0)
+      expect(r.pendencias.length).toBe(0)
+    }
+  })
+
+  it('caminho da IA devolve notasLaudo vazio — mesmo contrato do local', async () => {
+    const r = await processarIA(cliente(), 'pac-1', RESULTADO_IA(), 'print-colado.png')
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.notasLaudo).toEqual([])
+  })
+})
+
 describe('A-03 · cultura conta na decisão local-vs-IA', () => {
   it('laudo só com cultura (zero observações) é processado localmente, não cai como não reconhecido', async () => {
     const r = await processarPdf(cliente(), 'pac-1', PDF_SO_CULTURA(), 'laudo.pdf', null)

@@ -113,3 +113,57 @@ describe('M3 · os avisos do laudo anterior não sobrevivem ao próximo envio', 
     }
   })
 })
+
+describe('R3.1 · a nota discreta ("o laudo não trouxe") é um estado à parte, com o mesmo ciclo de vida de `pendencias`', () => {
+  // Mesma armadilha do M3: se `notasLaudo` não morrer com o envio anterior,
+  // a nota de um laudo fica na tela atribuída a nada depois de um envio que
+  // falhou ou de outro laudo inteiro.
+  it('o limpador zera notasLaudo junto com pendências e conferência de paciente', () => {
+    const i = FONTE.indexOf('const limparAvisosDoLaudo')
+    expect(i).toBeGreaterThan(-1)
+    const corpo = FONTE.slice(i, i + 300)
+    expect(corpo).toMatch(/setNotasLaudo\(\[\]\)/)
+  })
+
+  it('nos handlers de extração, notasLaudo é posto DEPOIS do reset, junto com pendências', () => {
+    const handlers = ['handleExtractPasted', 'handleExtractText', 'handleExtract']
+    for (const h of handlers) {
+      const i = FONTE.indexOf(`const ${h} =`)
+      expect(i, h).toBeGreaterThan(-1)
+      const corpo = FONTE.slice(i, i + 2200)
+      const iReset = corpo.indexOf('resetAdding()')
+      const iNotas = corpo.indexOf('setNotasLaudo(data.notasLaudo')
+      expect(iReset, h).toBeGreaterThan(-1)
+      expect(iNotas, h).toBeGreaterThan(iReset)
+    }
+  })
+})
+
+describe('R3.1 · dois canais na tela — só "confira" ganha ⚠ e lista âmbar', () => {
+  // O ⚠ da célula não pode voltar a ler `revisar` sozinho: `revisar` é
+  // QUALQUER motivo, dos dois canais, e é exatamente essa mistura que
+  // marcava metade da tabela (49% no acervo real). O canal "confira" que a
+  // tela precisa ler é `confere_valor`.
+  it('PivotCell decide o ⚠ por `confere_valor`, não só por `revisar`', () => {
+    const i = FONTE.indexOf('function PivotCell')
+    expect(i).toBeGreaterThan(-1)
+    const corpo = FONTE.slice(i)
+    expect(corpo).toMatch(/confere_valor/)
+  })
+
+  it('a nota discreta não usa ⚠ nem classe de cor de alerta (âmbar/vermelho)', () => {
+    const i = FONTE.indexOf('notasLaudo.length > 0')
+    expect(i).toBeGreaterThan(-1)
+    // Da abertura do bloco até o próximo `{/*` (comentário do bloco seguinte)
+    // ou até 400 caracteres — janela generosa o bastante para o bloco JSX
+    // inteiro, curta o bastante para não vazar para o bloco da tabela.
+    const corpo = FONTE.slice(i, i + 400)
+    expect(corpo).not.toMatch(/⚠/)
+    expect(corpo).not.toMatch(/amber|red-/)
+  })
+
+  it('a lista âmbar (pendências) continua existindo, separada da nota', () => {
+    expect(FONTE).toMatch(/pendencias\.length > 0/)
+    expect(FONTE.indexOf('pendencias.length > 0')).toBeLessThan(FONTE.indexOf('notasLaudo.length > 0'))
+  })
+})

@@ -20,11 +20,15 @@ const ENTREGA: Entrega = {
       analitoId: 'glicose.serum',
       precisaConferencia: false,
       motivos: [],
+      confereValor: false,
+      motivosConfere: [],
+      motivosNota: [],
       conflito: false,
       origem: { pagina: 1, linha: 3, regra: 'tabular' },
     }],
   }],
   pendencias: [],
+  notasLaudo: [],
   conferenciaPaciente: 'confere',
   impressaoDigital: 'abc123',
 }
@@ -87,6 +91,29 @@ describe('D6 · laudo repetido grava e marca, não bloqueia', () => {
       clienteFake({ inserir: async l => { gravado = l; return { erro: null } } }),
       'pac-1', ENTREGA, 'laudo.pdf')
     expect(gravado[0].resultados[0].motivos_revisao).not.toContain('coleta possivelmente duplicada')
+  })
+
+  // R3.1 — coleta duplicada é dúvida sobre O VALOR (é o MESMO resultado que
+  // já pode estar gravado), não "o laudo não trouxe um dado". Precisa entrar
+  // no canal "confira" para ganhar ⚠, e não só em `motivos_revisao`.
+  it('a marcação de duplicata também entra no canal "confira" — ⚠ na tela', async () => {
+    let gravado: any = null
+    await gravarEntrega(
+      clienteFake({
+        buscarPorImpressaoDigital: async () => ({ dataEnvio: '10/05/2026' }),
+        inserir: async l => { gravado = l; return { erro: null } },
+      }),
+      'pac-1', ENTREGA, 'laudo.pdf')
+    expect(gravado[0].resultados[0].confere_valor).toBe(true)
+    expect(gravado[0].resultados[0].motivos_confere).toContain('coleta possivelmente duplicada')
+  })
+
+  it('sem duplicata, confere_valor não é forçado', async () => {
+    let gravado: any = null
+    await gravarEntrega(
+      clienteFake({ inserir: async l => { gravado = l; return { erro: null } } }),
+      'pac-1', ENTREGA, 'laudo.pdf')
+    expect(gravado[0].resultados[0].confere_valor).toBe(false)
   })
 })
 

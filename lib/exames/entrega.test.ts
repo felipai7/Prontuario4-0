@@ -56,6 +56,12 @@ describe('D4 e D5 · dois valores do mesmo exame', () => {
     expect(e.pendencias.some(p => p.nome === 'PCO2 (Arterial)')).toBe(true)
   })
 
+  it('o conflito é canal "confira" — dois valores no laudo é dúvida sobre O VALOR', async () => {
+    const e = await entregar(bytes)
+    const pco2 = e.linhas.flatMap(l => l.valores).find(v => v.nome === 'PCO2 (Arterial)')!
+    expect(pco2.confereValor).toBe(true)
+  })
+
   it('R3 · em conflito o sistema não opina sobre alterado', async () => {
     const e = await entregar(bytes)
     const pco2 = e.linhas.flatMap(l => l.valores).find(v => v.nome === 'PCO2 (Arterial)')!
@@ -78,6 +84,67 @@ describe('D9 · as pendências saem prontas para a tela', () => {
       'Glicose              92    mg/dL      70 - 99',
     ]))
     expect(e.pendencias).toEqual([])
+  })
+})
+
+describe('R3.1 · dois canais de aviso — "confira" e "o laudo não trouxe"', () => {
+  // Decisão da Juliana, 03/08/2026: medido no acervo real, 427 de 879
+  // resultados (49%) ganhavam ⚠ só por `referenceAbsent` ou `unknownUnit` —
+  // fadiga de alarme. A distinção não é severidade, é do que o marcador FALA:
+  // dúvida sobre o VALOR (canal "confira", ⚠ + lista âmbar) vs. o laudo que
+  // não trouxe um dado (canal "nota", discreto).
+  const LAUDO_MISTO = [
+    'GASOMETRIA ARTERIAL',
+    'Coleta: 12/05/2026',
+    // Sem coluna de referência: só `referenceAbsent` — canal "nota".
+    'pH............:  7,38',
+    // Faixa fisicamente impossível para potássio: `implausibleValue` — canal
+    // "confira".
+    'BIOQUIMICA',
+    'Coleta: 12/05/2026',
+    'Potássio             72,0    mmol/L     3,5 - 5,0',
+  ]
+
+  it('o valor implausível entra no canal "confira" — ⚠ e pendência', async () => {
+    const e = await entregar(pdfDeLinhas(LAUDO_MISTO))
+    const k = e.linhas.flatMap(l => l.valores).find(v => v.nome === 'Potássio')!
+    expect(k.confereValor).toBe(true)
+    expect(e.pendencias.some(p => p.nome === 'Potássio')).toBe(true)
+  })
+
+  it('o valor sem referência NÃO entra no canal "confira"', async () => {
+    const e = await entregar(pdfDeLinhas(LAUDO_MISTO))
+    const ph = e.linhas.flatMap(l => l.valores).find(v => v.nome === 'pH (Arterial)')!
+    expect(ph.confereValor).toBe(false)
+    expect(e.pendencias.some(p => p.nome === 'pH (Arterial)')).toBe(false)
+  })
+
+  it('referenceAbsent não some — continua visível no canal "nota"', async () => {
+    const e = await entregar(pdfDeLinhas(LAUDO_MISTO))
+    const ph = e.linhas.flatMap(l => l.valores).find(v => v.nome === 'pH (Arterial)')!
+    expect(ph.motivosNota).toContain(
+      'o laudo não trouxe faixa de referência — o valor não foi comparado com nada',
+    )
+    expect(e.notasLaudo.some(n => n.nome === 'pH (Arterial)')).toBe(true)
+  })
+
+  it('`precisaConferencia` mantém o significado antigo — QUALQUER motivo, dos dois canais', async () => {
+    const e = await entregar(pdfDeLinhas(LAUDO_MISTO))
+    const ph = e.linhas.flatMap(l => l.valores).find(v => v.nome === 'pH (Arterial)')!
+    // Só tem motivo de canal "nota", mesmo assim `precisaConferencia` é true:
+    // é o campo que ainda vira `revisar` no banco, e `revisar` não muda de
+    // sentido nesta correção.
+    expect(ph.precisaConferencia).toBe(true)
+  })
+
+  it('unknownUnit também é canal "nota", não "confira"', async () => {
+    const e = await entregar(pdfDeLinhas([
+      'BIOQUIMICA', 'Coleta: 12/05/2026',
+      'Glicose              92    xyz      70 - 99',
+    ]))
+    const g = e.linhas.flatMap(l => l.valores).find(v => v.nome === 'Glicose')!
+    expect(g.confereValor).toBe(false)
+    expect(g.motivosNota.length).toBeGreaterThan(0)
   })
 })
 

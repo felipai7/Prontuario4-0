@@ -50,10 +50,26 @@ export interface ResultadoExame {
   censura?: 'lt' | 'lte' | 'gt' | 'gte' | null
   /** Identificador do analito no catálogo, quando reconhecido. */
   analito_id?: string | null
-  /** Marcado pelo extrator como pendente de conferência humana. */
+  /**
+   * Marcado pelo extrator como pendente de conferência humana. Sentido
+   * INALTERADO desde antes de 03/08/2026: QUALQUER motivo de revisão, dos
+   * dois canais (ver `confere_valor`). Linhas gravadas antes da divisão de
+   * canal continuam válidas com este significado.
+   */
   revisar?: boolean
   /** Por que precisa de revisão — em português, para a tela mostrar direto. */
   motivos_revisao?: string[]
+  /**
+   * Canal "confira este valor" (decisão da Juliana, 03/08/2026, ver
+   * `lib/exames/entrega.ts`): algo sobre ESTE RESULTADO é duvidoso — dirige
+   * o ⚠ da célula. Diferente de `revisar`: um resultado pode ter
+   * `revisar:true` (o laudo não trouxe faixa) e `confere_valor:false` (o
+   * valor em si não é suspeito). `undefined` em linha gravada antes desta
+   * divisão — a tela trata como "sem informação de canal", não como "false".
+   */
+  confere_valor?: boolean
+  /** Motivos traduzidos do canal "confira" — o que o título do ⚠ mostra. */
+  motivos_confere?: string[]
 }
 
 export interface Exame {

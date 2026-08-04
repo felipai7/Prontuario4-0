@@ -146,6 +146,31 @@ describe('R3 · a interpretação acontece AQUI, não no extrator', () => {
   })
 })
 
+describe('R3.1 · os dois canais chegam ao banco em campos separados', () => {
+  it('valor implausível: confere_valor true, e continua marcado em motivos_revisao', async () => {
+    const linhas = await extrairEAdaptar([
+      'BIOQUIMICA', 'Coleta: 12/04/2026',
+      'Potássio             72,0    mmol/L      3,5 - 5,0',
+    ])
+    const r = linhas[0]!.resultados.find(r => r.nome === 'Potássio')!
+    expect(r.confere_valor).toBe(true)
+    expect(r.revisar).toBe(true)
+    expect((r.motivos_revisao ?? []).some(m => /fisicamente possível/.test(m))).toBe(true)
+  })
+
+  it('sem faixa de referência: confere_valor false, mas revisar continua true (sentido antigo)', async () => {
+    const linhas = await extrairEAdaptar([
+      'GASOMETRIA ARTERIAL', 'Coleta: 12/04/2026',
+      'pH............:  7,38',
+    ])
+    const r = linhas[0]!.resultados.find(r => r.nome === 'pH (Arterial)')!
+    expect(r.confere_valor).toBe(false)
+    expect(r.revisar).toBe(true)
+    expect((r.motivos_revisao ?? []).some(m => /não trouxe faixa/.test(m))).toBe(true)
+    expect((r.motivos_confere ?? []).length).toBe(0)
+  })
+})
+
 describe('apresentação', () => {
   it('a referência rejeitada não é exibida como se fosse faixa', async () => {
     const linhas = await extrairEAdaptar([
