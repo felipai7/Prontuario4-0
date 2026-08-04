@@ -76,6 +76,7 @@ const MOTIVOS: Record<string, string> = {
   unknownAnalyte: 'exame não reconhecido no catálogo',
   unknownUnit: 'unidade não reconhecida',
   referenceRejected: 'a coluna de referência não trazia uma faixa confiável',
+  referenceAbsent: 'o laudo não trouxe faixa de referência — o valor não foi comparado com nada',
   implausibleValue: 'valor fora da faixa fisicamente possível',
   lowDetectionConfidence: 'laboratório não identificado com segurança',
   fallbackExtracted: 'lido por IA, não pelo extrator local',
@@ -190,6 +191,21 @@ function resumoDeAvisos(resultado: ExtractionResult, lidoPorIA: boolean): string
 
   if (lidoPorIA) partes.push('Lido por IA — não conferido pelo extrator local')
 
+  // I5 — o laudo de imagem que veio no mesmo arquivo NÃO é importado (o
+  // recurso está fora de escopo, design 8.1), mas ele também não pode sumir
+  // calado. Até 03/08/2026 `montarEntrega` lia `observations` e `cultures` e
+  // ignorava `imaging`; como a rota só recorre à IA quando as duas primeiras
+  // estão vazias, um PDF com laboratório E imagem era resolvido aqui e o
+  // texto da imagem não chegava nem ao prontuário nem a `discarded[]`.
+  // R10 — só o contador, nunca uma linha do laudo.
+  const imagens = resultado.imaging.length
+  if (imagens > 0) {
+    partes.push(
+      `${imagens} laudo${imagens > 1 ? 's' : ''} de imagem neste arquivo ` +
+      `não foi${imagens > 1 ? 'ram' : ''} importado${imagens > 1 ? 's' : ''} — leia no PDF original`,
+    )
+  }
+
   const descartados = resultado.discarded.length
   if (descartados > 0) {
     partes.push(`${descartados} linha${descartados > 1 ? 's' : ''} não importada${descartados > 1 ? 's' : ''}`)
@@ -232,6 +248,17 @@ export function montarEntrega(resultado: ExtractionResult, lidoPorIA: boolean): 
 
   const linhas: LinhaEntregue[] = []
   const pendencias: { nome: string; motivo: string }[] = []
+
+  // I5 — a mesma perda, na lista que a tela mostra por cima da tabela (D9).
+  // Duas vias de propósito: a pendência é da sessão e some no refresh; a nota
+  // em `observacoes` vai para o banco junto com o registro e sobrevive.
+  if (resultado.imaging.length > 0) {
+    const n = resultado.imaging.length
+    pendencias.push({
+      nome: n > 1 ? `${n} laudos de imagem` : 'Laudo de imagem',
+      motivo: 'laudo de imagem não importado — este módulo só lê exames de laboratório; leia no PDF original',
+    })
+  }
   const chaves = [...porData.keys()].sort((a, b) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b)))
   const observacoes = resumoDeAvisos(resultado, lidoPorIA)
 

@@ -59,7 +59,36 @@ export function absolutoDoDiferencial(
   const abs = pares.slice(iPct + 1).find(p => /\/?\s*(mm3|mm³|µL|uL|mcL)/i.test(p.unidade))
   if (!abs) return null
 
-  // Havendo duas faixas, a segunda é a do absoluto; havendo uma, é dele.
-  const referencia = referencias.length > 1 ? referencias[1]! : (referencias[0] ?? '')
+  // Havendo DUAS faixas, a ordem resolve: a primeira é do percentual e a
+  // segunda é do absoluto, na mesma sequência dos valores.
+  //
+  // Havendo UMA SÓ, a ordem não resolve nada, e usá-la assim mesmo era o
+  // defeito I2: a faixa que sobra é quase sempre a do PERCENTUAL, e encostada
+  // num valor absoluto ela produz alarme na DIREÇÃO ERRADA. Neutrófilos de
+  // 500/mm³ é neutropenia grave; comparados contra "51 a 65" (percentual),
+  // 500 fica acima do máximo e a tela mostra vermelho com seta para CIMA —
+  // "neutrofilia", o oposto do que o paciente tem.
+  //
+  // Com uma faixa só, ela só vale se DECLARAR a unidade do absoluto. Sem
+  // unidade não dá para saber de quem ela é, e o honesto é não ter faixa: sem
+  // referência, `interpretarNumerico` não opina e a marcação de revisão
+  // aparece. Perder a faixa custa uma cor na tela; herdar a errada custa a
+  // leitura invertida de uma neutropenia.
+  const referencia =
+    referencias.length > 1 ? referencias[1]!
+    : referencias.length === 1 && ehFaixaDoAbsoluto(referencias[0]!) ? referencias[0]!
+    : ''
   return { valor: abs.valor, unidade: abs.unidade, referencia }
+}
+
+/**
+ * A faixa declara, no fim, uma unidade de CONTAGEM ABSOLUTA.
+ *
+ * Ancorada no fim e exigindo um caractere não-alfabético antes, para "uL" não
+ * casar dentro de uma palavra ("adulto") — a mesma armadilha que o `/i` de uma
+ * regex de unidade já pregou neste projeto.
+ */
+function ehFaixaDoAbsoluto(faixa: string): boolean {
+  if (/%/.test(faixa)) return false
+  return /(?:^|[^A-Za-zÀ-ÿ])\/?\s*(?:mm3|mm³|µL|uL|mcL)\s*$/i.test(faixa.trim())
 }

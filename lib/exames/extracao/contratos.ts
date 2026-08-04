@@ -247,6 +247,16 @@ export type ReviewReason =
   | 'unknownAnalyte'
   | 'unknownUnit'
   | 'referenceRejected'
+  /**
+   * O laudo não trouxe faixa nenhuma para um valor NUMÉRICO.
+   *
+   * Sem faixa, `interpretarNumerico` não opina — e "não opinei" tem a mesma
+   * forma de "conferi, está normal" (`alterado:false`, `direcao:'normal'`).
+   * Sem esta marcação, um valor de gasometria sem coluna de referência
+   * chegava à tela como texto cinza comum, idêntico a um normal confirmado,
+   * enquanto o MESMO exame colado como print voltava vermelho da IA.
+   */
+  | 'referenceAbsent'
   | 'implausibleValue'
   | 'lowDetectionConfidence'
   | 'fallbackExtracted'

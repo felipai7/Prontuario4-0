@@ -38,6 +38,13 @@ const NORMAL: Interpretacao = { alterado: false, direcao: 'normal' }
  * O formato é o mesmo de "normal" porque é o que a tela sabe exibir hoje. A
  * diferença aparece para o usuário pelo campo `referencia`, que fica nulo, e
  * pelo marcador de revisão: o extrator já classificou a linha como pendente.
+ *
+ * Essa última frase era falsa até 03/08/2026 (I3). O motor só marcava revisão
+ * para referência `rejected`, nunca para `absent` — e como SEM_OPINIAO tem
+ * exatamente a forma de NORMAL, um valor sem faixa era gravado
+ * `revisar:false` e desenhado em cinza comum, idêntico a um normal
+ * confirmado. Agora `referenceAbsent` é um motivo de revisão de verdade, e
+ * este comentário voltou a descrever o que o código faz.
  */
 const SEM_OPINIAO: Interpretacao = { alterado: false, direcao: 'normal' }
 const QUALITATIVO_ALTERADO: Interpretacao = { alterado: true, direcao: 'qualitativo' }

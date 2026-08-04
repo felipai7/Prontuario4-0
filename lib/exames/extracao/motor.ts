@@ -136,6 +136,15 @@ export function extrairDoTexto(
           if (referencia.kind === 'rejected') motivos.push('referenceRejected')
 
           const valor = interpretarValor(bruta.rawValue, ctxNorm)
+          // I3 — faixa AUSENTE também pede conferência, mas só para valor
+          // numérico: é ele que fica sem opinião possível, e "sem opinião"
+          // é indistinguível de "normal confirmado" na tela. Qualitativo e
+          // semiquantitativo ("Negativo", "+++") são interpretáveis sozinhos
+          // e marcá-los encheria a lista de pendências de linhas sem defeito
+          // — lista de alarme que sempre toca é lista que ninguém lê.
+          if (referencia.kind === 'absent' && valor.kind === 'numeric') {
+            motivos.push('referenceAbsent')
+          }
           // Erro de ESCALA, não de saúde: potássio 7,2 lido como 0,72. Marca
           // para revisão e nunca descarta — se a faixa estiver errada,
           // descartar apaga justamente o valor extremo, que é o que importa.
