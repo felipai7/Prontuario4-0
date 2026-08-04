@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { agruparExamesPorHorario, parseExameTimestamp, type ClusterExames } from '@/lib/exames/agrupamento'
 import { grupoDoNome, gruposEmOrdem, nomeCanonico } from '@/lib/exames/grupos'
@@ -12,7 +12,10 @@ interface Props {
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
 }
 
-type AddMode = 'ia' | 'texto' | 'manual'
+// 'pdf' era 'ia' até 03/08/2026, quando a IA saiu da rota de exames. O nome
+// antigo passou a mentir duas vezes: não há IA, e a aba só aceita PDF (print
+// e texto colado eram os outros dois caminhos que só a IA lia).
+type AddMode = 'pdf' | 'manual'
 type ManualResultado = {
   nome: string; valor: string; unidade: string; referencia: string
   alterado: boolean; direcao: 'alto' | 'baixo' | 'normal' | 'qualitativo'
@@ -257,9 +260,8 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
   const fileRef  = useRef<HTMLInputElement>(null)
 
   const [adding,     setAdding]     = useState(false)
-  const [addMode,    setAddMode]    = useState<AddMode>('ia')
+  const [addMode,    setAddMode]    = useState<AddMode>('pdf')
   const [file,       setFile]       = useState<File | null>(null)
-  const [preview,    setPreview]    = useState<string | null>(null)
   const [extracting, setExtracting] = useState(false)
   const [localErr,   setLocalErr]   = useState<string | null>(null)
   const [mTipo,      setMTipo]      = useState('')
@@ -267,8 +269,6 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
   const [mObs,       setMObs]       = useState('')
   const [mRows,      setMRows]      = useState<ManualResultado[]>([emptyResultado()])
   const [savingM,    setSavingM]    = useState(false)
-  const [rawText,    setRawText]    = useState('')
-  const [pastedImgs, setPastedImgs] = useState<{ base64: string; mediaType: string; preview: string }[]>([])
   // Achado A-04 (Tarefa 7): o extrator marcava, o adaptador traduzia, o banco
   // guardava — e nenhum componente lia. `pendencias` e `conferenciaPaciente`
   // são o que a rota devolve em `RespostaExtracao`, guardados aqui só para a
@@ -374,108 +374,18 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
     if (germeAlert?.tipo === 'critico') break
   }
 
-  // ── Clipboard paste (image) ───────────────────────────────────────────────
-  const handleGlobalPaste = useCallback((e: ClipboardEvent) => {
-    if (!adding) return
-    const items = Array.from(e.clipboardData?.items ?? [])
-    const imgItem = items.find(i => i.type.startsWith('image/'))
-    if (!imgItem) return
-    e.preventDefault()
-    const blob = imgItem.getAsFile()
-    if (!blob) return
-    const reader = new FileReader()
-    reader.onload = ev => {
-      const dataUrl = ev.target?.result as string
-      const [header, b64] = dataUrl.split(',')
-      const mt = header.match(/data:([^;]+)/)?.[1] ?? 'image/png'
-      setPastedImgs(prev => [...prev, { base64: b64, mediaType: mt, preview: dataUrl }])
-      setAddMode('ia')
-      setFile(null); setPreview(null)
-      setLocalErr(null)
-    }
-    reader.readAsDataURL(blob)
-  }, [adding])
-
-  useEffect(() => {
-    document.addEventListener('paste', handleGlobalPaste)
-    return () => document.removeEventListener('paste', handleGlobalPaste)
-  }, [handleGlobalPaste])
-
-  const handleExtractPasted = async () => {
-    if (!pastedImgs.length) return
-    setExtracting(true); setLocalErr(null)
-    try {
-      const resp = await fetch('/api/extract-exam', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          images: pastedImgs.map(i => ({ base64: i.base64, mediaType: i.mediaType })),
-          pacienteId: paciente.id, pacienteNome: paciente.nome,
-          nomeArquivo: 'print-colado',
-        }),
-      })
-      const data = await resp.json()
-      if (!resp.ok || !data.ok) throw new Error(data.erro ?? 'Não foi possível salvar')
-
-      // `resetAdding()` limpa os avisos do laudo anterior (M3), então ele
-      // vem ANTES: invertido, apagaria justamente os avisos que acabaram de
-      // chegar. A ordem é parte do conserto, não estilo.
-      resetAdding()
-      setPendencias(data.pendencias ?? [])
-      setNotasLaudo(data.notasLaudo ?? [])
-      setConferenciaPaciente(data.conferenciaPaciente ?? 'naoPerguntado')
-      onRefresh()
-      showToast(
-        data.duplicataDe
-          ? `Salvo. Atenção: este mesmo arquivo já foi enviado em ${data.duplicataDe}.`
-          : data.registros > 1
-            ? `Laudo com ${data.registros} datas de coleta: ${data.registros} exames salvos!`
-            : 'Exame extraído e salvo!',
-      )
-    } catch (e: any) { setLocalErr(e.message); limparAvisosDoLaudo() }
-    setExtracting(false)
-  }
-
-  const handleExtractText = async () => {
-    if (!rawText.trim()) { setLocalErr('Cole o texto do laudo no campo acima'); return }
-    setExtracting(true); setLocalErr(null)
-    try {
-      const resp = await fetch('/api/extract-exam', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rawText: rawText.trim(),
-          pacienteId: paciente.id, pacienteNome: paciente.nome,
-          nomeArquivo: null,
-        }),
-      })
-      const data = await resp.json()
-      if (!resp.ok || !data.ok) throw new Error(data.erro ?? 'Não foi possível salvar')
-
-      // `resetAdding()` limpa os avisos do laudo anterior (M3), então ele
-      // vem ANTES: invertido, apagaria justamente os avisos que acabaram de
-      // chegar. A ordem é parte do conserto, não estilo.
-      resetAdding()
-      setPendencias(data.pendencias ?? [])
-      setNotasLaudo(data.notasLaudo ?? [])
-      setConferenciaPaciente(data.conferenciaPaciente ?? 'naoPerguntado')
-      onRefresh()
-      showToast(
-        data.duplicataDe
-          ? `Salvo. Atenção: este mesmo arquivo já foi enviado em ${data.duplicataDe}.`
-          : data.registros > 1
-            ? `Laudo com ${data.registros} datas de coleta: ${data.registros} exames salvos!`
-            : 'Exame extraído e salvo!',
-      )
-    } catch (e: any) { setLocalErr(e.message); limparAvisosDoLaudo() }
-    setExtracting(false)
-  }
+  // Não há mais listener global de `paste` nem grade de prints: o servidor
+  // só lê PDF, e um print colado não tinha para onde ir depois que a IA saiu.
+  // Colar uma imagem na tela agora não faz nada — melhor do que aceitá-la e
+  // falhar no envio.
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; if (!f) return
+    // Sem miniatura: o que entra aqui é PDF, e a leitura prévia do arquivo só
+    // existia para mostrar o print colado. O nome do arquivo é a confirmação
+    // de que veio o certo.
     setFile(f); setLocalErr(null)
-    const reader = new FileReader()
-    reader.onload = ev => setPreview(f.type.startsWith('image/') ? ev.target?.result as string : '[PDF]')
-    reader.readAsDataURL(f)
   }
 
   const handleExtract = async () => {
@@ -488,10 +398,10 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
         reader.onerror = rej
         reader.readAsDataURL(file)
       })
-      // Gravação agora acontece no servidor (Tarefa 7 — achado A-04): tanto o
-      // caminho local (`processarPdf`) quanto o da IA (`processarIA`)
-      // devolvem o mesmo formato `RespostaExtracao`, então este handler não
-      // precisa mais saber por qual dos dois o laudo passou.
+      // Gravação acontece no servidor (Tarefa 7 — achado A-04). Desde
+      // 03/08/2026 há um caminho só, `processarPdf`: se o laudo não for
+      // reconhecido, a resposta traz a mensagem que manda digitar à mão, e
+      // ela cai no `catch` abaixo como qualquer outra falha.
       const resp = await fetch('/api/extract-exam', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -559,13 +469,12 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
   }
 
   const resetAdding = () => {
-    setAdding(false); setAddMode('ia'); setFile(null); setPreview(null); setLocalErr(null)
-    setPastedImgs([]); setRawText('')
+    setAdding(false); setAddMode('pdf'); setFile(null); setLocalErr(null)
     if (fileRef.current) fileRef.current.value = ''
     setMTipo(''); setMData(''); setMObs(''); setMRows([emptyResultado()])
     // M3 — fechar o painel também encerra o laudo anterior. Quem chama isto
-    // e QUER mostrar avisos novos (os três handlers de extração) chama-o
-    // ANTES de `setPendencias`, nunca depois.
+    // e QUER mostrar avisos novos (`handleExtract`) chama-o ANTES de
+    // `setPendencias`, nunca depois.
     limparAvisosDoLaudo()
   }
 
@@ -588,13 +497,9 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
       {adding && (
         <div className="border-2 border-dashed border-indigo-200 rounded-xl p-4 bg-indigo-50 space-y-3">
           <div className="flex rounded-lg overflow-hidden border border-indigo-200">
-            <button onClick={() => { setAddMode('ia'); setLocalErr(null) }}
-              className={`flex-1 py-2 text-xs font-semibold transition-colors ${addMode === 'ia' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 hover:bg-indigo-50'}`}>
-              📁 PDF / Imagem
-            </button>
-            <button onClick={() => { setAddMode('texto'); setLocalErr(null) }}
-              className={`flex-1 py-2 text-xs font-semibold transition-colors ${addMode === 'texto' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 hover:bg-indigo-50'}`}>
-              📋 Colar texto
+            <button onClick={() => { setAddMode('pdf'); setLocalErr(null) }}
+              className={`flex-1 py-2 text-xs font-semibold transition-colors ${addMode === 'pdf' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 hover:bg-indigo-50'}`}>
+              📄 PDF
             </button>
             <button onClick={() => { setAddMode('manual'); setLocalErr(null) }}
               className={`flex-1 py-2 text-xs font-semibold transition-colors ${addMode === 'manual' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 hover:bg-indigo-50'}`}>
@@ -602,84 +507,24 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
             </button>
           </div>
 
-          {addMode === 'ia' && (
+          {addMode === 'pdf' && (
             <>
-              {/* Clipboard paste hint */}
-              {pastedImgs.length === 0 && !file && (
-                <div className="flex items-center gap-2 rounded-lg bg-indigo-100 border border-indigo-200 px-3 py-2 text-xs text-indigo-700">
-                  <span className="text-base">💡</span>
-                  <span>Cole prints com <kbd className="bg-white border border-indigo-200 rounded px-1 py-0.5 font-mono">Ctrl+V</kbd> — pode colar quantos precisar antes de extrair</span>
-                </div>
-              )}
-
-              {/* Pasted images grid */}
-              {pastedImgs.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-medium text-indigo-700">
-                      📋 {pastedImgs.length} print{pastedImgs.length > 1 ? 's' : ''} colado{pastedImgs.length > 1 ? 's' : ''} — cole mais com <kbd className="bg-indigo-50 border border-indigo-200 rounded px-1 font-mono">Ctrl+V</kbd>
-                    </p>
-                    <button onClick={() => setPastedImgs([])}
-                      className="text-xs text-red-400 hover:text-red-600">Limpar tudo</button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {pastedImgs.map((img, idx) => (
-                      <div key={idx} className="relative">
-                        <img src={img.preview} alt={`print ${idx + 1}`} className="w-full h-28 rounded-lg border object-contain bg-slate-50"/>
-                        <button onClick={() => setPastedImgs(prev => prev.filter((_, i) => i !== idx))}
-                          className="absolute top-1 right-1 bg-white/90 hover:bg-white text-slate-500 hover:text-red-600 rounded-full w-5 h-5 flex items-center justify-center text-xs border border-slate-200 shadow-sm">✕</button>
-                        <span className="absolute bottom-1 left-1 bg-black/50 text-white text-xs px-1.5 py-0.5 rounded">{idx + 1}</span>
-                      </div>
-                    ))}
-                  </div>
-                  {localErr && <p className="text-red-600 text-sm">❌ {localErr}</p>}
-                  <button onClick={handleExtractPasted} disabled={extracting}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors">
-                    {extracting ? `⏳ Extraindo ${pastedImgs.length} imagens com IA...` : `🤖 Extrair ${pastedImgs.length} print${pastedImgs.length > 1 ? 's' : ''} e Salvar`}
-                  </button>
-                </div>
-              )}
-
-              {/* File picker */}
-              {pastedImgs.length === 0 && (
-                <>
-                  <input ref={fileRef} type="file" id="exam-file" accept=".pdf,image/*" onChange={handleFile} className="hidden"/>
-                  <label htmlFor="exam-file"
-                    className="flex items-center justify-center gap-2 w-full py-3 border-2 border-dashed border-indigo-300 rounded-lg cursor-pointer hover:border-indigo-500 hover:bg-white text-sm text-indigo-600 font-medium transition-all">
-                    📁 {file ? file.name : 'Selecionar PDF ou Imagem'}
-                  </label>
-                  {preview && preview !== '[PDF]' && <img src={preview} alt="preview" className="max-h-40 mx-auto rounded-lg border object-contain"/>}
-                  {preview === '[PDF]' && <p className="text-sm text-slate-500 text-center">📄 {file?.name}</p>}
-                  {localErr && <p className="text-red-600 text-sm">❌ {localErr}</p>}
-                  {file && (
-                    <button onClick={handleExtract} disabled={extracting}
-                      className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors">
-                      {extracting ? '⏳ Extraindo com IA...' : '🤖 Extrair e Salvar'}
-                    </button>
-                  )}
-                </>
-              )}
-            </>
-          )}
-
-          {addMode === 'texto' && (
-            <>
-              <div className="bg-indigo-100 border border-indigo-200 rounded-lg px-3 py-2 text-xs text-indigo-700 flex items-start gap-2">
-                <span className="text-base mt-0.5">💡</span>
-                <span>Abra o resultado no site do laboratório ou em qualquer PDF, pressione <kbd className="bg-white border border-indigo-200 rounded px-1 py-0.5 font-mono">Ctrl+A</kbd> para selecionar tudo e <kbd className="bg-white border border-indigo-200 rounded px-1 py-0.5 font-mono">Ctrl+C</kbd> para copiar. Cole abaixo.</span>
-              </div>
-              <textarea
-                value={rawText}
-                onChange={e => setRawText(e.target.value)}
-                placeholder="Cole aqui o texto completo do resultado laboratorial..."
-                rows={8}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs bg-white resize-y focus:outline-none focus:ring-2 focus:ring-indigo-400 font-mono"
-              />
+              <input ref={fileRef} type="file" id="exam-file" accept="application/pdf,.pdf" onChange={handleFile} className="hidden"/>
+              <label htmlFor="exam-file"
+                className="flex items-center justify-center gap-2 w-full py-3 border-2 border-dashed border-indigo-300 rounded-lg cursor-pointer hover:border-indigo-500 hover:bg-white text-sm text-indigo-600 font-medium transition-all">
+                📄 {file ? file.name : 'Selecionar PDF do laudo'}
+              </label>
+              <p className="text-xs text-slate-500 text-center">
+                O laudo é lido aqui no computador e não sai dele. Se o laboratório não for
+                reconhecido, use a aba Manual.
+              </p>
               {localErr && <p className="text-red-600 text-sm">❌ {localErr}</p>}
-              <button onClick={handleExtractText} disabled={extracting || !rawText.trim()}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors">
-                {extracting ? '⏳ Extraindo com IA...' : '🤖 Extrair e Salvar'}
-              </button>
+              {file && (
+                <button onClick={handleExtract} disabled={extracting}
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors">
+                  {extracting ? '⏳ Lendo o laudo...' : '📄 Extrair e Salvar'}
+                </button>
+              )}
             </>
           )}
 
@@ -830,7 +675,13 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
                           aqui na tabela pivô, não na lista "sem
                           estruturação" (onde `observacoes` já era exibido).
                           Sem isto, o marcador nunca aparecia na tela — a
-                          única leitura que a Juliana de fato usa. */}
+                          única leitura que a Juliana de fato usa.
+
+                          Continua aqui depois da remoção da IA (03/08/2026):
+                          nenhum exame NOVO nasce com este marcador, mas os
+                          que a IA gravou até ontem continuam no banco, e são
+                          justamente os que ela precisa olhar com desconfiança.
+                          Apagar a exibição apagaria o aviso, não o dado. */}
                       {cl.exames.some(ex => ex.observacoes?.includes('Lido por IA')) && (
                         <p className="text-[10px] text-slate-400 font-normal mt-0.5"
                           title={cl.exames.map(ex => ex.observacoes).filter(Boolean).join(' · ')}>

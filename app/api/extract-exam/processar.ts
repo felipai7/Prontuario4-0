@@ -15,13 +15,33 @@
 
 import { extrairExames } from '@/lib/exames/extracao'
 import { montarEntrega } from '@/lib/exames/entrega'
-import { gravarEntrega, inserirTolerandoImpressaoDigital, type ClienteExames } from '@/lib/exames/persistencia'
+import { gravarEntrega, type ClienteExames } from '@/lib/exames/persistencia'
 import type { VeredictoPaciente } from '@/lib/exames/extracao'
+
+/**
+ * O que a tela mostra quando a leitura local não reconheceu o documento.
+ *
+ * Até 03/08/2026 este caso não tinha mensagem: ele era o SINAL de "manda para
+ * a IA" (`erro: 'NAO_RECONHECIDO'`), e a médica nunca via nada. Removida a IA,
+ * não há mais para onde mandar — o caso precisa dizer o que aconteceu e o que
+ * fazer, na mesma tela, sem que ela tenha que adivinhar se o envio sumiu.
+ *
+ * Cobre as DUAS causas medidas no acervo de 50 laudos: laboratório fora da
+ * lista (1 caso) e PDF sem camada de texto (2 casos). Nomeia as duas porque
+ * a conduta é a mesma e porque dizer só "laboratório não reconhecido" seria
+ * mentira nos dois PDFs digitalizados.
+ *
+ * R10 — é uma constante: não interpola nada do laudo, e por construção não
+ * tem como carregar conteúdo de paciente.
+ */
+export const MENSAGEM_NAO_RECONHECIDO =
+  'Este laudo não foi reconhecido: o laboratório não está entre os que o programa lê, ' +
+  'ou o PDF é uma imagem sem texto. Digite os resultados na aba Manual.'
 
 export type RespostaExtracao =
   | {
       ok: true
-      via: 'local' | 'ia'
+      via: 'local'
       registros: number
       /** Canal "confira este valor" (R3.1) — o que vira a lista âmbar. */
       pendencias: { nome: string; motivo: string }[]
@@ -60,11 +80,15 @@ export async function processarPdf(
     resultado.cultures.length === 0 &&
     resultado.imaging.length === 0
   ) {
-    // O veredito da leitura, para o log da rota. Sem conteúdo de laudo (R10):
-    // um identificador de perfil, códigos de aviso tipados e contagens.
+    // `diagnostico` é o veredito da leitura, para o LOG da rota — nunca para a
+    // tela. Sem conteúdo de laudo (R10): um identificador de perfil, códigos
+    // de aviso tipados e contagens. É também como a rota distingue "não
+    // reconhecido" (culpa do documento) de falha de gravação (culpa nossa),
+    // agora que não existe mais o sentinel 'NAO_RECONHECIDO' que servia só
+    // para decidir se caía na IA.
     return {
       ok: false,
-      erro: 'NAO_RECONHECIDO',
+      erro: MENSAGEM_NAO_RECONHECIDO,
       diagnostico: {
         perfil: resultado.detection.profileId,
         confianca: Number(resultado.detection.confidence.toFixed(2)),
@@ -90,113 +114,5 @@ export async function processarPdf(
     notasLaudo: entrega.notasLaudo,
     conferenciaPaciente: entrega.conferenciaPaciente,
     duplicataDe: gravacao.duplicataDe,
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════
-// Tarefa 6b — o caminho da IA (prints, texto colado, e PDF que o extrator
-// local não reconheceu) fecha o mesmo buraco do D7: até aqui a gravação
-// continuava acontecendo no navegador, e uma falha do banco virava "Exame
-// extraído e salvo!" do mesmo jeito.
-//
-// NÃO reaproveita `montarEntrega`/`gravarEntrega`: os dois passam por
-// `adaptarParaExames`, que RECALCULA `alterado`/`direcao` a partir de
-// `referenciaEstruturada` (a referência já normalizada em forma estruturada).
-// A IA nunca preenche esse campo — ela só devolve a referência como texto
-// livre, no formato que veio do laudo — então forçar o resultado dela por
-// ali faria todo valor cair no caminho "sem referência" do adaptador,
-// derrubando um "alterado: true" que a IA já tinha acertado. Este caminho
-// grava `alterado`/`direcao` exatamente como a IA devolveu, sem reinterpretar
-// nada.
-// ══════════════════════════════════════════════════════════════════════════
-
-/** O formato solto que o prompt da IA devolve — não é `ExtractionResult`. */
-export interface ResultadoIA {
-  tipo_exame: string
-  data_exame: string | null
-  resultados: {
-    nome: string
-    valor: string
-    unidade: string | null
-    referencia: string | null
-    alterado: boolean
-    direcao: 'alto' | 'baixo' | 'normal' | 'qualitativo'
-  }[] | null
-  observacoes: string | null
-}
-
-// D10 — o marcador vai no REGISTRO (uma vez por laudo), nunca em cada
-// resultado. Quarenta marcadores em quarenta valores é ruído; um marcador no
-// registro é informação.
-const MARCADOR_IA = 'Lido por IA — não conferido pelo extrator local'
-
-/**
- * Grava o resultado que já veio pronto da IA. Devolve o mesmo formato de
- * `processarPdf` — é o que permite a tela (Tarefa 7) tratar os dois com um
- * contrato só.
- */
-export async function processarIA(
-  cliente: ClienteExames,
-  pacienteId: string,
-  resultadoDaIA: ResultadoIA,
-  nomeArquivo: string | null,
-): Promise<RespostaExtracao> {
-  const resultados = resultadoDaIA.resultados ?? []
-
-  const observacoes = resultadoDaIA.observacoes
-    ? `${resultadoDaIA.observacoes}; ${MARCADOR_IA}`
-    : MARCADOR_IA
-
-  // C1 — mesma tolerância do caminho local: a coluna `impressao_digital` só
-  // existe depois do ALTER TABLE, e sem isto TODA gravação por este caminho
-  // falharia hoje. Ver `inserirTolerandoImpressaoDigital`.
-  const { erro } = await inserirTolerandoImpressaoDigital(cliente, [{
-    paciente_id: pacienteId,
-    tipo_exame: resultadoDaIA.tipo_exame || 'Exame',
-    data_exame: resultadoDaIA.data_exame,
-    // Passa `alterado`/`direcao` (e o resto) sem reinterpretar — ver o
-    // comentário do topo desta seção sobre por que isto não usa
-    // `adaptarParaExames`.
-    resultados: resultados.map(r => ({
-      nome: r.nome,
-      valor: r.valor,
-      unidade: r.unidade,
-      referencia: r.referencia,
-      alterado: r.alterado,
-      direcao: r.direcao,
-    })),
-    observacoes,
-    raw_text: null,
-    nome_arquivo: nomeArquivo,
-    // Sem impressão digital, de propósito: o caminho da IA não tem bytes de
-    // documento estáveis para hashear (texto colado e prints não são o PDF
-    // original, e mesmo quando é PDF a IA só entra quando o extrator local
-    // JÁ não reconheceu nada). Não há fingerprint confiável aqui — e um
-    // hash inventado (ex. do texto colado) pareceria conferência de
-    // duplicata sem ser: o mesmo laudo colado duas vezes com espaçamento
-    // diferente teria hashes diferentes, e round-trips pela IA não são
-    // determinísticos do jeito que o parser local é (R8). Vazio, não fingido.
-    impressao_digital: '',
-  }])
-
-  // A-05/D7 — mesma regra do caminho local: erro do banco vira resultado
-  // explícito, nunca um "ok: true" que a tela mostraria como sucesso.
-  // `erro` é a mensagem do Supabase, não conteúdo do laudo (R10).
-  if (erro) return { ok: false, erro }
-
-  return {
-    ok: true,
-    via: 'ia',
-    registros: 1,
-    // O caminho da IA não roda a conferência de pendência por valor (isso
-    // exigiria a mesma reinterpretação que este caminho evita de propósito).
-    pendencias: [],
-    notasLaudo: [],
-    // Idem para a conferência de nome do paciente: ela lê a geometria do
-    // texto do PDF local (`conferirPaciente` sobre `texto.lines`), camada
-    // que este caminho não tem. 'naoPerguntado' é o mesmo default que a
-    // tela já usa antes de qualquer extração.
-    conferenciaPaciente: 'naoPerguntado',
-    duplicataDe: null,
   }
 }
