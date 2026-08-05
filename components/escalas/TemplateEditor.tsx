@@ -147,8 +147,8 @@ export default function TemplateEditor({ unitId, staffList, shiftTypesList, souC
             <div key={d} className="text-center text-xs font-bold text-slate-400 py-1">{d}</div>
           ))}
           {DIAS.map(dia => (
-            <div key={dia} className="border border-slate-200 rounded-lg p-1 space-y-1" title={tituloCompletoDoDia(dia)}>
-              <p className="text-xs font-semibold text-slate-500">{ocorrenciaDoDia(dia)}ª</p>
+            <div key={dia} className="border border-slate-200 rounded-lg p-1 space-y-1">
+              <p className="text-xs font-semibold text-slate-500 leading-tight">{tituloCompletoDoDia(dia)}</p>
               {tiposAtivos.map(t => {
                 const slots = getSlots(dia, t.id)
                 const slot1 = slots[0]
