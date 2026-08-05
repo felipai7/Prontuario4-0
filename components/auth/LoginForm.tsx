@@ -1,10 +1,8 @@
 'use client'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 export default function LoginForm() {
-  const router = useRouter()
   const supabase = createClient()
 
   const [email,    setEmail]    = useState('')
@@ -24,8 +22,11 @@ export default function LoginForm() {
       return
     }
 
-    router.push('/dashboard')
-    router.refresh()
+    // Recarregamento completo, e não router.push+refresh: trocar de conta
+    // precisa jogar fora TODO estado de cliente da conta anterior (nome no
+    // cabeçalho, permissões, o que quer que esteja em memória). O mesmo
+    // problema já apareceu ao trocar de unidade — ver SeletorUnidade.tsx.
+    window.location.assign('/dashboard')
   }
 
   return (

@@ -127,9 +127,18 @@ export default function PacienteModal({ paciente, unidade, onClose, onAltaConced
     const { data } = await supabase.from('exames').select('*').eq('paciente_id', pac.id).order('created_at')
     if (data) setExames(data as Exame[])
   }
+  // Um salvamento de balanço dispara DOIS recarregamentos concorrentes (o
+  // onRefresh explícito do BalancoTab + o evento de realtime da própria
+  // gravação) — sem trava, a resposta do MAIS ANTIGO podia chegar depois da
+  // do mais novo e sobrescrever a tela com um valor já superado (turno editado
+  // duas vezes em sequência rápida, por exemplo). Reabrir a ficha mascarava o
+  // sintoma porque um único load novo ganhava a corrida sozinho — mas o dado
+  // errado ficava visível até isso acontecer.
+  const periodosReqRef = useRef(0)
   const loadPeriodos = async () => {
+    const reqId = ++periodosReqRef.current
     const { data } = await supabase.from('periodos_balanco').select('*').eq('paciente_id', pac.id).order('inicio')
-    if (data) setPeriodos(data as PeriodoBalanco[])
+    if (data && reqId === periodosReqRef.current) setPeriodos(data as PeriodoBalanco[])
   }
   const loadSinais = async () => {
     const { data } = await supabase.from('sinais_vitais').select('*').eq('paciente_id', pac.id).order('horario')

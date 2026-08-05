@@ -117,7 +117,11 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    router.push('/login')
+    // Recarregamento completo, e não router.push: sem isso o nome/e-mail e as
+    // permissões da conta anterior podiam sobreviver em memória (estado do
+    // React, singletons de módulo) até o próximo login trazer dados novos por
+    // cima — mesma causa do troca-de-unidade em SeletorUnidade.tsx.
+    window.location.assign('/login')
   }
 
   const refreshPacientes = useCallback(async () => {
