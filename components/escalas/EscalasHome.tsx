@@ -77,6 +77,33 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
   const [novoNivel, setNovoNivel] = useState<Nivel>('plantonista')
   const [savingStaff, setSavingStaff] = useState(false)
 
+  // ── Editar nome/cargo de um membro já cadastrado ───────────────────────────
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editNome, setEditNome] = useState('')
+  const [editProfissao, setEditProfissao] = useState<Profissao>('medico')
+  const [editNivel, setEditNivel] = useState<Nivel>('plantonista')
+  const [savingEdit, setSavingEdit] = useState(false)
+
+  const handleStartEdit = (s: Staff) => {
+    setEditingId(s.id); setEditNome(s.full_name); setEditProfissao(s.profissao); setEditNivel(s.nivel)
+  }
+  const handleCancelEdit = () => setEditingId(null)
+
+  const handleSaveEdit = async () => {
+    if (!editingId) return
+    if (!editNome.trim()) { showToast('Informe o nome', 'error'); return }
+    setSavingEdit(true)
+    const { error } = await supabase.from('staff').update({
+      full_name: editNome.trim(), profissao: editProfissao,
+      nivel: editProfissao === 'medico' ? editNivel : 'plantonista',
+    }).eq('id', editingId)
+    setSavingEdit(false)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    showToast('Membro atualizado!')
+    setEditingId(null)
+    loadStaff(selectedUnitId)
+  }
+
   const handleAddStaff = async () => {
     if (!novoEmail.trim() || !novoNome.trim()) { showToast('Informe e-mail e nome', 'error'); return }
     setSavingStaff(true)
@@ -159,19 +186,58 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
             ) : (
               <ul className="space-y-2">
                 {staffList.map(s => (
-                  <li key={s.id} className="flex items-center justify-between gap-2 border border-slate-200 rounded-lg p-3">
-                    <div className="min-w-0">
-                      <p className={`text-sm font-medium ${s.active ? 'text-slate-800' : 'text-slate-400 line-through'}`}>{s.full_name}</p>
-                      <p className="text-xs text-slate-400">{labelCargo(s)}</p>
-                    </div>
-                    {souChefeDaSelecionada && (
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <button onClick={() => handleToggleActive(s)}
-                          className="text-xs font-medium text-slate-500 hover:text-indigo-600 border border-slate-200 rounded-lg px-2 py-1">
-                          {s.active ? 'Desativar' : 'Reativar'}
-                        </button>
-                        <button onClick={() => handleRemoveStaff(s)} title="Remover"
-                          className="text-slate-300 hover:text-red-500 text-sm">🗑️</button>
+                  <li key={s.id} className="border border-slate-200 rounded-lg p-3">
+                    {editingId === s.id ? (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                          <input value={editNome} onChange={e => setEditNome(e.target.value)}
+                            placeholder="Nome completo" className={inputCls} />
+                          <select value={editProfissao} className={inputCls}
+                            onChange={e => {
+                              const p = e.target.value as Profissao
+                              setEditProfissao(p)
+                              if (p !== 'medico') setEditNivel('plantonista')
+                            }}>
+                            {PROFISSOES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                          </select>
+                          {editProfissao === 'medico' && (
+                            <select value={editNivel} onChange={e => setEditNivel(e.target.value as Nivel)} className={inputCls}>
+                              <option value="plantonista">Médico Plantonista</option>
+                              <option value="chefe">Médico Intensivista (chefe)</option>
+                            </select>
+                          )}
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <button onClick={handleCancelEdit}
+                            className="text-xs font-medium text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg px-3 py-1.5">
+                            Cancelar
+                          </button>
+                          <button onClick={handleSaveEdit} disabled={savingEdit}
+                            className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-lg">
+                            {savingEdit ? 'Salvando...' : 'Salvar'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className={`text-sm font-medium ${s.active ? 'text-slate-800' : 'text-slate-400 line-through'}`}>{s.full_name}</p>
+                          <p className="text-xs text-slate-400">{labelCargo(s)}</p>
+                        </div>
+                        {souChefeDaSelecionada && (
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <button onClick={() => handleStartEdit(s)} title="Editar nome e cargo"
+                              className="text-xs font-medium text-slate-500 hover:text-indigo-600 border border-slate-200 rounded-lg px-2 py-1">
+                              ✏️ Editar
+                            </button>
+                            <button onClick={() => handleToggleActive(s)}
+                              className="text-xs font-medium text-slate-500 hover:text-indigo-600 border border-slate-200 rounded-lg px-2 py-1">
+                              {s.active ? 'Desativar' : 'Reativar'}
+                            </button>
+                            <button onClick={() => handleRemoveStaff(s)} title="Remover"
+                              className="text-slate-300 hover:text-red-500 text-sm">🗑️</button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </li>
