@@ -68,7 +68,6 @@ export default function SwapRequests({ unitId, staffList, shiftTypesList, meuSta
   // ── Nova solicitação de troca ──────────────────────────────────────────────
   const [shiftIdEscolhido, setShiftIdEscolhido] = useState('')
   const [targetStaffId, setTargetStaffId] = useState('')
-  const [motivo, setMotivo] = useState('')
   const [saving, setSaving] = useState(false)
 
   const handleCreateSwap = async () => {
@@ -76,12 +75,12 @@ export default function SwapRequests({ unitId, staffList, shiftTypesList, meuSta
     setSaving(true)
     const { error } = await supabase.from('swap_requests').insert({
       unit_id: unitId, shift_id: shiftIdEscolhido, requester_id: meuStaffId,
-      target_staff_id: targetStaffId, reason: motivo.trim() || null,
+      target_staff_id: targetStaffId,
     })
     setSaving(false)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
     showToast('Troca solicitada!')
-    setShiftIdEscolhido(''); setTargetStaffId(''); setMotivo('')
+    setShiftIdEscolhido(''); setTargetStaffId('')
     load()
   }
 
@@ -130,7 +129,7 @@ export default function SwapRequests({ unitId, staffList, shiftTypesList, meuSta
           {meusPlantoes.length === 0 ? (
             <p className="text-xs text-slate-400">Você não tem plantões futuros publicados nesta unidade.</p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <select value={shiftIdEscolhido} onChange={e => setShiftIdEscolhido(e.target.value)} className={inputCls}>
                 <option value="">Selecione seu plantão...</option>
                 {meusPlantoes.map(s => (
@@ -143,7 +142,6 @@ export default function SwapRequests({ unitId, staffList, shiftTypesList, meuSta
                 <option value="">Trocar com...</option>
                 {colegas.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
               </select>
-              <input value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Motivo (opcional)" className={inputCls} />
             </div>
           )}
           {meusPlantoes.length > 0 && (
@@ -169,7 +167,7 @@ export default function SwapRequests({ unitId, staffList, shiftTypesList, meuSta
                   <li key={s.id} className="flex items-center justify-between gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm">
                     <div className="min-w-0">
                       <p className="text-slate-800">{linhaPlantao(s.shift_id)}</p>
-                      <p className="text-xs text-slate-500">De {staffMap[s.requester_id] ?? '?'}{s.reason && ` · ${s.reason}`}</p>
+                      <p className="text-xs text-slate-500">De {staffMap[s.requester_id] ?? '?'}</p>
                     </div>
                     <div className="flex gap-1.5 flex-shrink-0">
                       <button onClick={() => handleAccept(s.id)}

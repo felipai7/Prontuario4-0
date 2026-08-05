@@ -142,12 +142,16 @@ export default function TemplateEditor({ unitId, staffList, shiftTypesList, souC
       {loading ? (
         <p className="text-sm text-slate-400">Carregando...</p>
       ) : (
-        <div className="grid grid-cols-7 gap-1">
+        // 1 coluna no celular: "2ª Sexta-feira" + 2 seletores por turno não
+        // cabem espremidos em 1/7 de tela na vertical. Cabeçalho de dia da
+        // semana some no modo lista — o título de cada célula já soletra
+        // o dia por extenso.
+        <div className="grid grid-cols-1 sm:grid-cols-7 gap-1">
           {DIAS_SEMANA.map(d => (
-            <div key={d} className="text-center text-xs font-bold text-slate-400 py-1">{d}</div>
+            <div key={d} className="hidden sm:block text-center text-xs font-bold text-slate-400 py-1">{d}</div>
           ))}
           {DIAS.map(dia => (
-            <div key={dia} className="border border-slate-200 rounded-lg p-1 space-y-1">
+            <div key={dia} className="border border-slate-200 rounded-lg p-1.5 sm:p-1 space-y-1">
               <p className="text-xs font-semibold text-slate-500 leading-tight">{tituloCompletoDoDia(dia)}</p>
               {tiposAtivos.map(t => {
                 const slots = getSlots(dia, t.id)
@@ -156,8 +160,8 @@ export default function TemplateEditor({ unitId, staffList, shiftTypesList, souC
                 const completo = slots.length >= 2
                 const bg = slots.length === 0 ? 'bg-red-50' : completo ? 'bg-emerald-50' : 'bg-amber-50'
                 return (
-                  <div key={t.id} className={`rounded px-1 py-0.5 ${bg}`}>
-                    <p className="text-[11px] text-slate-500 truncate">{t.name}</p>
+                  <div key={t.id} className={`rounded px-1.5 sm:px-1 py-1 sm:py-0.5 ${bg}`}>
+                    <p className="text-xs sm:text-[11px] text-slate-500 sm:truncate">{t.name}</p>
                     {souChefe ? (
                       <div className="space-y-0.5">
                         <select value={slot1?.staff_id ?? ''}
@@ -172,7 +176,7 @@ export default function TemplateEditor({ unitId, staffList, shiftTypesList, souC
                         </select>
                       </div>
                     ) : (
-                      <p className="text-[11px] font-medium text-slate-800 truncate">
+                      <p className="text-xs sm:text-[11px] font-medium text-slate-800 sm:truncate">
                         {slots.length === 0 ? '—' : slots.map(s => staffMap[s.staff_id] ?? '?').join(' / ')}
                       </p>
                     )}
