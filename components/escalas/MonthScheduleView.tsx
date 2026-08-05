@@ -8,6 +8,8 @@ interface Props {
   staffList: Staff[]
   shiftTypesList: ShiftType[]
   souChefe: boolean
+  /** Destaca os plantões desta pessoa na grade — null quando não está na equipe. */
+  meuStaffId: string | null
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
 }
 
@@ -47,7 +49,7 @@ function celulasDoMes(ref: Date): (string | null)[] {
   return celulas
 }
 
-export default function MonthScheduleView({ unitId, staffList, shiftTypesList, souChefe, showToast }: Props) {
+export default function MonthScheduleView({ unitId, staffList, shiftTypesList, souChefe, meuStaffId, showToast }: Props) {
   const supabase = createClient()
   const [ref, setRef] = useState(() => { const d = new Date(); d.setDate(1); return d })
   const [shifts, setShifts] = useState<Shift[]>([])
@@ -142,6 +144,13 @@ export default function MonthScheduleView({ unitId, staffList, shiftTypesList, s
         </div>
       </div>
 
+      {meuStaffId && (
+        <p className="text-xs text-slate-500 flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded bg-indigo-100 border border-indigo-400 align-middle"></span>
+          Em destaque: seus plantões
+        </p>
+      )}
+
       <div className="flex items-center gap-2 flex-wrap">
         {publicado ? (
           <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5 inline-block">
@@ -212,19 +221,28 @@ export default function MonthScheduleView({ unitId, staffList, shiftTypesList, s
             return (
               <div key={dataStr} className="min-h-[4.5rem] border border-slate-200 rounded-lg p-1 space-y-1">
                 <p className="text-xs font-semibold text-slate-500">{parseInt(dataStr.slice(8), 10)}</p>
-                {doDia.map(s => (
-                  <div key={s.id} className={`text-[11px] rounded px-1 py-0.5 ${s.status === 'swapped' ? 'bg-amber-50' : 'bg-slate-50'}`}>
-                    <p className="text-slate-500 truncate">{s.shift_type_id ? shiftTypeMap[s.shift_type_id] ?? '?' : '?'}</p>
-                    {souChefe ? (
-                      <select value={s.staff_id ?? ''} onChange={e => handleAssignStaff(s, e.target.value)}
-                        className="w-full border border-slate-300 rounded px-0.5 py-0.5 text-[11px] bg-white">
-                        {staffAtivo.map(st => <option key={st.id} value={st.id}>{st.full_name}</option>)}
-                      </select>
-                    ) : (
-                      <p className="font-medium text-slate-800 truncate">{s.staff_id ? staffMap[s.staff_id] ?? '?' : '—'}</p>
-                    )}
-                  </div>
-                ))}
+                {doDia.map(s => {
+                  const ehMeu = meuStaffId != null && s.staff_id === meuStaffId
+                  const bg = ehMeu
+                    ? 'bg-indigo-100 border border-indigo-400 ring-1 ring-indigo-300'
+                    : s.status === 'swapped' ? 'bg-amber-50' : 'bg-slate-50'
+                  return (
+                    <div key={s.id} className={`text-[11px] rounded px-1 py-0.5 ${bg}`}>
+                      <p className={`truncate ${ehMeu ? 'text-indigo-500' : 'text-slate-500'}`}>{s.shift_type_id ? shiftTypeMap[s.shift_type_id] ?? '?' : '?'}</p>
+                      {souChefe ? (
+                        <select value={s.staff_id ?? ''} onChange={e => handleAssignStaff(s, e.target.value)}
+                          className="w-full border border-slate-300 rounded px-0.5 py-0.5 text-[11px] bg-white">
+                          {staffAtivo.map(st => <option key={st.id} value={st.id}>{st.full_name}</option>)}
+                        </select>
+                      ) : (
+                        <p className={`font-medium truncate ${ehMeu ? 'text-indigo-900' : 'text-slate-800'}`}>
+                          {s.staff_id ? staffMap[s.staff_id] ?? '?' : '—'}
+                          {s.status === 'swapped' && ' 🔄'}
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )
           })}

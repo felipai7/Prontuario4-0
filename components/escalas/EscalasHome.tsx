@@ -28,8 +28,6 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
   const supabase = createClient()
   const { toasts, showToast, removeToast } = useToast()
 
-  const souChefeDeAlgumaUnidade = myStaff.some(s => s.nivel === 'chefe' && s.profissao === 'medico' && s.active)
-
   const [selectedUnitId, setSelectedUnitId] = useState<string>(() => {
     const minhaUnidade = myStaff.find(s => s.active)?.unit_id
     return minhaUnidade ?? units[0]?.id ?? ''
@@ -168,14 +166,13 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
           </div>
         )}
 
-        {!souChefeDeAlgumaUnidade && (
+        {myStaff.length === 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-            Você ainda não é chefe de nenhuma unidade, então não pode administrar escalas por aqui.
-            {myStaff.length === 0 && ' Peça para um chefe te adicionar à equipe de uma unidade.'}
+            Você ainda não está na equipe de nenhuma unidade. Peça para um chefe te adicionar.
           </div>
         )}
 
-        {selectedUnitId && (
+        {selectedUnitId && souChefeDaSelecionada && (
           <section className="bg-white border border-slate-200 rounded-xl p-4 space-y-4">
             <h3 className="font-semibold text-slate-700">👥 Equipe da unidade</h3>
 
@@ -285,34 +282,41 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
           </section>
         )}
 
+        {/* Escala publicada — o que todo mundo vem ver aqui. Plantonista enxerga
+            só isto (+ trocas e financeiro, abaixo); o resto da tela é
+            administração do chefe. */}
         {selectedUnitId && (
           <MonthScheduleView unitId={selectedUnitId} staffList={medicos} shiftTypesList={shiftTypesList}
-            souChefe={souChefeDaSelecionada} showToast={showToast} />
+            souChefe={souChefeDaSelecionada} meuStaffId={meuStaffId} showToast={showToast} />
         )}
 
-        {selectedUnitId && (
+        {selectedUnitId && souChefeDaSelecionada && (
           <TemplateEditor unitId={selectedUnitId} staffList={medicos} shiftTypesList={shiftTypesList}
             souChefe={souChefeDaSelecionada} showToast={showToast} />
         )}
 
+        {/* Trocas ficam visíveis pro plantonista: é onde ele pede/aceita troca
+            do PRÓPRIO plantão — tirar isso quebraria o aviso de troca pendente
+            que aparece no painel principal. */}
         {selectedUnitId && (
           <SwapRequests unitId={selectedUnitId} staffList={medicos} shiftTypesList={shiftTypesList}
             meuStaffId={meuStaffId} souChefe={souChefeDaSelecionada} showToast={showToast} />
         )}
 
-        {selectedUnitId && (
+        {selectedUnitId && souChefeDaSelecionada && (
           <ComparativoView unitId={selectedUnitId} staffList={medicos} shiftTypesList={shiftTypesList} showToast={showToast} />
         )}
 
         {selectedUnitId && (
-          <FinanceiroPlantonista unitId={selectedUnitId} meuStaffId={meuStaffId} shiftTypesList={shiftTypesList} showToast={showToast} />
+          <FinanceiroPlantonista unitId={selectedUnitId} meuStaffId={meuStaffId} shiftTypesList={shiftTypesList}
+            abrirPorPadrao={souChefeDaSelecionada} showToast={showToast} />
         )}
 
         {selectedUnitId && souChefeDaSelecionada && (
           <FinanceiroChefe unitId={selectedUnitId} staffList={medicos} shiftTypesList={shiftTypesList} showToast={showToast} />
         )}
 
-        {selectedUnitId && (
+        {selectedUnitId && souChefeDaSelecionada && (
           <ShiftTypesAdmin unitId={selectedUnitId} showToast={showToast} />
         )}
 
