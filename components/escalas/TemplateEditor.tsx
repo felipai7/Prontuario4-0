@@ -13,6 +13,30 @@ interface Props {
 
 const DIAS = Array.from({ length: 35 }, (_, i) => i + 1)
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+// Nome completo + gênero do ordinal: "-feira" é feminino (1ª Segunda-feira),
+// domingo/sábado são masculinos (1º Domingo, 1º Sábado).
+const DIA_SEMANA_INFO: { nome: string; fem: boolean }[] = [
+  { nome: 'Domingo',       fem: false },
+  { nome: 'Segunda-feira', fem: true },
+  { nome: 'Terça-feira',   fem: true },
+  { nome: 'Quarta-feira',  fem: true },
+  { nome: 'Quinta-feira',  fem: true },
+  { nome: 'Sexta-feira',   fem: true },
+  { nome: 'Sábado',        fem: false },
+]
+/**
+ * day_number 1..35 é (dia da semana, ocorrência no mês) — não um contador
+ * sequencial. A grade abaixo já posiciona cada dia sob a coluna certa
+ * (Dom..Sáb); este rótulo é só a ocorrência, pra não repetir o dia da
+ * semana que a coluna já mostra. Ver supabase/escalas_mes_padrao_por_semana.sql.
+ */
+function ocorrenciaDoDia(dayNumber: number): number {
+  return Math.floor((dayNumber - 1) / 7) + 1
+}
+function tituloCompletoDoDia(dayNumber: number): string {
+  const info = DIA_SEMANA_INFO[(dayNumber - 1) % 7]
+  return `${ocorrenciaDoDia(dayNumber)}${info.fem ? 'ª' : 'º'} ${info.nome}`
+}
 const selectCls = 'w-full border border-slate-300 rounded-md px-1.5 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400'
 
 export default function TemplateEditor({ unitId, staffList, shiftTypesList, souChefe, showToast }: Props) {
@@ -89,8 +113,10 @@ export default function TemplateEditor({ unitId, staffList, shiftTypesList, souC
         <div>
           <h3 className="font-semibold text-slate-700">📋 Espelho da escala (mês padrão de 35 dias)</h3>
           <p className="text-xs text-slate-400 mt-0.5">
-            Permanente: todos os meses são publicados a partir deste espelho, em ciclo contínuo.
-            Só precisa ser editado quando alguém entra ou sai da escala em definitivo.
+            Permanente: cada mês publicado usa este espelho — a coluna é o dia da semana, a
+            posição na coluna é a 1ª, 2ª, 3ª... ocorrência dele no mês (ex: 2ª linha da coluna
+            "Seg" = 2ª segunda-feira do mês). Só precisa ser editado quando alguém entra ou sai
+            da escala em definitivo.
           </p>
         </div>
         {souChefe && (
@@ -106,7 +132,7 @@ export default function TemplateEditor({ unitId, staffList, shiftTypesList, souC
             <p className="text-xs text-slate-400">Nenhuma alteração registrada ainda.</p>
           ) : audit.map(a => (
             <p key={a.id} className="text-xs text-slate-600">
-              Dia {a.day_number} — {a.old_staff_id ? (staffMap[a.old_staff_id] ?? '?') : 'vazio'} → {a.new_staff_id ? (staffMap[a.new_staff_id] ?? '?') : 'vazio'}
+              {tituloCompletoDoDia(a.day_number)} — {a.old_staff_id ? (staffMap[a.old_staff_id] ?? '?') : 'vazio'} → {a.new_staff_id ? (staffMap[a.new_staff_id] ?? '?') : 'vazio'}
               <span className="text-slate-400"> · {new Date(a.changed_at).toLocaleString('pt-BR')}</span>
             </p>
           ))}
@@ -121,8 +147,8 @@ export default function TemplateEditor({ unitId, staffList, shiftTypesList, souC
             <div key={d} className="text-center text-xs font-bold text-slate-400 py-1">{d}</div>
           ))}
           {DIAS.map(dia => (
-            <div key={dia} className="border border-slate-200 rounded-lg p-1 space-y-1">
-              <p className="text-xs font-semibold text-slate-500">{dia}</p>
+            <div key={dia} className="border border-slate-200 rounded-lg p-1 space-y-1" title={tituloCompletoDoDia(dia)}>
+              <p className="text-xs font-semibold text-slate-500">{ocorrenciaDoDia(dia)}ª</p>
               {tiposAtivos.map(t => {
                 const slots = getSlots(dia, t.id)
                 const slot1 = slots[0]
