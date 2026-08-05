@@ -7,7 +7,7 @@
 // ══════════════════════════════════════════════════════════════════════════
 
 import { describe, it, expect } from 'vitest'
-import { processarPdf, MENSAGEM_NAO_RECONHECIDO } from './processar'
+import { processarPdf } from './processar'
 // Relativo, não pelo alias `@/lib/exames/extracao/...`: o teste estrutural
 // `fronteira.test.ts` proíbe código de fora do módulo de importar um caminho
 // interno pelo alias — só o índice público (`@/lib/exames/extracao`) pode. O
@@ -180,7 +180,12 @@ describe('laudo que o leitor local não reconhece', () => {
     const r = await processarPdf(cliente(), 'pac-1', PDF_LAB_DESCONHECIDO(), 'laudo.pdf', null)
     expect(r.ok).toBe(false)
     if (!r.ok) {
-      expect(r.erro).toBe(MENSAGEM_NAO_RECONHECIDO)
+      // Desde 04/08/2026 a mensagem varia com a CAUSA (ver mensagem.test.ts).
+      // Este PDF é legível e não casa com perfil nenhum, então cai no caso
+      // genérico — que deixou de afirmar "o PDF é uma imagem sem texto",
+      // porque aqui ele não é.
+      expect(r.erro).toMatch(/laboratório não está entre os que o programa lê/)
+      expect(r.erro).not.toMatch(/imagem sem texto/)
       // Diz o que fazer, não só que deu errado — é o caminho manual.
       expect(r.erro).toMatch(/Manual/)
       // E não é mais o nome de um sinal interno na cara da médica.

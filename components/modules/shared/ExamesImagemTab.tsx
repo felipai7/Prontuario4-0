@@ -1,7 +1,20 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Paciente, ExameImagem, ToastData } from '@/types'
+
+// A ANÁLISE POR IA SAIU DAQUI EM 04/08/2026.
+//
+// Ela lia o laudo enviado como arquivo e devolvia resumo + achados separados
+// por tópico. Na prática ninguém usava esse caminho: o uso real é digitar qual
+// exame foi feito, quando, e colar o texto do laudo que o radiologista já
+// escreveu — pedido do Felipe, a partir do uso na UTI.
+//
+// Resumir com IA um laudo que já vem escrito por um médico não acrescenta
+// informação; só interpreta de novo o que já estava dito, e mandava o laudo do
+// paciente para fora. Some junto a rota /api/extract-imagem, que existia só
+// para isto. Os laudos já gravados com resumo da IA continuam intactos e
+// aparecem como sempre — nada no banco foi tocado.
 
 interface Props {
   paciente: Paciente
@@ -10,27 +23,10 @@ interface Props {
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
 }
 
-interface AiResult {
-  tipo_exame: string
-  data_exame: string | null
-  resumo: string
-  achados: Record<string, string>
-  conclusao: string | null
-}
-
-type Mode = 'ia' | 'manual'
-
 export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, showToast }: Props) {
   const supabase = createClient()
-  const fileRef  = useRef<HTMLInputElement>(null)
 
   const [formOpen,   setFormOpen]   = useState(false)
-  const [mode,       setMode]       = useState<Mode>('ia')
-  const [uploading,  setUploading]  = useState(false)
-  const [aiResult,   setAiResult]   = useState<AiResult | null>(null)
-  const [tipoEdit,   setTipoEdit]   = useState('')
-  const [dataEdit,   setDataEdit]   = useState('')
-  // manual mode fields
   const [mTipo,      setMTipo]      = useState('')
   const [mData,      setMData]      = useState('')
   const [mTexto,     setMTexto]     = useState('')
@@ -40,9 +36,7 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
   const [deleting,   setDeleting]   = useState<string | null>(null)
 
   const resetForm = () => {
-    setAiResult(null); setTipoEdit(''); setDataEdit('')
     setMTipo(''); setMData(''); setMTexto(''); setMDataErr('')
-    if (fileRef.current) fileRef.current.value = ''
   }
 
   const maskDate = (val: string): string => {
@@ -65,48 +59,6 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
     return ''
   }
 
-  const handleModeChange = (m: Mode) => { setMode(m); resetForm() }
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; if (!file) return
-    setUploading(true); setAiResult(null)
-    try {
-      const b64 = await new Promise<string>((res, rej) => {
-        const reader = new FileReader()
-        reader.onload = ev => res((ev.target?.result as string).split(',')[1])
-        reader.onerror = rej
-        reader.readAsDataURL(file)
-      })
-      const resp = await fetch('/api/extract-imagem', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base64: b64, mediaType: file.type }),
-      })
-      const data = await resp.json()
-      if (!resp.ok) throw new Error(data.error)
-      setAiResult(data)
-      setTipoEdit(data.tipo_exame ?? '')
-      setDataEdit(data.data_exame ?? '')
-    } catch (err: any) { showToast('Erro: ' + err.message, 'error'); resetForm() }
-    setUploading(false)
-    if (fileRef.current) fileRef.current.value = ''
-  }
-
-  const handleSaveIa = async () => {
-    if (!aiResult) return
-    if (!tipoEdit.trim()) { showToast('Informe o tipo de exame', 'error'); return }
-    setSaving(true)
-    const { error } = await supabase.from('exames_imagem').insert({
-      paciente_id: paciente.id,
-      tipo_exame:  tipoEdit.trim(),
-      data_exame:  dataEdit.trim() || null,
-      resumo_ia:   aiResult.resumo,
-      achados: { ...aiResult.achados, ...(aiResult.conclusao ? { '📋 Conclusão': aiResult.conclusao } : {}) },
-    })
-    setSaving(false)
-    if (error) { showToast('Erro: ' + error.message, 'error'); return }
-    showToast('Laudo salvo!')
-    resetForm(); setFormOpen(false); onRefresh()
-  }
 
   const handleSaveManual = async () => {
     if (!mTipo.trim()) { showToast('Informe o tipo de exame', 'error'); return }
@@ -155,76 +107,8 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
       {/* Form */}
       {formOpen && (
         <div className="border-2 border-indigo-200 rounded-xl bg-indigo-50 p-4 space-y-3">
-          {/* Mode toggle */}
-          <div className="flex rounded-lg overflow-hidden border border-indigo-200">
-            <button onClick={() => handleModeChange('ia')}
-              className={`flex-1 py-2 text-sm font-semibold transition-colors ${mode === 'ia' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 hover:bg-indigo-50'}`}>
-              📷 Via foto / PDF
-            </button>
-            <button onClick={() => handleModeChange('manual')}
-              className={`flex-1 py-2 text-sm font-semibold transition-colors ${mode === 'manual' ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 hover:bg-indigo-50'}`}>
-              ✏️ Inserir texto
-            </button>
-          </div>
-
-          {/* IA mode */}
-          {mode === 'ia' && !aiResult && (
-            <label className={`flex items-center justify-center gap-2 w-full py-3 border-2 border-dashed border-indigo-300 rounded-lg cursor-pointer hover:border-indigo-500 hover:bg-white text-sm text-indigo-600 font-medium transition-all ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
-              {uploading ? '⏳ Analisando com IA...' : '📁 Selecionar PDF ou Imagem'}
-              <input ref={fileRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleFileChange} disabled={uploading}/>
-            </label>
-          )}
-
-          {mode === 'ia' && aiResult && (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs text-slate-500 font-medium block mb-1">Tipo de exame *</label>
-                  <input value={tipoEdit} onChange={e => setTipoEdit(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
-                </div>
-                <div>
-                  <label className="text-xs text-slate-500 font-medium block mb-1">Data</label>
-                  <input value={dataEdit} onChange={e => setDataEdit(e.target.value)} placeholder="DD/MM/AAAA"
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
-                </div>
-              </div>
-              <div className="bg-white border border-indigo-100 rounded-lg p-3">
-                <p className="text-xs font-bold text-indigo-700 mb-1.5">Resumo extraído pela IA</p>
-                <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{aiResult.resumo}</p>
-              </div>
-              {Object.keys(aiResult.achados).length > 0 && (
-                <div className="bg-white border border-indigo-100 rounded-lg p-3 space-y-1.5">
-                  <p className="text-xs font-bold text-indigo-700 mb-2">Achados</p>
-                  {Object.entries(aiResult.achados).map(([k, v]) => (
-                    <div key={k} className="flex gap-2 text-xs">
-                      <span className="font-semibold text-slate-600 whitespace-nowrap min-w-[110px]">{k}:</span>
-                      <span className="text-slate-700">{v as string}</span>
-                    </div>
-                  ))}
-                  {aiResult.conclusao && (
-                    <div className="mt-2 pt-2 border-t border-indigo-100">
-                      <p className="text-xs font-bold text-indigo-700">Conclusão:</p>
-                      <p className="text-xs text-slate-700 mt-0.5">{aiResult.conclusao}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-              <div className="flex gap-2">
-                <button onClick={resetForm} className="flex-1 border border-slate-300 text-slate-600 text-sm font-semibold py-2 rounded-lg hover:bg-slate-50">
-                  Reenviar arquivo
-                </button>
-                <button onClick={handleSaveIa} disabled={saving}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold py-2 rounded-lg">
-                  {saving ? '⏳ Salvando...' : '💾 Salvar Laudo'}
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* Manual mode */}
-          {mode === 'manual' && (
-            <div className="space-y-3">
+          {/* Caminho único: tipo, data e o texto do laudo. */}
+          <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs text-slate-500 font-medium block mb-1">Tipo de exame *</label>
@@ -252,8 +136,7 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
                 className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold py-2.5 rounded-lg">
                 {saving ? '⏳ Salvando...' : '💾 Salvar Laudo'}
               </button>
-            </div>
-          )}
+          </div>
         </div>
       )}
 

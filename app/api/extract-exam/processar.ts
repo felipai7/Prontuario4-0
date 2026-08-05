@@ -16,7 +16,7 @@
 import { extrairExames } from '@/lib/exames/extracao'
 import { montarEntrega } from '@/lib/exames/entrega'
 import { gravarEntrega, type ClienteExames } from '@/lib/exames/persistencia'
-import type { VeredictoPaciente } from '@/lib/exames/extracao'
+import type { VeredictoPaciente, WarningCode } from '@/lib/exames/extracao'
 
 /**
  * O que a tela mostra quando a leitura local não reconheceu o documento.
@@ -34,9 +34,41 @@ import type { VeredictoPaciente } from '@/lib/exames/extracao'
  * R10 — é uma constante: não interpola nada do laudo, e por construção não
  * tem como carregar conteúdo de paciente.
  */
-export const MENSAGEM_NAO_RECONHECIDO =
-  'Este laudo não foi reconhecido: o laboratório não está entre os que o programa lê, ' +
-  'ou o PDF é uma imagem sem texto. Digite os resultados na aba Manual.'
+/**
+ * A mensagem, dizendo QUAL das causas ocorreu.
+ *
+ * Motivo: quatro situações muito diferentes desembocavam todas numa mensagem
+ * única — laboratório fora da lista, PDF digitalizado,
+ * arquivo que o leitor não conseguiu abrir e camada de texto ilegível. A
+ * mensagem única nomeava só as duas primeiras, então nas outras duas ela
+ * afirmava algo falso sobre o documento.
+ *
+ * Isso não é cosmético: em 04/08/2026 um laudo do IMEC — laboratório
+ * reconhecido, com camada de texto, que extrai 54 resultados fora de produção —
+ * falhou na UTI mostrando exatamente esta mensagem. Ela mandou digitar à mão e
+ * escondeu que a causa era outra. Com o motivo na tela, o próximo caso se
+ * identifica sozinho, sem depender de eu ler o log do servidor.
+ *
+ * R10 — vocabulário FECHADO: cada retorno é uma constante deste arquivo,
+ * escolhida por um código de aviso tipado. Nada do laudo entra aqui.
+ */
+export function mensagemNaoReconhecido(avisos: readonly WarningCode[]): string {
+  if (avisos.includes('malformedDocument')) {
+    return 'Não consegui abrir este PDF — o arquivo pode estar corrompido ou protegido. '
+      + 'Se ele abre normalmente no computador, avise: é falha nossa, não do arquivo. '
+      + 'Enquanto isso, digite os resultados na aba Manual.'
+  }
+  if (avisos.includes('noTextLayer')) {
+    return 'Este PDF é uma imagem digitalizada (não tem texto para ler). '
+      + 'Digite os resultados na aba Manual.'
+  }
+  if (avisos.includes('corruptedTextLayer')) {
+    return 'O texto deste PDF veio embaralhado pela fonte usada no arquivo, e ler '
+      + 'assim arriscaria trocar valores. Digite os resultados na aba Manual.'
+  }
+  return 'Este laudo não foi reconhecido: o laboratório não está entre os que o '
+    + 'programa lê, ou o formato mudou. Digite os resultados na aba Manual.'
+}
 
 export type RespostaExtracao =
   | {
@@ -88,7 +120,7 @@ export async function processarPdf(
     // para decidir se caía na IA.
     return {
       ok: false,
-      erro: MENSAGEM_NAO_RECONHECIDO,
+      erro: mensagemNaoReconhecido(resultado.warnings.map(w => w.code)),
       diagnostico: {
         perfil: resultado.detection.profileId,
         confianca: Number(resultado.detection.confidence.toFixed(2)),
