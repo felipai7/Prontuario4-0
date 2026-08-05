@@ -37,7 +37,7 @@ function tituloCompletoDoDia(dayNumber: number): string {
   const info = DIA_SEMANA_INFO[(dayNumber - 1) % 7]
   return `${ocorrenciaDoDia(dayNumber)}${info.fem ? 'ª' : 'º'} ${info.nome}`
 }
-const selectCls = 'w-full border border-slate-300 rounded-md px-1.5 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400'
+const selectCls = 'w-full border border-slate-300 rounded-md px-1 py-1 text-[10px] sm:text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400'
 
 export default function TemplateEditor({ unitId, staffList, shiftTypesList, souChefe, showToast }: Props) {
   const supabase = createClient()
@@ -142,17 +142,15 @@ export default function TemplateEditor({ unitId, staffList, shiftTypesList, souC
       {loading ? (
         <p className="text-sm text-slate-400">Carregando...</p>
       ) : (
-        // 1 coluna no celular: "2ª Sexta-feira" + 2 seletores por turno não
-        // cabem espremidos em 1/7 de tela na vertical. Cabeçalho de dia da
-        // semana some no modo lista — o título de cada célula já soletra
-        // o dia por extenso.
-        <div className="grid grid-cols-1 sm:grid-cols-7 gap-1">
+        // 7 colunas sempre (mesmo no celular) — fonte reduzida e o nome quebra
+        // linha em vez de truncar.
+        <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
           {DIAS_SEMANA.map(d => (
-            <div key={d} className="hidden sm:block text-center text-xs font-bold text-slate-400 py-1">{d}</div>
+            <div key={d} className="text-center text-[10px] sm:text-xs font-bold text-slate-400 py-1">{d}</div>
           ))}
           {DIAS.map(dia => (
-            <div key={dia} className="border border-slate-200 rounded-lg p-1.5 sm:p-1 space-y-1">
-              <p className="text-xs font-semibold text-slate-500 leading-tight">{tituloCompletoDoDia(dia)}</p>
+            <div key={dia} className="border border-slate-200 rounded-lg p-0.5 sm:p-1 space-y-1">
+              <p className="text-[9px] sm:text-xs font-semibold text-slate-500 leading-tight break-words">{tituloCompletoDoDia(dia)}</p>
               {tiposAtivos.map(t => {
                 const slots = getSlots(dia, t.id)
                 const slot1 = slots[0]
@@ -160,8 +158,8 @@ export default function TemplateEditor({ unitId, staffList, shiftTypesList, souC
                 const completo = slots.length >= 2
                 const bg = slots.length === 0 ? 'bg-red-50' : completo ? 'bg-emerald-50' : 'bg-amber-50'
                 return (
-                  <div key={t.id} className={`rounded px-1.5 sm:px-1 py-1 sm:py-0.5 ${bg}`}>
-                    <p className="text-xs sm:text-[11px] text-slate-500 sm:truncate">{t.name}</p>
+                  <div key={t.id} className={`rounded px-0.5 sm:px-1 py-0.5 ${bg}`}>
+                    <p className="text-[9px] sm:text-[11px] text-slate-500 break-words leading-tight">{t.name}</p>
                     {souChefe ? (
                       <div className="space-y-0.5">
                         <select value={slot1?.staff_id ?? ''}
@@ -176,7 +174,7 @@ export default function TemplateEditor({ unitId, staffList, shiftTypesList, souC
                         </select>
                       </div>
                     ) : (
-                      <p className="text-xs sm:text-[11px] font-medium text-slate-800 sm:truncate">
+                      <p className="text-[9px] sm:text-[11px] font-medium text-slate-800 break-words leading-tight">
                         {slots.length === 0 ? '—' : slots.map(s => staffMap[s.staff_id] ?? '?').join(' / ')}
                       </p>
                     )}

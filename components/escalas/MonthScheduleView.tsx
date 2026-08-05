@@ -211,38 +211,34 @@ export default function MonthScheduleView({ unitId, staffList, shiftTypesList, s
       ) : shifts.length === 0 ? (
         <p className="text-sm text-slate-400">Nenhum plantão registrado para este mês nesta unidade.</p>
       ) : (
-        // 1 coluna no celular (nome de plantonista não cabe espremido em 1/7 de
-        // tela na vertical), grade de calendário a partir de sm:. O cabeçalho
-        // de dia da semana só faz sentido na grade — some no modo lista, e o
-        // dia da semana passa a entrar no rótulo de cada linha.
-        <div className="grid grid-cols-1 sm:grid-cols-7 gap-1">
+        // 7 colunas sempre (mesmo no celular) — em vez de truncar, o nome
+        // quebra linha (Renato / Nunes) com fonte reduzida, pra caber sem
+        // quebrar o formato de calendário.
+        <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
           {DIAS_SEMANA.map(d => (
-            <div key={d} className="hidden sm:block text-center text-xs font-bold text-slate-400 py-1">{d}</div>
+            <div key={d} className="text-center text-[10px] sm:text-xs font-bold text-slate-400 py-1">{d}</div>
           ))}
           {celulasDoMes(ref).map((dataStr, i) => {
-            if (!dataStr) return <div key={i} className="hidden sm:block min-h-[4.5rem]" />
-            const diaSemana = DIAS_SEMANA[new Date(dataStr + 'T12:00:00').getDay()]
+            if (!dataStr) return <div key={i} className="min-h-[4.5rem]" />
             const doDia = shiftsPorDia.get(dataStr) ?? []
             return (
-              <div key={dataStr} className="sm:min-h-[4.5rem] border border-slate-200 rounded-lg p-1.5 sm:p-1 space-y-1">
-                <p className="text-xs font-semibold text-slate-500">
-                  <span className="sm:hidden">{diaSemana} · </span>{parseInt(dataStr.slice(8), 10)}
-                </p>
+              <div key={dataStr} className="min-h-[4.5rem] border border-slate-200 rounded-lg p-0.5 sm:p-1 space-y-1">
+                <p className="text-[10px] sm:text-xs font-semibold text-slate-500">{parseInt(dataStr.slice(8), 10)}</p>
                 {doDia.map(s => {
                   const ehMeu = meuStaffId != null && s.staff_id === meuStaffId
                   const bg = ehMeu
                     ? 'bg-indigo-100 border border-indigo-400 ring-1 ring-indigo-300'
                     : s.status === 'swapped' ? 'bg-amber-50' : 'bg-slate-50'
                   return (
-                    <div key={s.id} className={`text-xs sm:text-[11px] rounded px-1.5 sm:px-1 py-1 sm:py-0.5 ${bg}`}>
-                      <p className={`sm:truncate ${ehMeu ? 'text-indigo-500' : 'text-slate-500'}`}>{s.shift_type_id ? shiftTypeMap[s.shift_type_id] ?? '?' : '?'}</p>
+                    <div key={s.id} className={`text-[9px] sm:text-[11px] rounded px-0.5 sm:px-1 py-0.5 leading-tight ${bg}`}>
+                      <p className={`break-words ${ehMeu ? 'text-indigo-500' : 'text-slate-500'}`}>{s.shift_type_id ? shiftTypeMap[s.shift_type_id] ?? '?' : '?'}</p>
                       {souChefe ? (
                         <select value={s.staff_id ?? ''} onChange={e => handleAssignStaff(s, e.target.value)}
-                          className="w-full border border-slate-300 rounded px-0.5 py-0.5 text-xs sm:text-[11px] bg-white">
+                          className="w-full border border-slate-300 rounded px-0.5 py-0.5 text-[9px] sm:text-[11px] bg-white">
                           {staffAtivo.map(st => <option key={st.id} value={st.id}>{st.full_name}</option>)}
                         </select>
                       ) : (
-                        <p className={`font-medium sm:truncate ${ehMeu ? 'text-indigo-900' : 'text-slate-800'}`}>
+                        <p className={`font-medium break-words ${ehMeu ? 'text-indigo-900' : 'text-slate-800'}`}>
                           {s.staff_id ? staffMap[s.staff_id] ?? '?' : '—'}
                           {s.status === 'swapped' && ' 🔄'}
                         </p>
