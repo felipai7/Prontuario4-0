@@ -62,11 +62,22 @@ export default function MonthScheduleView({ unitId, staffList, shiftTypesList, s
   const staffMap = useMemo(() => Object.fromEntries(staffList.map(s => [s.id, s.full_name])), [staffList])
   const staffAtivo = useMemo(() => staffList.filter(s => s.active), [staffList])
   const shiftTypeMap = useMemo(() => Object.fromEntries(shiftTypesList.map(t => [t.id, t.name])), [shiftTypesList])
+  const shiftTypeStartMap = useMemo(() => Object.fromEntries(shiftTypesList.map(t => [t.id, t.start_time])), [shiftTypesList])
   const shiftsPorDia = useMemo(() => {
     const m = new Map<string, Shift[]>()
     for (const s of shifts) m.set(s.date, [...(m.get(s.date) ?? []), s])
+    // Diurno acima de Noturno: ordena pelo horário de início do tipo de turno —
+    // a query só ordena por data, então sem isso os dois ficam intercalados na
+    // ordem em que o banco devolveu.
+    for (const arr of m.values()) {
+      arr.sort((a, b) => {
+        const inicioA = a.shift_type_id ? shiftTypeStartMap[a.shift_type_id] ?? '' : ''
+        const inicioB = b.shift_type_id ? shiftTypeStartMap[b.shift_type_id] ?? '' : ''
+        return inicioA.localeCompare(inicioB)
+      })
+    }
     return m
-  }, [shifts])
+  }, [shifts, shiftTypeStartMap])
 
   const load = async () => {
     if (!unitId) return
