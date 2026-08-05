@@ -23,7 +23,7 @@ import NutricaoTab from '@/components/modules/nutricao/NutricaoTab'
 import ExamesTab       from '@/components/modules/shared/ExamesTab'
 import ExamesImagemTab from '@/components/modules/shared/ExamesImagemTab'
 import { featureFlags } from '@/lib/featureFlags'
-import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, FisioEvento, FisioAvaliacaoDiaria, Dispositivo, LppEvento, NutricaoAvaliacao, NutricaoDia, AuditoriaIntensivista, IrasEvento, IrasSepseChoque, ToastData, Cargo, Profissao } from '@/types'
+import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, FisioEvento, FisioAvaliacaoDiaria, Dispositivo, LppEvento, SwabVigilancia, NutricaoAvaliacao, NutricaoDia, AuditoriaIntensivista, IrasEvento, IrasSepseChoque, ToastData, Cargo, Profissao } from '@/types'
 
 /** Dados do paciente carregados pela casca e disponíveis a todas as abas. */
 export interface PacienteContext {
@@ -45,6 +45,7 @@ export interface PacienteContext {
   fisioAvaliacoes: FisioAvaliacaoDiaria[]
   dispositivos: Dispositivo[]
   lpps: LppEvento[]
+  swabs: SwabVigilancia[]
   nutricaoAvaliacao: NutricaoAvaliacao | null
   nutricaoDias: NutricaoDia[]
   auditoria: AuditoriaIntensivista[]
@@ -102,7 +103,7 @@ const painelPlantao: TabDef = {
     <PlantonistaTab paciente={ctx.paciente} sinais={ctx.sinais} dvas={ctx.dvas}
       periodos={ctx.periodos} atbs={ctx.atbs} cuidados={ctx.cuidados}
       intercorrencias={ctx.intercorrencias} pendencias={ctx.pendencias}
-      registrosIntensivista={ctx.registrosIntensivista}
+      registrosIntensivista={ctx.registrosIntensivista} swabs={ctx.swabs}
       onRefresh={ctx.onRefresh} showToast={ctx.showToast} />
   ),
 }
@@ -183,7 +184,7 @@ const enfermagem: TabDef = {
   id: 'enfermagem',
   label: '💉 Dispositivos e LPP',
   render: ctx => <EnfermagemTab paciente={ctx.paciente} dispositivos={ctx.dispositivos}
-    lpps={ctx.lpps} podeEditar={ctx.podeEditar}
+    lpps={ctx.lpps} swabs={ctx.swabs} podeEditar={ctx.podeEditar}
     onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
 }
 

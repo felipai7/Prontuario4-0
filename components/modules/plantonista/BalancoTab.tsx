@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   calcAguaEndogena, calcPerdasInsensiveis, calcBalanco,
-  calcAcumuladoTotal, calcAcumuladoMovel, calcFirstPeriod, calcNextPeriod,
+  calcAcumuladoTotal, calcAcumuladoMovel, calcDiurese24h, calcFirstPeriod, calcNextPeriod,
   fmtTurno, colorParcial, getTurno, fmtNum, boundaryStart, fmtDataHora
 } from '@/lib/utils'
 import type { Paciente, PeriodoBalanco, ToastData } from '@/types'
@@ -16,8 +16,13 @@ interface Props {
 }
 
 // ── Arithmetic expression evaluator ──────────────────────────────────────────
+// Vírgula é o separador decimal aqui (padrão BR) — normaliza pra ponto antes de
+// avaliar como expressão JS. Ponto digitado pelo usuário é bloqueado antes de
+// chegar aqui (ver temPontoInvalido): alguns liam "1.200" como mil e duzentos
+// (separador de milhar, uso comum no Brasil) e o eval devolvia 1.2, um erro de
+// 1000x silencioso num valor de balanço hídrico.
 function evalMath(expr: string): number {
-  const clean = (expr ?? '').trim()
+  const clean = (expr ?? '').trim().replace(/,/g, '.')
   if (!clean || clean === '0') return 0
   if (!/^[\d\s+\-*/().]+$/.test(clean)) return parseFloat(clean) || 0
   try {
@@ -25,6 +30,11 @@ function evalMath(expr: string): number {
     if (typeof result === 'number' && isFinite(result)) return Math.max(0, Math.round(result * 10) / 10)
   } catch {}
   return parseFloat(clean) || 0
+}
+
+/** Ponto é ambíguo (decimal ou milhar) — só vírgula é aceita como decimal. */
+function temPontoInvalido(expr: string): boolean {
+  return expr.includes('.')
 }
 
 // ── Row definitions (without subtotal rows) ───────────────────────────────────
@@ -120,6 +130,9 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
 
   const setField = (k: keyof FormState, v: string) => setForm(f => ({ ...f, [k]: v }))
 
+  const camposComPontoInvalido = (): string[] =>
+    [...CAMPOS_GANHO, ...CAMPOS_PERDA].filter(k => temPontoInvalido(form[k as keyof FormState]))
+
   const sorted = [...periodos].sort((a, b) =>
     new Date(a.inicio).getTime() - new Date(b.inicio).getTime()
   )
@@ -131,18 +144,17 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
   }, [])
 
   // Débito urinário 24h: sum diurese from newest periods covering 24h of horas_periodo
-  let duHoras = 0, duTotal = 0
-  for (const p of [...sorted].reverse()) {
-    if (duHoras >= 24) break
-    duHoras += p.horas_periodo
-    duTotal  += p.diurese
-  }
+  const { horas: duHoras, total: duTotal } = calcDiurese24h(periodos)
   const duLabel  = duHoras >= 24
     ? 'Débito Urinário 24h'
     : duHoras > 0 ? `Débito Urinário (últ. ${duHoras.toFixed(0)}h)` : 'Débito Urinário'
 
   // Última evacuação
   const lastEvac = [...sorted].reverse().find(p => p.evacuacao > 0)
+
+  // Última diálise: mesmo campo `dialise` (UF) já lançado a cada turno — não é
+  // um dado novo, só um recorte do turno mais recente em que ele foi > 0.
+  const lastDialise = [...sorted].reverse().find(p => p.dialise > 0)
 
   // Sugestão automática do próximo turno (usada como valor inicial do seletor,
   // e forçada para o 1º turno, cuja duração é parcial desde a admissão)
@@ -181,6 +193,10 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
   const handleSave = async () => {
     if (!periodSpec) return
     if (periodoDuplicado) { showToast('Já existe um registro para esse turno — edite-o em vez de duplicar', 'error'); return }
+    const comPonto = camposComPontoInvalido()
+    if (comPonto.length > 0) {
+      showToast(`Use vírgula, não ponto, em: ${comPonto.map(k => LABELS[k]).join(', ')}`, 'error'); return
+    }
     setSaving(true)
     const { error } = await supabase.from('periodos_balanco').insert({
       paciente_id: paciente.id,
@@ -218,6 +234,10 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
 
   const handleUpdate = async () => {
     if (!editingPeriodo) return
+    const comPonto = camposComPontoInvalido()
+    if (comPonto.length > 0) {
+      showToast(`Use vírgula, não ponto, em: ${comPonto.map(k => LABELS[k]).join(', ')}`, 'error'); return
+    }
     setSaving(true)
     const { error } = await supabase.from('periodos_balanco').update({
       venoso: evalMath(form.venoso), oral_enteral: evalMath(form.oral_enteral),
@@ -316,6 +336,15 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
               <p className="text-sm font-semibold text-slate-500">Ausente desde admissão</p>
             )}
           </div>
+
+          {/* Última Diálise — só aparece se o paciente já dialisou nesta internação */}
+          {lastDialise && (
+            <div className="rounded-xl p-3 border bg-cyan-50 border-cyan-200">
+              <p className="text-xs font-semibold mb-1 text-cyan-600">🩸 Última Diálise (UF)</p>
+              <p className="text-2xl font-black text-cyan-800">{lastDialise.dialise.toFixed(0)} mL</p>
+              <p className="text-xs text-cyan-600 mt-0.5">{fmtTurno(lastDialise.turno, lastDialise.inicio)}</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -438,7 +467,7 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
           )}
 
           <button onClick={formMode === 'add' ? handleSave : handleUpdate}
-            disabled={saving || (formMode === 'add' && !!periodoDuplicado)}
+            disabled={saving || (formMode === 'add' && !!periodoDuplicado) || camposComPontoInvalido().length > 0}
             className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors">
             {saving ? 'Salvando...' : formMode === 'add' ? 'Registrar Balanço' : 'Atualizar Balanço'}
           </button>
@@ -527,13 +556,15 @@ function SummaryCard({ label, value, sub }: { label: string; value: number | nul
 }
 
 function ExprField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  const preview = evalMath(value)
-  const hasExpr = value.trim() !== '' && value.trim() !== '0' && value !== String(preview) && /[+\-*/()]/.test(value)
+  const preview  = evalMath(value)
+  const invalido = temPontoInvalido(value)
+  const hasExpr  = !invalido && value.trim() !== '' && value.trim() !== '0' && value !== String(preview) && /[+\-*/()]/.test(value)
   return (
-    <div className="bg-white border border-slate-200 rounded-lg px-3 py-2">
+    <div className={`bg-white border rounded-lg px-3 py-2 ${invalido ? 'border-red-400 ring-1 ring-red-200' : 'border-slate-200'}`}>
       <p className="text-xs text-slate-500 mb-1">{label}</p>
       <input type="text" value={value} onChange={e => onChange(e.target.value)} placeholder="0"
         className="w-full text-sm font-semibold focus:outline-none bg-transparent"/>
+      {invalido && <p className="text-xs text-red-500 mt-0.5">Use vírgula, não ponto</p>}
       {hasExpr && <p className="text-xs text-indigo-500 mt-0.5">= {preview.toFixed(0)} mL</p>}
     </div>
   )

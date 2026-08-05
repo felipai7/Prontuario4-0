@@ -1,9 +1,9 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { calcBalanco, calcAcumuladoMovel, diaAtualATB, fmtNum } from '@/lib/utils'
+import { calcBalanco, calcAcumuladoMovel, calcDiurese24h, diaAtualATB, diasDesde, fmtNum } from '@/lib/utils'
 import { fmtData } from '@/lib/utils'
-import type { Paciente, SinalVital, DVA, PeriodoBalanco, ATB, CuidadosHorizontais, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, ToastData } from '@/types'
+import type { Paciente, SinalVital, DVA, PeriodoBalanco, ATB, CuidadosHorizontais, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, SwabVigilancia, ToastData } from '@/types'
 
 interface Props {
   paciente: Paciente
@@ -15,6 +15,7 @@ interface Props {
   intercorrencias: Intercorrencia[]
   pendencias: PendenciaIntensivista[]
   registrosIntensivista: RegistroIntensivista[]
+  swabs: SwabVigilancia[]
   onRefresh: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
 }
@@ -33,7 +34,7 @@ function agoraLocal(): string {
   return d.toISOString().slice(0, 16)
 }
 
-export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs, cuidados, intercorrencias, pendencias, registrosIntensivista, onRefresh, showToast }: Props) {
+export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs, cuidados, intercorrencias, pendencias, registrosIntensivista, swabs, onRefresh, showToast }: Props) {
   const supabase = createClient()
 
   // Intercorrências são carregadas e assinadas pela casca (PacienteModal) — este
@@ -85,9 +86,13 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs,
     : null
   const bhUltimo = ultimoPeriodo ? calcBalanco(ultimoPeriodo) : null
   const bhMovel  = calcAcumuladoMovel(periodos)
+  const { horas: duHoras, total: duTotal } = calcDiurese24h(periodos)
   const ultimoRegistroIntensivista = registrosIntensivista.length
     ? [...registrosIntensivista].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())[0]
     : null
+  // Fica visível todo dia enquanto não marcarem o resultado — não é um aviso
+  // único disparado na coleta, é uma condição que persiste (ver EnfermagemTab).
+  const swabsPendentes = swabs.filter(s => !s.resultado_disponivel)
 
   return (
     <div className="space-y-6">
@@ -127,8 +132,10 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs,
                     anúria (<0,1). Mesma conta e mesmas 2 casas do cartão de
                     Débito Urinário da aba Balanço, inclusive o fallback de 70 Kg
                     — que é sinalizado, porque um limiar clínico calculado sobre
-                    peso presumido não pode passar por medido. */}
-                (diurese {ultimoPeriodo.diurese} mL{ultimoPeriodo.horas_periodo > 0 && <> → {fmtNum(ultimoPeriodo.diurese / (paciente.peso_kg ?? 70) / ultimoPeriodo.horas_periodo, 2)} mL/Kg/h{!paciente.peso_kg && ' (peso 70 Kg)'}</>})
+                    peso presumido não pode passar por medido. Diurese em 24h (não
+                    do último turno) via calcDiurese24h, a mesma função do
+                    cabeçalho do Balanço Hídrico — os dois têm que bater. */}
+                (diurese 24h {duTotal.toFixed(0)} mL{duHoras > 0 && <> → {fmtNum(duTotal / (paciente.peso_kg ?? 70) / duHoras, 2)} mL/Kg/h{!paciente.peso_kg && ' (peso 70 Kg)'}</>}{duHoras > 0 && duHoras < 24 && ` — dados de ${duHoras.toFixed(0)}h`})
                 · Acum. móvel: {bhMovel > 0 ? '+' : ''}{bhMovel.toFixed(0)} mL
               </p>
             ) : <p className="text-sm text-slate-400">Sem balanço registrado.</p>}
@@ -148,6 +155,17 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs,
               <p className="text-xs font-bold text-amber-700 uppercase tracking-wide mb-1">📝 Pendências em aberto</p>
               <ul className="text-sm text-amber-900 space-y-0.5">
                 {pendencias.filter(p => !p.resolvida).map(p => <li key={p.id}>• {p.texto}</li>)}
+              </ul>
+            </div>
+          )}
+
+          {swabsPendentes.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 md:col-span-2">
+              <p className="text-xs font-bold text-amber-700 uppercase tracking-wide mb-1">🧫 Swab(s) de vigilância pendente(s)</p>
+              <ul className="text-sm text-amber-900 space-y-0.5">
+                {swabsPendentes.map(s => (
+                  <li key={s.id}>• Coletado em {fmtData(s.data_coleta)} — há {diasDesde(s.data_coleta)} dia(s) sem resultado</li>
+                ))}
               </ul>
             </div>
           )}

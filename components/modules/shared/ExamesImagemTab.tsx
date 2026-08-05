@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { parseDataParaISO } from '@/lib/utils'
 import type { Paciente, ExameImagem, ToastData } from '@/types'
 
 // A ANÁLISE POR IA SAIU DAQUI EM 04/08/2026.
@@ -89,8 +90,14 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
     onRefresh()
   }
 
-  const sorted = [...examesImagem].sort((a, b) =>
-    new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  // Ordena pela data do exame (a data clínica), não por quando foi digitado —
+  // um laudo antigo lançado hoje deve aparecer junto dos outros da mesma época,
+  // não no topo. Sem data válida, cai para created_at como desempate/fallback.
+  const chaveOrdenacao = (ex: ExameImagem): number => {
+    const iso = ex.data_exame ? parseDataParaISO(ex.data_exame) : null
+    return iso ? new Date(iso + 'T12:00:00').getTime() : new Date(ex.created_at).getTime()
+  }
+  const sorted = [...examesImagem].sort((a, b) => chaveOrdenacao(b) - chaveOrdenacao(a))
 
   return (
     <div className="space-y-4">

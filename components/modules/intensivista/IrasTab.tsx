@@ -54,14 +54,17 @@ export default function IrasTab({
   const teveVM = useMemo(
     () => ventHistorico.some(v => v.modalidade === 'ventilacao_mecanica'), [ventHistorico])
   const teveDispositivo = (t: 'CVC' | 'SVD') => dispositivos.some(d => d.tipo === t)
+  // Cateter de diálise conta como CVC no indicador (mesmo risco de IPCS) —
+  // ver supabase/dispositivos_novos_tipos.sql.
+  const teveCateterCentral = () => dispositivos.some(d => d.tipo === 'CVC' || d.tipo === 'CDL')
 
   const avisoCruzamento = (t: TipoIras): string | null => {
     if (t === 'pav' && !teveVM)
       return 'PAV sem nenhum registro de ventilação mecânica neste paciente. Confira o Ventilatório.'
     if (t === 'itu_svd' && !teveDispositivo('SVD'))
       return 'ITU-SVD sem sonda vesical registrada. Confira Dispositivos (Enfermagem).'
-    if ((t === 'ipcs_lab' || t === 'ipcs_clinica') && !teveDispositivo('CVC'))
-      return 'IPCS sem cateter central registrado. Confira Dispositivos (Enfermagem).'
+    if ((t === 'ipcs_lab' || t === 'ipcs_clinica') && !teveCateterCentral())
+      return 'IPCS sem cateter central (CVC ou de diálise) registrado. Confira Dispositivos (Enfermagem).'
     return null
   }
 

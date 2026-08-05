@@ -72,28 +72,46 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
   const [atbSaving,     setAtbSaving]     = useState(false)
   const [atbRemoving,   setAtbRemoving]   = useState<string | null>(null)
   const [historyOpen,   setHistoryOpen]   = useState(false)
+  // Id do ATB sendo editado — null quando o form aberto é para um novo registro.
+  const [atbEditingId,  setAtbEditingId]  = useState<string | null>(null)
 
   const ativosATB = atbs.filter(a => a.ativo)
   const historicoATB = atbs.filter(a => !a.ativo)
+
+  const resetAtbForm = () => {
+    setAtbFormOpen(false); setAtbEditingId(null)
+    setAtbDroga(''); setAtbDias(''); setAtbFoco(''); setAtbDiaInicial(0)
+    setAtbInicio(new Date().toISOString().split('T')[0])
+  }
+
+  const handleEditarATB = (atb: ATB) => {
+    setAtbEditingId(atb.id)
+    setAtbDroga(atb.droga)
+    setAtbInicio(atb.data_inicio)
+    setAtbDiaInicial(atb.dia_inicial)
+    setAtbDias(atb.dias_previstos != null ? String(atb.dias_previstos) : '')
+    setAtbFoco(atb.foco ?? '')
+    setAtbFormOpen(true)
+  }
 
   const handleSaveATB = async () => {
     if (!atbDroga.trim()) { showToast('Informe o nome do ATB', 'error'); return }
     if (!atbInicio) { showToast('Informe a data de início', 'error'); return }
     setAtbSaving(true)
-    const { error } = await supabase.from('atbs').insert({
-      paciente_id:    paciente.id,
+    const payload = {
       droga:          atbDroga.trim(),
       data_inicio:    atbInicio,
       dia_inicial:    atbDiaInicial,
       dias_previstos: atbDias ? parseFloat(atbDias) : null,
       foco:           atbFoco.trim() || null,
-      ativo:          true,
-    })
+    }
+    const { error } = atbEditingId
+      ? await supabase.from('atbs').update(payload).eq('id', atbEditingId)
+      : await supabase.from('atbs').insert({ ...payload, paciente_id: paciente.id, ativo: true })
     setAtbSaving(false)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
-    showToast('ATB registrado!')
-    setAtbFormOpen(false); setAtbDroga(''); setAtbDias(''); setAtbFoco(''); setAtbDiaInicial(0)
-    setAtbInicio(new Date().toISOString().split('T')[0])
+    showToast(atbEditingId ? 'ATB atualizado!' : 'ATB registrado!')
+    resetAtbForm()
     onRefresh()
   }
 
@@ -315,7 +333,7 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
               </button>
             )}
             {podeEditar && (
-              <button onClick={() => setAtbFormOpen(o => !o)}
+              <button onClick={() => atbFormOpen ? resetAtbForm() : setAtbFormOpen(true)}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
                 {atbFormOpen ? '✕ Cancelar' : '+ Novo ATB'}
               </button>
@@ -346,10 +364,16 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
                 </p>
               </div>
               {podeEditar && (
-                <button onClick={() => handleEncerrarATB(atb.id)} disabled={atbRemoving === atb.id}
-                  className="text-xs text-red-400 hover:text-red-700 border border-red-100 hover:border-red-300 px-2 py-1.5 rounded-lg transition-colors flex-shrink-0">
-                  {atbRemoving === atb.id ? '⏳' : '⏹ Encerrar'}
-                </button>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <button onClick={() => handleEditarATB(atb)} title="Editar ATB"
+                    className="text-xs text-indigo-400 hover:text-indigo-700 border border-indigo-100 hover:border-indigo-300 px-2 py-1.5 rounded-lg transition-colors">
+                    ✏️
+                  </button>
+                  <button onClick={() => handleEncerrarATB(atb.id)} disabled={atbRemoving === atb.id}
+                    className="text-xs text-red-400 hover:text-red-700 border border-red-100 hover:border-red-300 px-2 py-1.5 rounded-lg transition-colors">
+                    {atbRemoving === atb.id ? '⏳' : '⏹ Encerrar'}
+                  </button>
+                </div>
               )}
             </div>
           )
@@ -357,6 +381,9 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
 
         {atbFormOpen && (
           <div className="border-2 border-indigo-200 rounded-xl bg-indigo-50 p-4 space-y-3">
+            {atbEditingId && (
+              <p className="text-xs font-bold text-amber-700 bg-amber-100 inline-block px-2 py-0.5 rounded-full">✏️ Editando ATB existente</p>
+            )}
             {/* 1 coluna no celular: a célula da data traz o campo + os botões D0/D1
                 lado a lado, e isso não cabe em meia tela. */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -396,7 +423,7 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
             </div>
             <button onClick={handleSaveATB} disabled={atbSaving}
               className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors">
-              {atbSaving ? 'Salvando...' : '+ Registrar ATB'}
+              {atbSaving ? 'Salvando...' : atbEditingId ? 'Salvar alterações' : '+ Registrar ATB'}
             </button>
           </div>
         )}
@@ -404,10 +431,16 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
         {historyOpen && historicoATB.length > 0 && (
           <div className="space-y-2 pt-2 border-t border-slate-200">
             {historicoATB.map(atb => (
-              <div key={atb.id} className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-2">
-                <span className="font-semibold text-slate-700">{atb.droga}</span> — {fmtData(atb.data_inicio)}
-                {atb.dias_previstos != null && ` · previsto: ${atb.dias_previstos}d`}
-                {atb.foco && ` · foco: ${atb.foco}`}
+              <div key={atb.id} className="flex items-start justify-between gap-2 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-2">
+                <div className="min-w-0">
+                  <span className="font-semibold text-slate-700">{atb.droga}</span> — {fmtData(atb.data_inicio)}
+                  {atb.dias_previstos != null && ` · previsto: ${atb.dias_previstos}d`}
+                  {atb.foco && ` · foco: ${atb.foco}`}
+                </div>
+                {podeEditar && (
+                  <button onClick={() => handleEditarATB(atb)} title="Editar ATB"
+                    className="text-indigo-400 hover:text-indigo-700 flex-shrink-0">✏️</button>
+                )}
               </div>
             ))}
           </div>

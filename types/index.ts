@@ -544,7 +544,7 @@ export interface ContagensFisioMes {
 
 // ── Enfermagem ───────────────────────────────────────────────────────────────
 
-export type TipoDispositivo = 'CVC' | 'SVD'
+export type TipoDispositivo = 'CVC' | 'SVD' | 'PAI' | 'CDL' | 'DRENO' | 'OUTRO'
 
 export interface Dispositivo {
   id: string
@@ -581,6 +581,17 @@ export interface ContagensEnfermagemMes {
   lpp_total: number
   /** Dispositivos sem retirada em paciente já saído — retirada esquecida. */
   dispositivos_abertos: number
+}
+
+export interface SwabVigilancia {
+  id: string
+  paciente_id: string
+  data_coleta: string             // YYYY-MM-DD
+  /** Enquanto false, o swab conta como pendente e dispara o alerta diário. */
+  resultado_disponivel: boolean
+  data_resultado: string | null   // YYYY-MM-DD
+  criado_em: string
+  criado_por: string | null
 }
 
 // ── Nutrição ─────────────────────────────────────────────────────────────────

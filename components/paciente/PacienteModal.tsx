@@ -8,7 +8,7 @@ import { nomeDaAla, type Unidade } from '@/lib/unidade'
 import { modulosAtivos, type PacienteContext } from '@/lib/modules'
 import { montarEvolucaoDiaria } from '@/lib/evolucaoDiaria'
 import { podeEditarModulo } from '@/lib/cargos'
-import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, FisioEvento, FisioAvaliacaoDiaria, Dispositivo, LppEvento, NutricaoAvaliacao, NutricaoDia, AuditoriaIntensivista, IrasEvento, IrasSepseChoque, ToastData, Cargo } from '@/types'
+import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, FisioEvento, FisioAvaliacaoDiaria, Dispositivo, LppEvento, NutricaoAvaliacao, NutricaoDia, AuditoriaIntensivista, IrasEvento, IrasSepseChoque, SwabVigilancia, ToastData, Cargo } from '@/types'
 
 const modulos = modulosAtivos()
 
@@ -68,6 +68,7 @@ export default function PacienteModal({ paciente, unidade, onClose, onAltaConced
   const [fisioAvaliacoes, setFisioAvaliacoes] = useState<FisioAvaliacaoDiaria[]>([])
   const [dispositivos,    setDispositivos]    = useState<Dispositivo[]>([])
   const [lpps,            setLpps]            = useState<LppEvento[]>([])
+  const [swabs,           setSwabs]           = useState<SwabVigilancia[]>([])
   const [nutricaoAvaliacao, setNutricaoAvaliacao] = useState<NutricaoAvaliacao | null>(null)
   const [nutricaoDias,      setNutricaoDias]      = useState<NutricaoDia[]>([])
   const [auditoria,         setAuditoria]         = useState<AuditoriaIntensivista[]>([])
@@ -192,6 +193,10 @@ export default function PacienteModal({ paciente, unidade, onClose, onAltaConced
     const { data } = await supabase.from('lpp_eventos').select('*').eq('paciente_id', pac.id).order('data')
     if (data) setLpps(data as LppEvento[])
   }
+  const loadSwabs = async () => {
+    const { data } = await supabase.from('swabs_vigilancia').select('*').eq('paciente_id', pac.id).order('data_coleta')
+    if (data) setSwabs(data as SwabVigilancia[])
+  }
 
   const loadNutricaoAvaliacao = async () => {
     const { data } = await supabase.from('nutricao_avaliacoes').select('*').eq('paciente_id', pac.id).maybeSingle()
@@ -224,7 +229,7 @@ export default function PacienteModal({ paciente, unidade, onClose, onAltaConced
       loadExames(), loadPeriodos(), loadSinais(), loadExamesImagem(), loadDvas(),
       loadPeriodosHemo(), loadAtbs(), loadCuidados(), loadNeuro(), loadVentilatorio(),
       loadIntercorrencias(), loadPendencias(), loadRegistrosIntensivista(),
-      loadFisioEventos(), loadFisioAvaliacoes(), loadDispositivos(), loadLpps(),
+      loadFisioEventos(), loadFisioAvaliacoes(), loadDispositivos(), loadLpps(), loadSwabs(),
       loadNutricaoAvaliacao(), loadNutricaoDias(), loadAuditoria(),
       loadIrasEventos(), loadIrasSepse(),
     ])
@@ -258,6 +263,7 @@ export default function PacienteModal({ paciente, unidade, onClose, onAltaConced
       .on('postgres_changes', { event: '*', schema: 'public', table: 'intercorrencias',        filter: `paciente_id=eq.${pac.id}` }, () => loadIntercorrencias())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pendencias_intensivista', filter: `paciente_id=eq.${pac.id}` }, () => loadPendencias())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'registros_intensivista', filter: `paciente_id=eq.${pac.id}` }, () => loadRegistrosIntensivista())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'swabs_vigilancia',        filter: `paciente_id=eq.${pac.id}` }, () => loadSwabs())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pacientes',              filter: `id=eq.${pac.id}` },
         (payload) => { if (payload.new && payload.eventType !== 'DELETE') setPac(payload.new as Paciente) })
       .subscribe()
@@ -414,7 +420,7 @@ export default function PacienteModal({ paciente, unidade, onClose, onAltaConced
     paciente: pac,
     exames, periodos, sinais, examesImagem, dvas, periodosHemo, atbs, cuidados,
     neuroHistorico, ventHistorico, intercorrencias, pendencias, registrosIntensivista,
-    fisioEventos, fisioAvaliacoes, dispositivos, lpps, nutricaoAvaliacao, nutricaoDias, auditoria,
+    fisioEventos, fisioAvaliacoes, dispositivos, lpps, swabs, nutricaoAvaliacao, nutricaoDias, auditoria,
     irasEventos, irasSepse,
     cargo,
     podeEditar: podeEditarModulo(cargo, moduloAtivo),

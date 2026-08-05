@@ -260,6 +260,23 @@ export function calcAcumuladoMovel(periodos: PeriodoBalanco[]): number {
   return ultimos.reduce((acc, p) => acc + calcBalanco(p).parcial, 0)
 }
 
+/**
+ * Diurese acumulada nas últimas 24h (soma turnos mais recentes até fechar
+ * 24h de `horas_periodo`). Usada tanto no cabeçalho do Balanço Hídrico quanto
+ * no Painel do Plantão — os dois têm que concordar por construção, não só
+ * por coincidência de código copiado duas vezes.
+ */
+export function calcDiurese24h(periodos: PeriodoBalanco[]): { horas: number; total: number } {
+  const ordenados = [...periodos].sort((a, b) => new Date(b.inicio).getTime() - new Date(a.inicio).getTime())
+  let horas = 0, total = 0
+  for (const p of ordenados) {
+    if (horas >= 24) break
+    horas += p.horas_periodo
+    total += p.diurese
+  }
+  return { horas, total }
+}
+
 /** Given admission datetime, return the first period's start/end/horas */
 export function calcFirstPeriod(admissionISO: string): {
   inicio: Date; fim: Date; horas: number; turno: 'diurno' | 'noturno'

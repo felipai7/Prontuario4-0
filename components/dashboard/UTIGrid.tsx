@@ -81,6 +81,24 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
     return () => { supabase.removeChannel(channel) }
   }, [])
 
+  // Pacientes com swab de vigilância pendente — badge no card do leito, visível
+  // sem precisar abrir o prontuário. Mesma ideia do alerta no Painel do Plantão,
+  // só que aqui aparece pra equipe inteira, todo dia, até alguém marcar o
+  // resultado (ver EnfermagemTab.tsx).
+  const [swabsPendentesIds, setSwabsPendentesIds] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    const carregar = async () => {
+      const { data } = await supabase.from('swabs_vigilancia').select('paciente_id').eq('resultado_disponivel', false)
+      setSwabsPendentesIds(new Set((data ?? []).map(s => s.paciente_id as string)))
+    }
+    carregar()
+    const channel = supabase
+      .channel('swabs-badge')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'swabs_vigilancia' }, () => carregar())
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [])
+
   // Keep modal in sync after external updates
   useEffect(() => {
     if (selectedPac) {
@@ -274,6 +292,7 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
                       key={leito}
                       numero={leito}
                       paciente={pac}
+                      swabPendente={!!pac && swabsPendentesIds.has(pac.id)}
                       onClick={() => handleLeitoClick(ala.id, leito, pac)}
                     />
                   )
@@ -323,8 +342,8 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
 
 // ── Leito Card ────────────────────────────────────────────────────────────
 
-function LeitoCard({ numero, paciente, onClick }: {
-  numero: number; paciente: Paciente | undefined; onClick: () => void
+function LeitoCard({ numero, paciente, swabPendente, onClick }: {
+  numero: number; paciente: Paciente | undefined; swabPendente: boolean; onClick: () => void
 }) {
   const isEmpty = !paciente
 
@@ -351,6 +370,12 @@ function LeitoCard({ numero, paciente, onClick }: {
             <div className="text-[11px] font-semibold text-amber-600 mt-1"
               title="SAPS-3 não pontuado — obrigatório para dar saída">
               ⚠️ SAPS-3
+            </div>
+          )}
+          {swabPendente && (
+            <div className="text-[11px] font-semibold text-amber-600 mt-1"
+              title="Swab de vigilância coletado, resultado ainda pendente">
+              🧫 Swab pendente
             </div>
           )}
         </>
