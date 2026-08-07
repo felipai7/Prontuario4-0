@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { agruparExamesPorHorario, parseExameTimestamp, type ClusterExames } from '@/lib/exames/agrupamento'
 import { grupoDoNome, gruposEmOrdem, nomeCanonico } from '@/lib/exames/grupos'
@@ -201,7 +201,7 @@ function getCategoryLabel(name: string): string {
 }
 
 // ── Pivot table helpers ───────────────────────────────────────────────────────
-type TableRow = { kind: 'header'; label: string } | { kind: 'param'; name: string }
+type TableRow = { kind: 'header'; label: string } | { kind: 'param'; name: string; group: string }
 
 function buildTableRows(allParams: string[]): TableRow[] {
   const groupMap = new Map<string, string[]>()
@@ -216,15 +216,29 @@ function buildTableRows(allParams: string[]): TableRow[] {
     const params = groupMap.get(label)
     if (params?.length) {
       rows.push({ kind: 'header', label })
-      params.forEach(p => rows.push({ kind: 'param', name: p }))
+      params.forEach(p => rows.push({ kind: 'param', name: p, group: label }))
     }
   }
   const outros = groupMap.get('📋 Outros')
   if (outros?.length) {
     rows.push({ kind: 'header', label: '📋 Outros' })
-    outros.forEach(p => rows.push({ kind: 'param', name: p }))
+    outros.forEach(p => rows.push({ kind: 'param', name: p, group: '📋 Outros' }))
   }
   return rows
+}
+
+// ── Grupos com "o que mostra por padrão" ──────────────────────────────────────
+//
+// Decisão do Felipe (08/2026): Hemograma reduz ao que se olha em toda visita
+// rápida (Hb/Ht/Leuco/Plaq); EAS começa TODO fechado, porque na prática só
+// interessa quando alterado. O resto dos parâmetros do grupo fica atrás de
+// "Ver mais" — não desaparece, só não ocupa espaço quando ninguém pediu.
+//
+// Grupo que não está neste mapa mostra tudo direto, como sempre mostrou —
+// curar um grupo é decisão clínica, não teto de altura de tabela.
+const PARAMS_PADRAO: Record<string, string[]> = {
+  '🩸 Hemograma': ['Hemoglobina', 'Hematócrito', 'Leucócitos', 'Plaquetas'],
+  '🔬 EAS/Urina': [],
 }
 
 // ── R3.1 · canal "o laudo não trouxe" ────────────────────────────────────────
@@ -323,6 +337,47 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
   })
 
   const tableRows = buildTableRows(allParams)
+
+  // Grupos abertos manualmente (Ver mais). Some volta ao padrão quando os
+  // exames mudam de tanto — trocar de paciente com o mesmo componente montado
+  // (troca de aba) não devia carregar "aberto" de um prontuário para outro.
+  const [gruposAbertos, setGruposAbertos] = useState<Set<string>>(new Set())
+  const toggleGrupo = (label: string) => setGruposAbertos(s => {
+    const novo = new Set(s)
+    if (novo.has(label)) novo.delete(label); else novo.add(label)
+    return novo
+  })
+
+  // Para cada grupo: quantos parâmetros ficam ocultos por padrão, e quantos
+  // desses ocultos estão alterados — alimenta o botão "Ver mais" e o alerta
+  // no cabeçalho (a médica não precisa expandir pra saber que há algo lá).
+  const gruposInfo = new Map<string, { total: number; ocultos: number; ocultosAlterados: number }>()
+  for (const row of tableRows) {
+    if (row.kind === 'header') { gruposInfo.set(row.label, { total: 0, ocultos: 0, ocultosAlterados: 0 }); continue }
+    const info = gruposInfo.get(row.group)!
+    info.total++
+    const padrao = PARAMS_PADRAO[row.group]
+    if (padrao && !padrao.includes(row.name)) {
+      info.ocultos++
+      if (clusters.some(cl => lookup.get(cl.key)?.get(row.name)?.alterado)) info.ocultosAlterados++
+    }
+  }
+
+  // Barra de rolagem duplicada em cima da tabela — a de baixo só aparece
+  // depois de rolar a tabela inteira verticalmente, e numa tabela de exames
+  // isso pode ser a altura da tela toda.
+  const scrollTopoRef  = useRef<HTMLDivElement>(null)
+  const scrollTabelaRef = useRef<HTMLDivElement>(null)
+  const [larguraTabela, setLarguraTabela] = useState(0)
+  useEffect(() => {
+    setLarguraTabela(scrollTabelaRef.current?.scrollWidth ?? 0)
+  }, [tableRows.length, clusters.length])
+  const sincronizarDoTopo = () => {
+    if (scrollTabelaRef.current && scrollTopoRef.current) scrollTabelaRef.current.scrollLeft = scrollTopoRef.current.scrollLeft
+  }
+  const sincronizarDaTabela = () => {
+    if (scrollTopoRef.current && scrollTabelaRef.current) scrollTopoRef.current.scrollLeft = scrollTabelaRef.current.scrollLeft
+  }
 
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [editExame,  setEditExame]  = useState<{ id: string; tipo: string; data: string; obs: string } | null>(null)
@@ -656,7 +711,13 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
 
       {/* Pivot table */}
       {comRes.length > 0 && (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+        <>
+          {/* Barra de rolagem em cima, sincronizada com a de baixo — a de
+              baixo só aparece depois de rolar a tabela inteira verticalmente. */}
+          <div ref={scrollTopoRef} onScroll={sincronizarDoTopo} className="overflow-x-auto" style={{ height: 14 }}>
+            <div style={{ width: larguraTabela, height: 1 }} />
+          </div>
+          <div ref={scrollTabelaRef} onScroll={sincronizarDaTabela} className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
           <table className="min-w-max w-full text-xs border-separate border-spacing-0">
             <thead>
               <tr>
@@ -713,20 +774,46 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
               </tr>
             </thead>
             <tbody>
-              {tableRows.map((row, rowIdx) => {
+              {(() => {
+                // Contador só das linhas realmente desenhadas — se contasse
+                // as ocultas, o zebrado dos grupos curados ficaria em faixas.
+                let linhaVisivel = 0
+                return tableRows.map(row => {
                 if (row.kind === 'header') {
+                  const info = gruposInfo.get(row.label)!
+                  const padrao = PARAMS_PADRAO[row.label]
+                  const aberto = gruposAbertos.has(row.label)
+                  // Só mostra o toggle se o grupo é curado E sobra algo pra
+                  // esconder — sem isso "Ver mais (0)" apareceria à toa.
+                  const temToggle = padrao !== undefined && info.total > padrao.length
                   return (
                     <tr key={`hdr-${row.label}`}>
                       <td colSpan={clusters.length + 1}
                         className="sticky left-0 z-10 px-3 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 border-b border-t border-indigo-100">
-                        {row.label}
+                        <div className="flex items-center gap-2">
+                          <span>{row.label}</span>
+                          {temToggle && (
+                            <button onClick={() => toggleGrupo(row.label)}
+                              className="text-[11px] font-semibold text-indigo-500 hover:text-indigo-700">
+                              {aberto ? '▲ Ver menos' : `▼ Ver mais (${info.ocultos})`}
+                            </button>
+                          )}
+                          {!aberto && info.ocultosAlterados > 0 && (
+                            <span className="text-[11px] font-bold text-amber-600">
+                              ⚠ {info.ocultosAlterados} alterado{info.ocultosAlterados > 1 ? 's' : ''} oculto{info.ocultosAlterados > 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )
                 }
                 const paramName = row.name
+                const padrao = PARAMS_PADRAO[row.group]
+                const oculto = padrao !== undefined && !padrao.includes(paramName) && !gruposAbertos.has(row.group)
+                if (oculto) return null
                 const hasAlt = clusters.some(cl => lookup.get(cl.key)?.get(paramName)?.alterado)
-                const rowBg = rowIdx % 2 === 0 ? '#ffffff' : '#f8fafc'
+                const rowBg = linhaVisivel++ % 2 === 0 ? '#ffffff' : '#f8fafc'
                 return (
                   <tr key={`p-${paramName}`}>
                     <td className={`sticky left-0 z-10 px-3 py-2 font-medium border-r-2 border-b border-slate-200 whitespace-nowrap ${hasAlt ? 'text-red-700' : 'text-slate-700'}`}
@@ -739,10 +826,12 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
                     })}
                   </tr>
                 )
-              })}
+                })
+              })()}
             </tbody>
           </table>
-        </div>
+          </div>
+        </>
       )}
 
       {/* Raw-text exams */}
