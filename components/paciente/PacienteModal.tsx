@@ -19,6 +19,15 @@ interface Props {
   onClose: () => void
   onAltaConcedida: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
+  /**
+   * Navegação entre leitos pelas setas laterais. O modal não desmonta ao
+   * trocar de paciente (só troca o conteúdo) — é isso que preserva o
+   * módulo/aba selecionados de um leito para o outro.
+   */
+  onLeitoAnterior?: () => void
+  onProximoLeito?: () => void
+  temLeitoAnterior?: boolean
+  temProximoLeito?: boolean
 }
 
 function diasInternado(dataInternacao: string, horaInternacao: string): number {
@@ -45,7 +54,10 @@ type EditForm = {
   saps3: string; paliativo: boolean; oncologico: boolean
 }
 
-export default function PacienteModal({ paciente, unidade, onClose, onAltaConcedida, showToast }: Props) {
+export default function PacienteModal({
+  paciente, unidade, onClose, onAltaConcedida, showToast,
+  onLeitoAnterior, onProximoLeito, temLeitoAnterior, temProximoLeito,
+}: Props) {
   const supabase   = createClient()
   const alas       = unidade?.alas ?? []
   const [moduloId, setModuloId] = useState(modulos[0].id)
@@ -255,6 +267,24 @@ export default function PacienteModal({ paciente, unidade, onClose, onAltaConced
     })
   }, [])
 
+  // Navegar de leito troca o paciente sem desmontar o modal — é isso que
+  // preserva o módulo/aba selecionados de um leito para o outro. Mas `pac`
+  // só nasce do prop na primeira montagem (`useState` ignora atualizações do
+  // valor inicial), então este efeito é quem de fato troca de paciente
+  // quando o prop muda. Reseta o que é estado do paciente ANTERIOR — seguir
+  // com um formulário de edição aberto, ou uma avaliação de IA em
+  // andamento, depois de trocar de leito misturaria dado de duas pessoas.
+  useEffect(() => {
+    setPac(paciente)
+    setEditing(false)
+    setEditErrors({})
+    setEditForm(makeEditForm(paciente))
+    setShowAlta(false)
+    aiAbortRef.current?.abort()
+    setAiOpen(false); setAiText(null); setAiLoading(false)
+    setEvoOpen(false); setEvoText(''); setEvoCopied(false)
+  }, [paciente.id])
+
   useEffect(() => {
     loadData()
     const channel = supabase
@@ -459,6 +489,21 @@ export default function PacienteModal({ paciente, unidade, onClose, onAltaConced
       {/* p-1 no celular: os 16px de cada lado custavam ~9% da largura útil de um
           iPhone, e isso sai justamente do conteúdo. No desktop segue p-4. */}
       <div className="fixed inset-0 bg-black/60 z-40 flex items-start justify-center p-1 sm:p-4 overflow-y-auto">
+        {/* Setas de leito: trocam o paciente sem fechar o modal, então o
+            módulo/aba que estava aberto continua o mesmo no leito seguinte
+            (ex.: balanço hídrico do leito 3 → balanço hídrico do leito 4). */}
+        {onLeitoAnterior && temLeitoAnterior && (
+          <button onClick={onLeitoAnterior} title="Leito anterior"
+            className="fixed left-1 sm:left-3 top-1/2 -translate-y-1/2 z-50 bg-white/90 hover:bg-white text-slate-700 rounded-full w-10 h-10 sm:w-12 sm:h-12 shadow-lg flex items-center justify-center text-2xl font-bold transition-colors">
+            ‹
+          </button>
+        )}
+        {onProximoLeito && temProximoLeito && (
+          <button onClick={onProximoLeito} title="Próximo leito"
+            className="fixed right-1 sm:right-3 top-1/2 -translate-y-1/2 z-50 bg-white/90 hover:bg-white text-slate-700 rounded-full w-10 h-10 sm:w-12 sm:h-12 shadow-lg flex items-center justify-center text-2xl font-bold transition-colors">
+            ›
+          </button>
+        )}
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[1300px] my-2 flex flex-col" style={{maxHeight:'97vh'}}>
 
           {/* Header */}

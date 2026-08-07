@@ -140,6 +140,18 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
   const ocupados = pacientesVisiveis.length
   const total    = unidade?.leitosAtivos ?? 0
 
+  // Setas de leito na ficha do paciente: avançam/retrocedem por número de
+  // leito, cruzando alas se precisar — "próximo leito" é sobre a numeração,
+  // não sobre em qual ala a pessoa está.
+  const pacientesPorLeito = [...pacientesVisiveis].sort((a, b) => a.numero_leito - b.numero_leito)
+  const indexLeitoAtual = selectedPac ? pacientesPorLeito.findIndex(p => p.id === selectedPac.id) : -1
+  const navegarLeito = (direcao: -1 | 1) => {
+    if (indexLeitoAtual === -1) return
+    const novoIndex = indexLeitoAtual + direcao
+    if (novoIndex < 0 || novoIndex >= pacientesPorLeito.length) return
+    setSelectedPac(pacientesPorLeito[novoIndex])
+  }
+
   const buscaNorm = normalizarNome(busca.trim())
   const resultadosBusca = buscaNorm
     ? pacientes.filter(p => normalizarNome(p.nome).includes(buscaNorm))
@@ -336,6 +348,10 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
             showToast('Alta concedida. Resumo arquivado.')
           }}
           showToast={showToast}
+          onLeitoAnterior={() => navegarLeito(-1)}
+          onProximoLeito={() => navegarLeito(1)}
+          temLeitoAnterior={indexLeitoAtual > 0}
+          temProximoLeito={indexLeitoAtual !== -1 && indexLeitoAtual < pacientesPorLeito.length - 1}
         />
       )}
 
