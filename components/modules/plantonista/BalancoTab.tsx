@@ -388,7 +388,7 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
               <div>
                 <label className="text-xs text-slate-500 block mb-1">Data</label>
                 <input type="date" value={formDate} onChange={e => setFormDate(e.target.value)}
-                  className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+                  className="border border-slate-300 rounded-lg px-2 py-1.5 text-base bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
               </div>
               <div className="flex rounded-lg overflow-hidden border border-slate-300">
                 {(['diurno','noturno'] as const).map(t => (
@@ -562,8 +562,13 @@ function ExprField({ label, value, onChange }: { label: string; value: string; o
   return (
     <div className={`bg-white border rounded-lg px-3 py-2 ${invalido ? 'border-red-400 ring-1 ring-red-200' : 'border-slate-200'}`}>
       <p className="text-xs text-slate-500 mb-1">{label}</p>
-      <input type="text" value={value} onChange={e => onChange(e.target.value)} placeholder="0"
-        className="w-full text-sm font-semibold focus:outline-none bg-transparent"/>
+      {/* text-base (16px), não text-sm: abaixo de 16px o Safari do iPhone dá
+          zoom automático ao tocar no campo. O zoom desloca a tela no meio do
+          toque — é fácil o dedo acabar digitando no campo vizinho depois do
+          salto, o que bagunça o turno inteiro (não só este campo) e só
+          acontece em celular. */}
+      <input type="text" inputMode="decimal" value={value} onChange={e => onChange(e.target.value)} placeholder="0"
+        className="w-full text-base font-semibold focus:outline-none bg-transparent"/>
       {invalido && <p className="text-xs text-red-500 mt-0.5">Use vírgula, não ponto</p>}
       {hasExpr && <p className="text-xs text-indigo-500 mt-0.5">= {preview.toFixed(0)} mL</p>}
     </div>
