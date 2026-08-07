@@ -239,6 +239,12 @@ function buildTableRows(allParams: string[]): TableRow[] {
 const PARAMS_PADRAO: Record<string, string[]> = {
   '🩸 Hemograma': ['Hemoglobina', 'Hematócrito', 'Leucócitos', 'Plaquetas'],
   '🔬 EAS/Urina': [],
+  '⚡ Eletrólitos': ['Sódio', 'Potássio', 'Magnésio'],
+  // Arterial e venosa são linhas separadas na tabela (ver grupos.json) — as
+  // duas entram no padrão, senão gasometria venosa some da vista por default.
+  '💨 Gasometria': ['pH', 'pH (Arterial)', 'pH (Venosa)', 'PCO2 (Arterial)', 'PCO2 (Venosa)', 'pCO2', 'HCO3', 'HCO3 (Arterial)', 'HCO3 (Venosa)'],
+  // 'INR/RNI' cobre registro antigo que passou pelas ALIASES em vez do catálogo.
+  '🩻 Coagulação': ['INR', 'INR/RNI'],
 }
 
 // ── R3.1 · canal "o laudo não trouxe" ────────────────────────────────────────
@@ -363,9 +369,10 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
     }
   }
 
-  // Barra de rolagem duplicada em cima da tabela — a de baixo só aparece
-  // depois de rolar a tabela inteira verticalmente, e numa tabela de exames
-  // isso pode ser a altura da tela toda.
+  // Barra de rolagem única, grudada no topo (sticky) — fica acessível o
+  // tempo todo sem precisar rolar até embaixo da tabela nem duplicar a
+  // barra. A rolagem nativa da tabela em si (scrollTabelaRef) fica
+  // funcional, só escondida visualmente.
   const scrollTopoRef  = useRef<HTMLDivElement>(null)
   const scrollTabelaRef = useRef<HTMLDivElement>(null)
   const [larguraTabela, setLarguraTabela] = useState(0)
@@ -712,12 +719,20 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
       {/* Pivot table */}
       {comRes.length > 0 && (
         <>
-          {/* Barra de rolagem em cima, sincronizada com a de baixo — a de
-              baixo só aparece depois de rolar a tabela inteira verticalmente. */}
-          <div ref={scrollTopoRef} onScroll={sincronizarDoTopo} className="overflow-x-auto" style={{ height: 14 }}>
+          {/* Uma barra só, grudada no topo da área visível (sticky) enquanto
+              rola a aba verticalmente — antes tinha uma em cima e outra
+              embaixo da tabela, e a de baixo só aparecia depois de rolar a
+              tabela inteira. A da tabela em si fica com a rolagem nativa
+              escondida (ainda funciona no toque/trackpad, só não duplica a
+              barra visível). */}
+          <div ref={scrollTopoRef} onScroll={sincronizarDoTopo}
+            className="sticky top-0 z-30 overflow-x-auto bg-white border-b border-slate-200"
+            style={{ height: 14 }}>
             <div style={{ width: larguraTabela, height: 1 }} />
           </div>
-          <div ref={scrollTabelaRef} onScroll={sincronizarDaTabela} className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+          <div ref={scrollTabelaRef} onScroll={sincronizarDaTabela}
+            className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm [&::-webkit-scrollbar]:hidden"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           <table className="min-w-max w-full text-xs border-separate border-spacing-0">
             <thead>
               <tr>
