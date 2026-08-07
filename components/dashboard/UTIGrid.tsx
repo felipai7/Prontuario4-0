@@ -8,7 +8,7 @@ import ToastContainer, { useToast } from '@/components/ui/Toast'
 import { pad, fmtData, calcAge, normalizarNome } from '@/lib/utils'
 import { ehIntensivista, apenasMedicos } from '@/lib/cargos'
 import SeletorUnidade from './SeletorUnidade'
-import { nomeDaAla, type Unidade } from '@/lib/unidade'
+import { nomeDaAla, compararLeitos, type Unidade } from '@/lib/unidade'
 import type { Paciente, Unit } from '@/types'
 
 interface Props {
@@ -28,7 +28,7 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
   const [pacientes,       setPacientes]       = useState<Paciente[]>(initialPacientes)
   const [selectedPac,     setSelectedPac]     = useState<Paciente | null>(null)
   const [showCadastro,    setShowCadastro]    = useState(false)
-  const [selectedLeito,   setSelectedLeito]   = useState<{ alaId: string; numero: number } | null>(null)
+  const [selectedLeito,   setSelectedLeito]   = useState<{ alaId: string; numero: string } | null>(null)
   const [busca,           setBusca]           = useState('')
 
   // Realtime subscription
@@ -107,10 +107,10 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
     }
   }, [pacientes])
 
-  const getPaciente = (alaId: string, leito: number) =>
+  const getPaciente = (alaId: string, leito: string) =>
     pacientes.find(p => p.ala_id === alaId && p.numero_leito === leito && p.ativo)
 
-  const handleLeitoClick = (alaId: string, numero: number, pac: Paciente | undefined) => {
+  const handleLeitoClick = (alaId: string, numero: string, pac: Paciente | undefined) => {
     if (pac) { setSelectedPac(pac) }
     else     { setSelectedLeito({ alaId, numero }); setShowCadastro(true) }
   }
@@ -143,7 +143,7 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
   // Setas de leito na ficha do paciente: avançam/retrocedem por número de
   // leito, cruzando alas se precisar — "próximo leito" é sobre a numeração,
   // não sobre em qual ala a pessoa está.
-  const pacientesPorLeito = [...pacientesVisiveis].sort((a, b) => a.numero_leito - b.numero_leito)
+  const pacientesPorLeito = [...pacientesVisiveis].sort((a, b) => compararLeitos(a.numero_leito, b.numero_leito))
   const indexLeitoAtual = selectedPac ? pacientesPorLeito.findIndex(p => p.id === selectedPac.id) : -1
   const navegarLeito = (direcao: -1 | 1) => {
     if (indexLeitoAtual === -1) return
@@ -163,7 +163,7 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
       <header className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-xl font-bold">🏥 ProMed UTI</h1>
+            <h1 className="text-xl font-bold">🏥 ProMed {unidade?.nome ?? 'UTI'}</h1>
             <p className="text-indigo-200 text-xs mt-0.5">
               {/* Com mais de uma unidade na mesma instalação, saber QUAL UTI está
                   na tela deixa de ser detalhe e vira segurança do paciente.
@@ -308,6 +308,7 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
                       key={leito}
                       numero={leito}
                       paciente={pac}
+                      requerSaps3={unidade?.requerSaps3 ?? true}
                       swabPendente={!!pac && swabsPendentesIds.has(pac.id)}
                       onClick={() => handleLeitoClick(ala.id, leito, pac)}
                     />
@@ -362,8 +363,8 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
 
 // ── Leito Card ────────────────────────────────────────────────────────────
 
-function LeitoCard({ numero, paciente, swabPendente, onClick }: {
-  numero: number; paciente: Paciente | undefined; swabPendente: boolean; onClick: () => void
+function LeitoCard({ numero, paciente, requerSaps3, swabPendente, onClick }: {
+  numero: string; paciente: Paciente | undefined; requerSaps3: boolean; swabPendente: boolean; onClick: () => void
 }) {
   const isEmpty = !paciente
 
@@ -386,7 +387,7 @@ function LeitoCard({ numero, paciente, swabPendente, onClick }: {
           </div>
           <div className="text-xs text-slate-500 mt-1">{calcAge(paciente.data_nascimento)}</div>
           <div className="text-xs text-slate-400 truncate">{paciente.plano_saude}</div>
-          {paciente.saps3 == null && (
+          {requerSaps3 && paciente.saps3 == null && (
             <div className="text-[11px] font-semibold text-amber-600 mt-1"
               title="SAPS-3 não pontuado — obrigatório para dar saída">
               ⚠️ SAPS-3

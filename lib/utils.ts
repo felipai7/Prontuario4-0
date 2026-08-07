@@ -15,7 +15,7 @@ export function fmtDataHora(str: string | null | undefined): string {
   })
 }
 
-export function pad(n: number): string {
+export function pad(n: string | number): string {
   return String(n).padStart(2, '0')
 }
 

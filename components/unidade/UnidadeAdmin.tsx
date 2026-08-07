@@ -109,6 +109,15 @@ export default function UnidadeAdmin({ souChefe, userEmail, units: unitsIniciais
     router.refresh()
   }
 
+  const alternarRequerSaps3 = async (u: Unit) => {
+    const { error } = await supabase.from('units').update({ requer_saps3: !u.requer_saps3 }).eq('id', u.id)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    await recarregarUnidades()
+    showToast(u.requer_saps3
+      ? 'SAPS-3 deixou de ser exigido na alta desta unidade.'
+      : 'SAPS-3 volta a ser exigido na alta desta unidade.')
+  }
+
   // ── Alas ────────────────────────────────────────────────────────────────
   const [novaAlaNome, setNovaAlaNome] = useState('')
 
@@ -150,6 +159,25 @@ export default function UnidadeAdmin({ souChefe, userEmail, units: unitsIniciais
 
   // ── Leitos ──────────────────────────────────────────────────────────────
   const [faixa, setFaixa] = useState<Record<string, { de: string; ate: string }>>({})
+  const [listaCustom, setListaCustom] = useState<Record<string, string>>({})
+
+  /** Insere leitos novos numa ala, ignorando códigos já cadastrados. Base comum
+   *  para a faixa numérica e a lista de códigos personalizados. */
+  const inserirLeitos = async (a: Ala, codigos: string[]) => {
+    const jaExistem = new Set(leitos.map(l => `${l.ala_id}:${l.numero}`))
+    const novos = codigos
+      .filter(c => !jaExistem.has(`${a.id}:${c}`))
+      // ativo_desde = HOJE, nunca uma data antiga. Se um leito novo nascesse
+      // valendo desde sempre, a taxa de ocupação dos meses passados mudaria
+      // sozinha — a unidade teria "mais leitos" em janeiro do que teve de fato.
+      .map(c => ({ ala_id: a.id, numero: c, ativo_desde: hoje }))
+    if (novos.length === 0) { showToast('Esses leitos já existem nesta ala.', 'error'); return }
+
+    const { error } = await supabase.from('leitos').insert(novos)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    showToast(`${novos.length} leito(s) adicionado(s), valendo a partir de hoje.`)
+    carregar(unidadeId)
+  }
 
   const addLeitos = async (a: Ala) => {
     const f = faixa[a.id] ?? { de: '', ate: '' }
@@ -160,22 +188,19 @@ export default function UnidadeAdmin({ souChefe, userEmail, units: unitsIniciais
     }
     if (ate - de > 99) { showToast('Faixa muito longa (máx. 100 leitos por vez).', 'error'); return }
 
-    const jaExistem = new Set(leitos.map(l => `${l.ala_id}:${l.numero}`))
-    const novos = []
-    for (let n = de; n <= ate; n++) {
-      if (jaExistem.has(`${a.id}:${n}`)) continue
-      // ativo_desde = HOJE, nunca uma data antiga. Se um leito novo nascesse
-      // valendo desde sempre, a taxa de ocupação dos meses passados mudaria
-      // sozinha — a unidade teria "mais leitos" em janeiro do que teve de fato.
-      novos.push({ ala_id: a.id, numero: n, ativo_desde: hoje })
-    }
-    if (novos.length === 0) { showToast('Esses leitos já existem nesta ala.', 'error'); return }
-
-    const { error } = await supabase.from('leitos').insert(novos)
-    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    const codigos: string[] = []
+    for (let n = de; n <= ate; n++) codigos.push(String(n))
+    await inserirLeitos(a, codigos)
     setFaixa(f2 => ({ ...f2, [a.id]: { de: '', ate: '' } }))
-    showToast(`${novos.length} leito(s) adicionado(s), valendo a partir de hoje.`)
-    carregar(unidadeId)
+  }
+
+  const addLeitosCustom = async (a: Ala) => {
+    const codigos = (listaCustom[a.id] ?? '')
+      .split(',').map(c => c.trim()).filter(Boolean)
+    if (codigos.length === 0) { showToast('Digite ao menos um código de leito.', 'error'); return }
+    if (codigos.length > 100) { showToast('Lista muito longa (máx. 100 leitos por vez).', 'error'); return }
+    await inserirLeitos(a, codigos)
+    setListaCustom(l => ({ ...l, [a.id]: '' }))
   }
 
   const desativarLeito = async (l: Leito) => {
@@ -255,10 +280,18 @@ export default function UnidadeAdmin({ souChefe, userEmail, units: unitsIniciais
               {units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
             {unidadeAtual && (
-              <button onClick={() => renomearUnidade(unidadeAtual)}
-                className="text-xs font-medium border border-slate-300 text-slate-600 hover:bg-slate-50 rounded-lg px-3 py-2">
-                ✏️ Renomear
-              </button>
+              <>
+                <button onClick={() => renomearUnidade(unidadeAtual)}
+                  className="text-xs font-medium border border-slate-300 text-slate-600 hover:bg-slate-50 rounded-lg px-3 py-2">
+                  ✏️ Renomear
+                </button>
+                <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600 cursor-pointer">
+                  <input type="checkbox" checked={unidadeAtual.requer_saps3}
+                    onChange={() => alternarRequerSaps3(unidadeAtual)}
+                    className="w-3.5 h-3.5 accent-indigo-600" />
+                  Exigir SAPS-3 na alta
+                </label>
+              </>
             )}
             <p className="text-xs text-slate-400 ml-auto">
               {alas.filter(a => a.ativa).length} ala(s) ativa(s) · {totalVigentes} leito(s) vigente(s)
@@ -359,6 +392,22 @@ export default function UnidadeAdmin({ souChefe, userEmail, units: unitsIniciais
                       + Adicionar
                     </button>
                   </div>
+
+                  <div className="flex items-center gap-2 pt-2 border-t border-slate-100 flex-wrap">
+                    <span className="text-xs text-slate-500">ou lista de códigos</span>
+                    <input value={listaCustom[ala.id] ?? ''} placeholder="01A, 01B, 02C..."
+                      onChange={e => setListaCustom(l => ({ ...l, [ala.id]: e.target.value }))}
+                      className="flex-1 min-w-[10rem] border border-slate-300 rounded-lg px-2 py-1.5 text-sm" />
+                    <button onClick={() => addLeitosCustom(ala)} disabled={!(listaCustom[ala.id] ?? '').trim()}
+                      className="text-xs font-semibold border border-slate-300 text-slate-600 hover:bg-slate-50
+                                 disabled:opacity-40 rounded-lg px-3 py-1.5">
+                      + Adicionar
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Use quando o leito tem código de porta, não só número (ex.: enfermaria
+                    com "01A", "01B"...). Separe os códigos por vírgula.
+                  </p>
                 </section>
               )
             })}

@@ -10,7 +10,7 @@ interface Props {
   /** Nome de exibição da ala, vindo do banco (antes era um if 'uti-01' ? ... : ...). */
   alaNome: string
   unitId: string
-  numeroLeito: number
+  numeroLeito: string
   onClose: () => void
   onSaved: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void

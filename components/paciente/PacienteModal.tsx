@@ -390,7 +390,7 @@ export default function PacienteModal({
     else if (editForm.data_nascimento > hoje) errs.data_nascimento = 'Não pode ser futura'
     if (!editForm.plano) errs.plano = 'Selecione um plano'
     if (editForm.plano === 'Outros' && !editForm.planoOu.trim()) errs.planoOu = 'Informe o plano'
-    const novoLeito = parseInt(editForm.numero_leito, 10)
+    const novoLeito = editForm.numero_leito
     const alaInfo = alas.find(a => a.id === editForm.ala_id)
     if (!alaInfo || !alaInfo.leitos.includes(novoLeito)) {
       errs.numero_leito = `Leito inválido para ${alaInfo?.nome ?? 'UTI selecionada'}`
@@ -849,6 +849,7 @@ export default function PacienteModal({
           cuidados={cuidados}
           neuro={neuroAtual}
           ventilatorio={ventAtual}
+          requerSaps3={unidade?.requerSaps3 ?? true}
           onClose={() => setShowAlta(false)}
           onAltaConcedida={onAltaConcedida}
           showToast={showToast}

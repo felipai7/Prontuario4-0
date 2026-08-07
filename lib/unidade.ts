@@ -12,8 +12,8 @@ export interface Ala {
   /** Código curto, o mesmo gravado em pacientes.ala_id (ex.: 'uti-01'). */
   id: string
   nome: string
-  /** Números dos leitos vigentes hoje, em ordem. */
-  leitos: number[]
+  /** Códigos dos leitos vigentes hoje, em ordem. Texto: "3" num leito simples, "01A" num código de porta. */
+  leitos: string[]
 }
 
 export interface Unidade {
@@ -24,6 +24,8 @@ export interface Unidade {
   leitosAtivos: number
   /** Quantas OUTRAS unidades a pessoa atende. >0 faz o seletor aparecer. */
   outrasUnidades: number
+  /** Se falso, a alta nesta unidade não exige SAPS-3 pontuado (ex.: Hospital). */
+  requerSaps3: boolean
 }
 
 /** Formato cru vindo do PostgREST (alas com leitos embutidos). */
@@ -35,14 +37,23 @@ interface AlaRow {
 }
 
 export interface LeitoRow {
-  numero: number
+  numero: string
   ativo_desde: string
   /** Null = ainda ativo. */
   ativo_ate: string | null
 }
 
 /**
- * Números dos leitos vigentes numa data, em ordem.
+ * Compara códigos de leito em ordem "natural": números puros ficam em ordem
+ * numérica (não "10" antes de "2"), e o resto cai para comparação de texto —
+ * necessário desde que numero_leito virou texto (código de porta, ex. "01A").
+ */
+export function compararLeitos(a: string, b: string): number {
+  return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
+}
+
+/**
+ * Códigos dos leitos vigentes numa data, em ordem.
  *
  * Leito com vigência encerrada (reforma, interdição, desativação) some do mapa
  * de hoje — mas continua contando nos leitos-dia dos meses em que existiu.
@@ -53,11 +64,11 @@ export interface LeitoRow {
  * ordem lexicográfica é a cronológica, e assim não há fuso horário no meio do
  * caminho para deslocar um leito em um dia.
  */
-export function leitosVigentes(leitos: LeitoRow[], hoje: string): number[] {
+export function leitosVigentes(leitos: LeitoRow[], hoje: string): string[] {
   return (leitos ?? [])
     .filter(l => l.ativo_desde <= hoje && (l.ativo_ate === null || l.ativo_ate >= hoje))
     .map(l => l.numero)
-    .sort((x, y) => x - y)
+    .sort(compararLeitos)
 }
 
 /** Nome do cookie que guarda a unidade escolhida por quem trabalha em mais de uma. */
@@ -86,14 +97,17 @@ export async function carregarUnidade(
 ): Promise<Unidade | null> {
   const { data: staffRows } = await supabase
     .from('staff')
-    .select('unit_id, created_at, units(name)')
+    .select('unit_id, created_at, units(name, requer_saps3)')
     .eq('user_id', userId)
     .eq('active', true)
     // Ordem estável: sem isso, quem trabalha em duas unidades cairia numa ou
     // noutra a cada carregamento, sem explicação.
     .order('created_at')
 
-  type Vinculo = { unit_id: string; units: { name: string } | { name: string }[] | null }
+  type Vinculo = {
+    unit_id: string
+    units: { name: string; requer_saps3: boolean } | { name: string; requer_saps3: boolean }[] | null
+  }
   const vinculos = (staffRows ?? []) as Vinculo[]
 
   const vinculo = (preferida && vinculos.find(v => v.unit_id === preferida)) || vinculos[0]
@@ -102,7 +116,9 @@ export async function carregarUnidade(
   // O PostgREST devolve o relacionamento como objeto ou array conforme a
   // cardinalidade que ele infere do schema; normalizar evita um bug bobo.
   const u = vinculo.units
-  const nome = (Array.isArray(u) ? u[0]?.name : u?.name) ?? 'Unidade'
+  const uObj = Array.isArray(u) ? u[0] : u
+  const nome = uObj?.name ?? 'Unidade'
+  const requerSaps3 = uObj?.requer_saps3 ?? true
 
   const { data: alasRows } = await supabase
     .from('alas')
@@ -125,6 +141,7 @@ export async function carregarUnidade(
     alas,
     leitosAtivos: alas.reduce((n, a) => n + a.leitos.length, 0),
     outrasUnidades: vinculos.length - 1,
+    requerSaps3,
   }
 }
 

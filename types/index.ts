@@ -9,7 +9,8 @@ export interface Paciente {
   hipoteses: string | null
   /** Código da ala, validado por FK contra alas(unit_id, codigo) — não é mais um enum do TypeScript. */
   ala_id: string
-  numero_leito: number
+  /** Texto, não número: leitos de enfermaria têm código de porta (ex.: "01A"), não só número sequencial. */
+  numero_leito: string
   /** Unidade dona do paciente: o único ponto de tenancy do lado clínico. */
   unit_id: string
   saps3: number | null
@@ -19,6 +20,8 @@ export interface Paciente {
   oncologico: boolean
   /** Alta anterior deste mesmo paciente, quando esta internação é uma reinternação. */
   readmissao_de: string | null
+  /** Alta da UTI que originou esta internação (transferência para leito hospitalar) — distinto de readmissao_de, não entra nos indicadores de reinternação. */
+  origem_uti_alta_id: string | null
   ativo: boolean
   created_at: string
   updated_at: string
@@ -334,6 +337,8 @@ export interface Unit {
   id: string
   name: string
   active: boolean
+  /** Se falso, a alta não exige SAPS-3 pontuado — unidades fora da UTI (ex.: Hospital) não pontuam. */
+  requer_saps3: boolean
   created_at: string
 }
 
@@ -352,7 +357,8 @@ export interface Ala {
 export interface Leito {
   id: string
   ala_id: string
-  numero: number
+  /** Texto: número simples ("3") ou código de porta ("01A"), conforme a unidade. */
+  numero: string
   /** Data em que o leito passou a operar — antes dela não conta nos leitos-dia. */
   ativo_desde: string
   /** Null = ainda ativo. */
