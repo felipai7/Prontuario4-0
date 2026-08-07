@@ -2,6 +2,7 @@
 import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { getTurno } from '@/lib/utils'
+import TabelaRolavel from '@/components/ui/TabelaRolavel'
 import type { Paciente, SinalVital, ToastData } from '@/types'
 
 interface Props {
@@ -417,7 +418,7 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-indigo-200 bg-white">
+          <TabelaRolavel className="rounded-lg border border-indigo-200 bg-white">
             <table className="min-w-max w-full text-xs border-separate border-spacing-0">
               <thead>
                 <tr>
@@ -464,7 +465,7 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
                 })}
               </tbody>
             </table>
-          </div>
+          </TabelaRolavel>
 
           <button onClick={handleSave} disabled={saving}
             className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-2 rounded-lg text-sm transition-colors">
@@ -479,7 +480,7 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
 
       {/* Grouped pivot table */}
       {groups.length > 0 && (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+        <TabelaRolavel className="rounded-xl border border-slate-200 shadow-sm">
           <table className="min-w-max w-full text-xs border-separate border-spacing-0">
             <thead>
               {/* Row 1: param header + group headers */}
@@ -595,7 +596,7 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
               })}
             </tbody>
           </table>
-        </div>
+        </TabelaRolavel>
       )}
 
       {/* Hint */}

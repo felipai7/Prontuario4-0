@@ -1,8 +1,9 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { agruparExamesPorHorario, parseExameTimestamp, type ClusterExames } from '@/lib/exames/agrupamento'
 import { grupoDoNome, gruposEmOrdem, nomeCanonico } from '@/lib/exames/grupos'
+import TabelaRolavel from '@/components/ui/TabelaRolavel'
 import type { Exame, Paciente, ResultadoExame, ToastData } from '@/types'
 
 interface Props {
@@ -369,23 +370,6 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
     }
   }
 
-  // Barra de rolagem única, grudada no topo (sticky) — fica acessível o
-  // tempo todo sem precisar rolar até embaixo da tabela nem duplicar a
-  // barra. A rolagem nativa da tabela em si (scrollTabelaRef) fica
-  // funcional, só escondida visualmente.
-  const scrollTopoRef  = useRef<HTMLDivElement>(null)
-  const scrollTabelaRef = useRef<HTMLDivElement>(null)
-  const [larguraTabela, setLarguraTabela] = useState(0)
-  useEffect(() => {
-    setLarguraTabela(scrollTabelaRef.current?.scrollWidth ?? 0)
-  }, [tableRows.length, clusters.length])
-  const sincronizarDoTopo = () => {
-    if (scrollTabelaRef.current && scrollTopoRef.current) scrollTabelaRef.current.scrollLeft = scrollTopoRef.current.scrollLeft
-  }
-  const sincronizarDaTabela = () => {
-    if (scrollTopoRef.current && scrollTabelaRef.current) scrollTopoRef.current.scrollLeft = scrollTabelaRef.current.scrollLeft
-  }
-
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [editExame,  setEditExame]  = useState<{ id: string; tipo: string; data: string; obs: string } | null>(null)
   const [editSaving, setEditSaving] = useState(false)
@@ -718,21 +702,7 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
 
       {/* Pivot table */}
       {comRes.length > 0 && (
-        <>
-          {/* Uma barra só, grudada no topo da área visível (sticky) enquanto
-              rola a aba verticalmente — antes tinha uma em cima e outra
-              embaixo da tabela, e a de baixo só aparecia depois de rolar a
-              tabela inteira. A da tabela em si fica com a rolagem nativa
-              escondida (ainda funciona no toque/trackpad, só não duplica a
-              barra visível). */}
-          <div ref={scrollTopoRef} onScroll={sincronizarDoTopo}
-            className="sticky top-0 z-30 overflow-x-auto bg-white border-b border-slate-200"
-            style={{ height: 14 }}>
-            <div style={{ width: larguraTabela, height: 1 }} />
-          </div>
-          <div ref={scrollTabelaRef} onScroll={sincronizarDaTabela}
-            className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm [&::-webkit-scrollbar]:hidden"
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        <TabelaRolavel className="rounded-xl border border-slate-200 shadow-sm">
           <table className="min-w-max w-full text-xs border-separate border-spacing-0">
             <thead>
               <tr>
@@ -845,8 +815,7 @@ export default function ExamesTab({ paciente, exames, onRefresh, showToast }: Pr
               })()}
             </tbody>
           </table>
-          </div>
-        </>
+        </TabelaRolavel>
       )}
 
       {/* Raw-text exams */}

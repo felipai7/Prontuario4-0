@@ -6,6 +6,7 @@ import {
   calcAcumuladoTotal, calcAcumuladoMovel, calcDiurese24h, calcFirstPeriod, calcNextPeriod,
   fmtTurno, colorParcial, getTurno, fmtNum, boundaryStart, fmtDataHora
 } from '@/lib/utils'
+import TabelaRolavel from '@/components/ui/TabelaRolavel'
 import type { Paciente, PeriodoBalanco, ToastData } from '@/types'
 
 interface Props {
@@ -480,7 +481,7 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
 
       {/* ── Transposed table ── */}
       {sorted.length > 0 && (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+        <TabelaRolavel className="rounded-xl border border-slate-200 shadow-sm">
           <table className="min-w-max w-full text-xs border-separate border-spacing-0">
             <thead>
               <tr>
@@ -535,7 +536,7 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
               })}
             </tbody>
           </table>
-        </div>
+        </TabelaRolavel>
       )}
     </div>
   )
