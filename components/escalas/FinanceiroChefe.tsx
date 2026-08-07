@@ -67,6 +67,95 @@ export default function FinanceiroChefe({ unitId, staffList, shiftTypesList, sho
     load()
   }
 
+  // Agrupamento por plantonista: alimenta o resumo na tela e o relatório
+  // impresso. Um pagamento sem staff_id (plantão sem ninguém atribuído,
+  // caso raro) cai num grupo "Sem profissional" em vez de sumir da conta.
+  type GrupoPlantonista = {
+    staffId: string; nome: string; pagamentos: PagamentoComPlantao[]
+    total: number; totalPago: number; totalPendente: number
+  }
+  const totaisPorPlantonista: GrupoPlantonista[] = useMemo(() => {
+    const grupos = new Map<string, GrupoPlantonista>()
+    for (const p of pagamentos) {
+      const staffId = p.shift.staff_id ?? '—'
+      const nome = p.shift.staff_id ? (staffMap[p.shift.staff_id] ?? '?') : 'Sem profissional'
+      if (!grupos.has(staffId)) grupos.set(staffId, { staffId, nome, pagamentos: [], total: 0, totalPago: 0, totalPendente: 0 })
+      const g = grupos.get(staffId)!
+      g.pagamentos.push(p)
+      g.total += p.payment_value
+      if (p.payment_status === 'paid') g.totalPago += p.payment_value
+      else g.totalPendente += p.payment_value
+    }
+    return [...grupos.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+  }, [pagamentos, staffMap])
+
+  const handleGerarRelatorio = () => {
+    const win = window.open('', '_blank', 'width=850,height=700')
+    if (!win) return
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    const total = pagamentos.reduce((acc, p) => acc + p.payment_value, 0)
+    const totalPago = pagamentos.filter(p => p.payment_status === 'paid').reduce((acc, p) => acc + p.payment_value, 0)
+
+    const secoes = totaisPorPlantonista.map(g => `
+      <h3>${esc(g.nome)}</h3>
+      <table>
+        <thead><tr><th>Data</th><th>Turno</th><th>Valor</th><th>Status</th></tr></thead>
+        <tbody>
+          ${g.pagamentos.map(p => `<tr>
+            <td>${fmtData(p.shift.date)}</td>
+            <td>${esc(p.shift.shift_type_id ? shiftTypeMap[p.shift.shift_type_id] ?? '?' : '?')}</td>
+            <td>${fmtValor(p.payment_value)}</td>
+            <td>${p.payment_status === 'paid' ? 'Pago' : 'Pendente'}</td>
+          </tr>`).join('')}
+        </tbody>
+        <tfoot>
+          <tr><td colspan="2">Subtotal — ${esc(g.nome)}</td><td>${fmtValor(g.total)}</td><td></td></tr>
+        </tfoot>
+      </table>
+    `).join('')
+
+    const conclusao = totaisPorPlantonista.map(g => `
+      <tr>
+        <td>${esc(g.nome)}</td><td>${g.pagamentos.length}</td>
+        <td class="total">${fmtValor(g.total)}</td>
+        <td>${fmtValor(g.totalPago)}</td>
+        <td>${fmtValor(g.totalPendente)}</td>
+      </tr>
+    `).join('')
+
+    win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+      <title>Relatório de pagamentos — ${esc(fmtMesAno(ref))}</title>
+      <style>
+        body{font-family:Arial,sans-serif;font-size:12px;padding:20mm 15mm;color:#000;}
+        h1{font-size:18px;margin:0 0 2px;}
+        h2{font-size:13px;font-weight:normal;color:#555;margin:0 0 16px;}
+        h3{font-size:13px;margin:18px 0 6px;border-bottom:1px solid #999;padding-bottom:2px;}
+        table{width:100%;border-collapse:collapse;margin-bottom:4px;}
+        th,td{text-align:left;padding:3px 6px;border-bottom:1px solid #eee;}
+        th{font-size:11px;color:#555;}
+        tfoot td{font-weight:bold;border-top:1px solid #999;border-bottom:none;padding-top:4px;}
+        .conclusao{margin-top:28px;border-top:2px solid #000;padding-top:10px;}
+        .conclusao table{margin-top:6px;}
+        .conclusao td.total{font-weight:bold;}
+        .grand-total{margin-top:10px;font-size:14px;font-weight:bold;text-align:right;}
+        @media print { h3 { page-break-after: avoid; } table { page-break-inside: avoid; } }
+      </style></head><body>
+      <h1>Relatório de pagamentos</h1>
+      <h2>${esc(fmtMesAno(ref))} — gerado em ${new Date().toLocaleString('pt-BR')}</h2>
+      ${secoes}
+      <div class="conclusao">
+        <strong>Conclusão — total por plantonista</strong>
+        <table>
+          <thead><tr><th>Plantonista</th><th>Plantões</th><th>Total</th><th>Pago</th><th>Pendente</th></tr></thead>
+          <tbody>${conclusao}</tbody>
+        </table>
+        <p class="grand-total">Total geral do mês: ${fmtValor(total)} — já pago: ${fmtValor(totalPago)}</p>
+      </div>
+      <script>window.onload=function(){setTimeout(function(){window.print();},400);};<\/script>
+      </body></html>`)
+    win.document.close()
+  }
+
   const handleExportarCsv = () => {
     const linhas = [
       ['Data', 'Profissional', 'Turno', 'Valor', 'Status'],
@@ -102,10 +191,16 @@ export default function FinanceiroChefe({ unitId, staffList, shiftTypesList, sho
           <button onClick={() => setRef(new Date(ref.getFullYear(), ref.getMonth() + 1, 1))}
             className="text-slate-500 hover:text-indigo-600 border border-slate-200 rounded-lg px-2 py-1 text-sm">→</button>
           {pagamentos.length > 0 && (
-            <button onClick={handleExportarCsv}
-              className="text-xs font-medium text-slate-500 hover:text-indigo-600 border border-slate-200 rounded-lg px-2 py-1.5">
-              ⬇️ CSV
-            </button>
+            <>
+              <button onClick={handleGerarRelatorio}
+                className="text-xs font-medium text-slate-500 hover:text-indigo-600 border border-slate-200 rounded-lg px-2 py-1.5">
+                📄 Relatório
+              </button>
+              <button onClick={handleExportarCsv}
+                className="text-xs font-medium text-slate-500 hover:text-indigo-600 border border-slate-200 rounded-lg px-2 py-1.5">
+                ⬇️ CSV
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -116,6 +211,34 @@ export default function FinanceiroChefe({ unitId, staffList, shiftTypesList, sho
         <p className="text-sm text-slate-400">Nenhum plantão publicado com pagamento neste mês.</p>
       ) : (
         <>
+          {/* Total por plantonista — o que o chefe mais vem procurar aqui;
+              a lista cronológica abaixo continua pra marcar pagamento
+              plantão a plantão. */}
+          <div className="border border-slate-200 rounded-lg overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 text-xs text-slate-500">
+                  <th className="text-left px-3 py-1.5 font-semibold">Plantonista</th>
+                  <th className="text-right px-3 py-1.5 font-semibold">Plantões</th>
+                  <th className="text-right px-3 py-1.5 font-semibold">Total</th>
+                  <th className="text-right px-3 py-1.5 font-semibold">Pago</th>
+                  <th className="text-right px-3 py-1.5 font-semibold">Pendente</th>
+                </tr>
+              </thead>
+              <tbody>
+                {totaisPorPlantonista.map(g => (
+                  <tr key={g.staffId} className="border-t border-slate-100">
+                    <td className="px-3 py-1.5 text-slate-700">{g.nome}</td>
+                    <td className="px-3 py-1.5 text-right text-slate-500">{g.pagamentos.length}</td>
+                    <td className="px-3 py-1.5 text-right font-semibold text-slate-800">{fmtValor(g.total)}</td>
+                    <td className="px-3 py-1.5 text-right text-emerald-700">{fmtValor(g.totalPago)}</td>
+                    <td className="px-3 py-1.5 text-right text-amber-700">{fmtValor(g.totalPendente)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
           <ul className="space-y-1.5 max-h-96 overflow-y-auto">
             {pagamentos.map(p => (
               <li key={p.shift_id} className="flex items-center justify-between gap-2 border border-slate-200 rounded-lg px-3 py-2 text-sm">
