@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import ToastContainer, { useToast } from '@/components/ui/Toast'
-import { normalizarCodigo } from '@/lib/unidade'
+import { normalizarCodigo, compararLeitos } from '@/lib/unidade'
 import type { Unit, Ala, Leito } from '@/types'
 
 interface Props {
@@ -62,7 +62,8 @@ export default function UnidadeAdmin({ souChefe, userEmail, units: unitsIniciais
 
   const hoje = hojeISO()
   const vigente = (l: Leito) => l.ativo_desde <= hoje && (l.ativo_ate === null || l.ativo_ate >= hoje)
-  const leitosDaAla = (alaId: string) => leitos.filter(l => l.ala_id === alaId)
+  const leitosDaAla = (alaId: string) =>
+    leitos.filter(l => l.ala_id === alaId).sort((a, b) => compararLeitos(a.numero, b.numero))
   const totalVigentes = leitos.filter(vigente).length
 
   // ── Unidade ─────────────────────────────────────────────────────────────
