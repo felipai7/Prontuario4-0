@@ -63,7 +63,7 @@ begin
   ) values (
     p_nome, p_data_nascimento, p_plano_saude, p_peso_kg, p_hipoteses,
     (now() at time zone 'America/Sao_Paulo')::date,
-    to_char(now() at time zone 'America/Sao_Paulo', 'HH24:MI'),
+    (now() at time zone 'America/Sao_Paulo')::time,
     p_ala_destino_codigo, v_leito, p_unit_destino, p_origem_uti_alta_id, true
   )
   returning id into v_novo;
