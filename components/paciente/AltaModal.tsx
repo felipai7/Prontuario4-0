@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { fmtData, calcAge } from '@/lib/utils'
-import { leitosVigentes, compararLeitos } from '@/lib/unidade'
 import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, TipoSaida, ToastData } from '@/types'
 
 // O tipo de saída é o que sustenta todo o bloco de mortalidade dos indicadores.
@@ -33,8 +32,11 @@ interface Props {
 
 /** Unidade em que o usuário logado também é staff — candidata a receber a transferência. */
 interface UnidadeDestino { id: string; nome: string }
-/** Ala da unidade destino, com os códigos de leito livres hoje (vigentes e sem paciente ativo). */
-interface AlaDestino { codigo: string; nome: string; leitosLivres: string[] }
+/** Ala da unidade destino. Disponibilidade de leito só é conferida no servidor
+ *  (transferir_para_unidade): sob RLS, o cliente não enxerga ocupação de uma
+ *  unidade que não é a ativa da sessão, então qualquer contagem feita aqui
+ *  seria só otimismo. */
+interface AlaDestino { codigo: string; nome: string }
 
 type Step = 'confirm' | 'discharging' | 'alta_ok' | 'generating' | 'review'
 
@@ -62,8 +64,6 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
   const [unitDestinoId,       setUnitDestinoId]        = useState('')
   const [alasDestino,         setAlasDestino]          = useState<AlaDestino[]>([])
   const [alaDestinoCodigo,    setAlaDestinoCodigo]     = useState('')
-  const [transferindo,        setTransferindo]         = useState(false)
-  const [resultadoTransfer,   setResultadoTransfer]    = useState<string | null>(null)
 
   // Unidades onde o usuário logado também é staff, além da unidade atual do
   // paciente — candidatas a receber a transferência. Carregado uma vez.
@@ -88,57 +88,53 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
     return () => { cancelado = true }
   }, [])
 
-  // Alas + leitos livres da unidade destino escolhida.
+  // Alas da unidade destino escolhida (alas/leitos não são estreitados por
+  // na_unidade_ativa — só pacientes —, então essa leitura funciona normalmente
+  // mesmo com a UTI como unidade ativa da sessão).
   useEffect(() => {
     if (!unitDestinoId) { setAlasDestino([]); setAlaDestinoCodigo(''); return }
     let cancelado = false
     ;(async () => {
-      const [{ data: alasData }, { data: pacientesData }] = await Promise.all([
-        supabase.from('alas').select('codigo, nome, leitos(numero, ativo_desde, ativo_ate)')
-          .eq('unit_id', unitDestinoId).eq('ativa', true).order('ordem'),
-        supabase.from('pacientes').select('ala_id, numero_leito').eq('unit_id', unitDestinoId).eq('ativo', true),
-      ])
+      const { data } = await supabase.from('alas').select('codigo, nome')
+        .eq('unit_id', unitDestinoId).eq('ativa', true).order('ordem')
       if (cancelado) return
-      const hoje = new Date().toISOString().slice(0, 10)
-      const ocupados = new Set((pacientesData ?? []).map(p => `${p.ala_id}:${p.numero_leito}`))
-      type AlaRow = { codigo: string; nome: string; leitos: { numero: string; ativo_desde: string; ativo_ate: string | null }[] }
-      const lista: AlaDestino[] = ((alasData as AlaRow[]) ?? []).map(a => ({
-        codigo: a.codigo, nome: a.nome,
-        leitosLivres: leitosVigentes(a.leitos, hoje).filter(n => !ocupados.has(`${a.codigo}:${n}`)),
-      }))
-      setAlasDestino(lista)
+      setAlasDestino((data as AlaDestino[]) ?? [])
       setAlaDestinoCodigo('')
     })()
     return () => { cancelado = true }
   }, [unitDestinoId])
 
-  /** Cria o paciente do lado da unidade destino, ligado à alta que acabou de acontecer. */
+  /**
+   * Cria o paciente do lado da unidade destino, ligado à alta que acabou de
+   * acontecer. Via RPC (não INSERT direto): a policy de pacientes exige
+   * na_unidade_ativa(unit_id) além de sou_da_unidade — a UTI é a unidade
+   * ativa no momento da alta, não o destino, então um INSERT do cliente
+   * sempre voltaria 403. transferir_para_unidade contorna isso de propósito,
+   * com sua própria checagem de que o chamador é staff da unidade destino.
+   *
+   * O resultado vira toast, não estado local: onAltaConcedida (chamado logo
+   * depois disto) fecha a ficha do paciente, e qualquer UI dentro do
+   * AltaModal desmonta antes de ser vista.
+   */
   const transferirParaHospital = async (resumoAltaIdCriado: string | null) => {
     const alaInfo = alasDestino.find(a => a.codigo === alaDestinoCodigo)
-    const leito = alaInfo?.leitosLivres.slice().sort(compararLeitos)[0]
-    if (!alaInfo || !leito) { setResultadoTransfer('❌ Sem leito livre nessa ala — transferência não registrada.'); return }
+    if (!alaInfo) return
 
-    setTransferindo(true)
-    const { error } = await supabase.from('pacientes').insert({
-      nome: paciente.nome,
-      data_nascimento: paciente.data_nascimento,
-      plano_saude: paciente.plano_saude,
-      peso_kg: paciente.peso_kg,
-      hipoteses: paciente.hipoteses,
-      data_internacao: new Date().toISOString().split('T')[0],
-      hora_internacao: new Date().toTimeString().slice(0, 5),
-      ala_id: alaInfo.codigo,
-      numero_leito: leito,
-      unit_id: unitDestinoId,
-      origem_uti_alta_id: resumoAltaIdCriado,
-      ativo: true,
+    const { error } = await supabase.rpc('transferir_para_unidade', {
+      p_nome: paciente.nome,
+      p_data_nascimento: paciente.data_nascimento,
+      p_plano_saude: paciente.plano_saude,
+      p_peso_kg: paciente.peso_kg,
+      p_hipoteses: paciente.hipoteses,
+      p_unit_destino: unitDestinoId,
+      p_ala_destino_codigo: alaInfo.codigo,
+      p_origem_uti_alta_id: resumoAltaIdCriado,
     })
-    setTransferindo(false)
     if (error) {
-      setResultadoTransfer('❌ Erro ao transferir: ' + error.message + ' — a alta da UTI já foi registrada normalmente.')
+      showToast('Alta feita, mas a transferência falhou: ' + error.message, 'error')
       return
     }
-    setResultadoTransfer(`✅ Também registrado em ${unidadesDestino.find(u => u.id === unitDestinoId)?.nome} — ${alaInfo.nome}, leito ${leito}.`)
+    showToast(`Também registrado em ${unidadesDestino.find(u => u.id === unitDestinoId)?.nome} — ${alaInfo.nome}.`)
   }
 
   /** Instante da saída em ISO, a partir dos campos locais. */
@@ -361,9 +357,7 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
                         className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white disabled:opacity-50">
                         <option value="">Ala destino...</option>
                         {alasDestino.map(a => (
-                          <option key={a.codigo} value={a.codigo} disabled={a.leitosLivres.length === 0}>
-                            {a.nome} {a.leitosLivres.length === 0 ? '(sem leito livre)' : `(${a.leitosLivres.length} livre(s))`}
-                          </option>
+                          <option key={a.codigo} value={a.codigo}>{a.nome}</option>
                         ))}
                       </select>
                     </div>
@@ -407,15 +401,6 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
                 <p className="font-bold text-emerald-800">Alta concedida com sucesso</p>
                 <p className="text-emerald-700 text-sm mt-1">{paciente.nome} foi removido da UTI</p>
               </div>
-
-              {transferindo && (
-                <p className="text-sm text-slate-500 text-center">Registrando no leito hospitalar...</p>
-              )}
-              {resultadoTransfer && (
-                <div className="border border-slate-200 bg-slate-50 rounded-xl p-3 text-sm text-slate-700">
-                  {resultadoTransfer}
-                </div>
-              )}
 
               <button onClick={handleGeneratePostAlta}
                 className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition-colors text-sm">
