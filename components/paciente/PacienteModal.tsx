@@ -687,7 +687,7 @@ export default function PacienteModal({
             {/* SAPS 3 pendente: fica acima do seletor de módulo, então plantonista
                 e intensivista veem o mesmo aviso. Endurece depois de 24h porque
                 é essa a janela em que a pontuação ainda não conhece o desfecho. */}
-            {pac.saps3 == null && (
+            {(unidade?.requerSaps3 ?? true) && pac.saps3 == null && (
               <div className={`mt-4 rounded-xl px-3 py-2 border ${
                 horasDesdeAdmissao(pac) > 24
                   ? 'bg-red-500/25 border-red-300/50'
