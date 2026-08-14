@@ -47,13 +47,14 @@ const ROWS: RowDef[] = [
   { key: 'oral_enteral',       label: 'Oral/Enteral',        type: 'gain' },
   { key: 'agua_endogena',      label: 'Água Endógena',       type: 'auto' },
   { key: 'diurese',            label: 'Diurese',             type: 'loss' },
-  { key: 'dialise',            label: 'UF Diálise',          type: 'loss' },
-  { key: 'febre',              label: 'Febre',               type: 'loss' },
+  { key: 'dialise',            label: 'Ultrafiltração Efetiva', type: 'loss' },
   { key: 'evacuacao',          label: 'Evacuação',           type: 'loss' },
+  { key: 'febre',              label: 'Febre',               type: 'loss' },
   { key: 'dreno',              label: 'Dreno',               type: 'loss' },
   { key: 'vomitos',            label: 'Vômitos',             type: 'loss' },
   { key: 'sne_sng',            label: 'SNG/SNE',             type: 'loss' },
   { key: 'ostomia',            label: 'Ostomia',             type: 'loss' },
+  { key: 'outros',             label: 'Outros',              type: 'loss' },
   { key: 'perdas_insensiveis', label: 'Perdas Insensíveis',  type: 'auto' },
   { key: '__parcial',          label: 'Saldo Parcial',       type: 'parcial' },
   { key: '__acumulado',        label: 'Acumulado',           type: 'acum' },
@@ -100,20 +101,22 @@ function fmtVal(type: RowType, value: number): string {
 // ── Form state ────────────────────────────────────────────────────────────────
 type FormState = {
   venoso: string; oral_enteral: string;
-  diurese: string; dialise: string; febre: string; evacuacao: string;
+  diurese: string; dialise: string; evacuacao: string; febre: string;
   dreno: string; vomitos: string; sne_sng: string; ostomia: string;
+  outros: string; outros_nome: string;
 }
 function emptyForm(): FormState {
-  return { venoso:'0', oral_enteral:'0', diurese:'0', dialise:'0', febre:'0',
-           evacuacao:'0', dreno:'0', vomitos:'0', sne_sng:'0', ostomia:'0' }
+  return { venoso:'0', oral_enteral:'0', diurese:'0', dialise:'0', evacuacao:'0',
+           febre:'0', dreno:'0', vomitos:'0', sne_sng:'0', ostomia:'0',
+           outros:'0', outros_nome:'' }
 }
 
 const CAMPOS_GANHO = ['venoso','oral_enteral'] as const
-const CAMPOS_PERDA = ['diurese','dialise','febre','evacuacao','dreno','vomitos','sne_sng','ostomia'] as const
+const CAMPOS_PERDA = ['diurese','dialise','evacuacao','febre','dreno','vomitos','sne_sng','ostomia','outros'] as const
 const LABELS: Record<string, string> = {
   venoso:'Venoso', oral_enteral:'Oral/Enteral',
-  diurese:'Diurese', dialise:'UF Diálise', febre:'Febre', evacuacao:'Evacuação',
-  dreno:'Dreno', vomitos:'Vômitos', sne_sng:'SNG/SNE', ostomia:'Ostomia',
+  diurese:'Diurese', dialise:'Ultrafiltração Efetiva', evacuacao:'Evacuação', febre:'Febre',
+  dreno:'Dreno', vomitos:'Vômitos', sne_sng:'SNG/SNE', ostomia:'Ostomia', outros:'Outros',
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -168,6 +171,12 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
       : calcNextPeriod(periodos[periodos.length - 1].fim)
   } catch {}
 
+  // Balanço pendente: o turno sugerido (próximo depois do último lançado, ou o
+  // 1º desde a admissão) já fechou — passou das 19h (diurno) ou das 7h
+  // (noturno) — e ainda não tem registro. `sugerido` já é exatamente esse
+  // turno, então só falta comparar o fim dele com agora.
+  const balancoPendente = !!sugerido && sugerido.fim.getTime() <= Date.now()
+
   // Turno efetivamente selecionado: livre a partir do 2º turno, forçado no 1º
   const periodSpec = periodos.length === 0 ? sugerido : calcPeriodoEscolhido(formDate, formTurno)
 
@@ -209,6 +218,9 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
       febre: evalMath(form.febre), evacuacao: evalMath(form.evacuacao),
       dreno: evalMath(form.dreno), vomitos: evalMath(form.vomitos),
       sne_sng: evalMath(form.sne_sng), ostomia: evalMath(form.ostomia),
+      outros: evalMath(form.outros),
+      // Só grava o nome quando há volume — "Outros: 0" não precisa de rótulo.
+      outros_nome: evalMath(form.outros) > 0 ? (form.outros_nome.trim() || null) : null,
       perdas_insensiveis: perdIns,
       // Null quando não houve evacuação: "não se aplica" é diferente de "não foi
       // diarreica", e só a segunda deve contar como avaliada.
@@ -229,6 +241,7 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
       febre: String(p.febre), evacuacao: String(p.evacuacao),
       dreno: String(p.dreno), vomitos: String(p.vomitos),
       sne_sng: String(p.sne_sng), ostomia: String(p.ostomia),
+      outros: String(p.outros), outros_nome: p.outros_nome ?? '',
     })
     setFormMode('edit')
   }
@@ -247,6 +260,8 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
       febre: evalMath(form.febre), evacuacao: evalMath(form.evacuacao),
       dreno: evalMath(form.dreno), vomitos: evalMath(form.vomitos),
       sne_sng: evalMath(form.sne_sng), ostomia: evalMath(form.ostomia),
+      outros: evalMath(form.outros),
+      outros_nome: evalMath(form.outros) > 0 ? (form.outros_nome.trim() || null) : null,
       perdas_insensiveis: perdIns,
       diarreica_medico: evalMath(form.evacuacao) > 0 ? diarreica : null,
     }).eq('id', editingPeriodo.id)
@@ -257,6 +272,13 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
 
   const cancelForm = () => {
     setFormMode(null); setEditingPeriodo(null); setForm(emptyForm()); setDiarreica(false)
+  }
+
+  const abrirNovoTurno = () => {
+    if (!sugerido) { showToast('Não foi possível calcular o próximo turno', 'error'); return }
+    setFormDate(sugerido.inicio.toISOString().split('T')[0])
+    setFormTurno(sugerido.turno)
+    setFormMode('add')
   }
 
   const acTotal = calcAcumuladoTotal(periodos)
@@ -270,6 +292,26 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
 
   return (
     <div className="space-y-4">
+      {/* Balanço pendente: o turno mais recente já fechou (19h do diurno, 7h do
+          noturno) sem registro. Só não aparece durante o próprio preenchimento
+          desse turno, pra não competir com o formulário já aberto. */}
+      {balancoPendente && sugerido && formMode === null && (
+        <div className="border border-amber-300 bg-amber-50 rounded-xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <p className="text-sm font-bold text-amber-800">
+              ⚠️ Balanço {fmtTurno(sugerido.turno, sugerido.inicio.toISOString())} ainda não lançado
+            </p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              O turno já encerrou — falta registrar o balanço hídrico dele.
+            </p>
+          </div>
+          <button onClick={abrirNovoTurno}
+            className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
+            Lançar agora
+          </button>
+        </div>
+      )}
+
       {/* Summary cards */}
       {/* Os três cartões empilham no celular: em 3 colunas, "Acumulado Móvel"
           e o valor com sinal não cabem em ~110px. */}
@@ -354,12 +396,7 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
         <h3 className="font-semibold text-slate-700">Registros ({periodos.length} turnos)</h3>
         {formMode === null ? (
           <button
-            onClick={() => {
-              if (!sugerido) { showToast('Não foi possível calcular o próximo turno', 'error'); return }
-              setFormDate(sugerido.inicio.toISOString().split('T')[0])
-              setFormTurno(sugerido.turno)
-              setFormMode('add')
-            }}
+            onClick={abrirNovoTurno}
             className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors">
             + Novo Turno
           </button>
@@ -443,6 +480,17 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
             </div>
           </div>
 
+          {/* Só aparece quando há volume em "Outros": sem volume, não há o que nomear. */}
+          {evalMath(form.outros) > 0 && (
+            <div className="bg-white border border-slate-200 rounded-lg px-3 py-2">
+              <label className="text-xs text-slate-500 block mb-1">O que é essa perda &quot;Outros&quot;?</label>
+              <input type="text" value={form.outros_nome}
+                onChange={e => setField('outros_nome', e.target.value)}
+                placeholder="Ex.: drenagem torácica, paracentese..."
+                className="w-full text-base font-medium focus:outline-none bg-transparent" />
+            </div>
+          )}
+
           {/* Só aparece quando houve evacuação: perguntar sobre algo que não
               aconteceu é ruído. Alimenta os indicadores de diarreia da Nutrição. */}
           {evalMath(form.evacuacao) > 0 && (
@@ -523,8 +571,9 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
                       const v   = getVal(row.key, p, acumulados[i])
                       const cls = cellCls(row.type, v)
                       const isEditing = formMode === 'edit' && editingPeriodo?.id === p.id
+                      const title = row.key === 'outros' && p.outros_nome ? p.outros_nome : undefined
                       return (
-                        <td key={p.id}
+                        <td key={p.id} title={title}
                           className={`px-2 py-2 text-center border-r border-b border-slate-100 text-xs ${cls} ${isEditing ? 'ring-1 ring-inset ring-amber-300' : ''}`}
                           style={{ background: rowBg || undefined }}>
                           {fmtVal(row.type, v)}

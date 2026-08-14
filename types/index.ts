@@ -105,6 +105,9 @@ export interface PeriodoBalanco {
   vomitos: number
   sne_sng: number
   ostomia: number
+  outros: number
+  /** O que é essa perda — só preenchido quando `outros` tem volume. */
+  outros_nome: string | null
   perdas_insensiveis: number
   /**
    * Checagem dupla da diarreia: médico e nutrição marcam de forma independente.

@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { isDateFuture, toTitleCaseNome, normalizarNome, fmtDataHora, parseDataParaISO } from '@/lib/utils'
 import { PLANOS } from '@/lib/config'
-import type { ToastData } from '@/types'
+import type { Paciente, ToastData } from '@/types'
 
 interface Props {
   alaId: string
@@ -22,7 +22,13 @@ interface AltaAnterior {
   nome: string
   dataAlta: string
   horasAtras: number
+  /** Null no caso raro de um resumo órfão — sem isso não dá pra desfazer a alta nem importar dados. */
+  pacienteId: string | null
+  snapshot: Paciente | null
 }
+
+/** Abaixo disso, a alta pode ter sido um clique errado — vale perguntar antes de contar como reinternação de verdade. */
+const HORAS_LIMITE_ACIDENTAL = 12
 
 function descreverIntervalo(horas: number): string {
   if (horas < 1)  return `${Math.max(1, Math.round(horas * 60))} min`
@@ -52,6 +58,9 @@ export default function CadastroForm({ alaId, alaNome, unitId, numeroLeito, onCl
   // intervalo. Quem admite confirma — nunca digita "<48h" ou "<30 dias" à mão.
   const [altaAnterior,  setAltaAnterior]  = useState<AltaAnterior | null>(null)
   const [confirmouReint, setConfirmouReint] = useState(false)
+  // null = ainda não respondeu. Só é perguntado quando a readmissão é < 12h.
+  const [acidental,     setAcidental]     = useState<boolean | null>(null)
+  const [desfazendo,    setDesfazendo]    = useState(false)
 
   useEffect(() => {
     if (!nome.trim() || !dataNasc) { setAltaAnterior(null); return }
@@ -60,9 +69,11 @@ export default function CadastroForm({ alaId, alaNome, unitId, numeroLeito, onCl
     const buscar = async () => {
       // Filtra pela data de nascimento no banco (índice do jsonb) e confere o
       // nome no cliente, normalizado — nomes vêm com acentuação inconsistente.
+      // Traz paciente_id + paciente_snapshot também: são a base de "desfazer
+      // alta" (reativar o registro original) e "importar dados anteriores".
       const { data } = await supabase
         .from('resumos_alta')
-        .select('id, paciente_nome, data_alta')
+        .select('id, paciente_nome, data_alta, paciente_id, paciente_snapshot')
         .eq('paciente_snapshot->>data_nascimento', dataNasc)
         .order('data_alta', { ascending: false })
         .limit(10)
@@ -73,15 +84,59 @@ export default function CadastroForm({ alaId, alaNome, unitId, numeroLeito, onCl
       if (!match) { setAltaAnterior(null); return }
 
       const horas = (Date.now() - new Date(match.data_alta).getTime()) / 3_600_000
-      setAltaAnterior({ id: match.id, nome: match.paciente_nome, dataAlta: match.data_alta, horasAtras: horas })
+      setAltaAnterior({
+        id: match.id, nome: match.paciente_nome, dataAlta: match.data_alta, horasAtras: horas,
+        pacienteId: match.paciente_id ?? null,
+        snapshot: (match.paciente_snapshot as Paciente) ?? null,
+      })
     }
 
     const t = setTimeout(buscar, 400)
     return () => { cancelado = true; clearTimeout(t) }
   }, [nome, dataNasc, supabase])
 
-  // Se o paciente detectado mudar, a confirmação anterior não vale mais.
-  useEffect(() => { setConfirmouReint(false) }, [altaAnterior?.id])
+  // Se o paciente detectado mudar, as respostas anteriores não valem mais.
+  useEffect(() => { setConfirmouReint(false); setAcidental(null) }, [altaAnterior?.id])
+
+  /** Pré-preenche com o que estava valendo na internação anterior — só campos deste formulário. */
+  const importarDadosAnteriores = () => {
+    const snap = altaAnterior?.snapshot
+    if (!snap) return
+    if ((PLANOS as readonly string[]).includes(snap.plano_saude)) { setPlano(snap.plano_saude); setPlanoOu('') }
+    else { setPlano('Outros'); setPlanoOu(snap.plano_saude) }
+    setHipoteses(snap.hipoteses ?? '')
+    setPesoKg(snap.peso_kg != null ? String(snap.peso_kg) : '')
+    setOncologico(snap.oncologico)
+    showToast('Dados importados da internação anterior — confira antes de salvar.')
+  }
+
+  /** A alta foi um clique errado: em vez de uma nova internação, reativa o
+   *  registro original no leito que a equipe está tentando usar agora e apaga
+   *  o resumo de alta — como se a alta nunca tivesse acontecido. Sem isso, a
+   *  correção manual criava uma admissão+alta fantasma que inflava não só o
+   *  indicador de reinternação, como admissões/altas/permanência do mês. */
+  const handleDesfazerAlta = async () => {
+    if (!altaAnterior?.pacienteId) return
+    setDesfazendo(true)
+    const { error: errAtivar } = await supabase.from('pacientes')
+      .update({ ativo: true, ala_id: alaId, numero_leito: numeroLeito, unit_id: unitId })
+      .eq('id', altaAnterior.pacienteId)
+    if (errAtivar) {
+      showToast('Erro ao reativar o paciente: ' + errAtivar.message, 'error')
+      setDesfazendo(false)
+      return
+    }
+    const { error: errDel } = await supabase.from('resumos_alta').delete().eq('id', altaAnterior.id)
+    setDesfazendo(false)
+    if (errDel) {
+      showToast('Paciente reativado, mas não consegui apagar o resumo de alta — apague manualmente depois: ' + errDel.message, 'error')
+    } else {
+      showToast('Alta desfeita — paciente reativado.')
+    }
+    onSaved()
+  }
+
+  const podeSerAcidental = !!altaAnterior && altaAnterior.horasAtras < HORAS_LIMITE_ACIDENTAL
 
   const validate = () => {
     const e: Record<string, string> = {}
@@ -166,7 +221,57 @@ export default function CadastroForm({ alaId, alaNome, unitId, numeroLeito, onCl
             </Field>
           </div>
 
-          {altaAnterior && (
+          {/* Readmissão < 12h: pergunta se a alta foi acidental antes de tratar
+              como uma reinternação de verdade — sem isso, uma alta dada por
+              engano e corrigida na hora infla o indicador de reinternação
+              (e, com o fluxo antigo, também admissões/altas/permanência). */}
+          {altaAnterior && podeSerAcidental && acidental === null && (
+            <div className="border border-red-300 bg-red-50 rounded-lg p-3">
+              <p className="text-sm text-red-900">
+                🚨 <span className="font-semibold">{altaAnterior.nome}</span> teve alta há{' '}
+                <span className="font-semibold">{descreverIntervalo(altaAnterior.horasAtras)}</span>{' '}
+                ({fmtDataHora(altaAnterior.dataAlta)}).
+              </p>
+              <p className="text-sm font-medium text-red-900 mt-2">A alta foi acidental (deu saída sem querer)?</p>
+              <div className="flex gap-2 mt-2">
+                <button type="button" onClick={() => setAcidental(true)}
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium border border-red-400 bg-white text-red-700 hover:bg-red-100 transition-colors">
+                  Sim, foi acidental
+                </button>
+                <button type="button" onClick={() => setAcidental(false)}
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 transition-colors">
+                  Não, é uma nova internação
+                </button>
+              </div>
+            </div>
+          )}
+
+          {altaAnterior && acidental === true && (
+            <div className="border border-red-300 bg-red-50 rounded-lg p-4 space-y-3">
+              <p className="text-sm text-red-900">
+                Vamos desfazer a alta de <span className="font-semibold">{altaAnterior.nome}</span> e
+                reativar o cadastro direto no <span className="font-semibold">{alaNome} — Leito {String(numeroLeito).padStart(2,'0')}</span>,
+                com todo o histórico anterior intacto. Nenhuma internação nova fica registrada.
+              </p>
+              {!altaAnterior.pacienteId && (
+                <p className="text-sm font-semibold text-red-700">
+                  ⚠️ Não encontrei o cadastro original pra reativar — volte e siga com um cadastro normal.
+                </p>
+              )}
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setAcidental(null)}
+                  className="flex-1 border border-slate-300 text-slate-600 font-semibold py-2 rounded-lg hover:bg-slate-50 text-sm transition-colors">
+                  Voltar
+                </button>
+                <button type="button" onClick={handleDesfazerAlta} disabled={desfazendo || !altaAnterior.pacienteId}
+                  className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-semibold py-2 rounded-lg text-sm transition-colors">
+                  {desfazendo ? 'Desfazendo...' : '↩️ Desfazer alta e reativar'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {altaAnterior && (!podeSerAcidental || acidental === false) && (
             <div className="border border-amber-300 bg-amber-50 rounded-lg p-3">
               <p className="text-sm text-amber-900">
                 ⚠️ <span className="font-semibold">{altaAnterior.nome}</span> teve alta em{' '}
@@ -181,9 +286,16 @@ export default function CadastroForm({ alaId, alaNome, unitId, numeroLeito, onCl
                   Confirmo que é o mesmo paciente (registra como reinternação)
                 </span>
               </label>
+              {confirmouReint && altaAnterior.snapshot && (
+                <button type="button" onClick={importarDadosAnteriores}
+                  className="mt-2 text-xs font-semibold text-amber-800 border border-amber-400 bg-white hover:bg-amber-100 px-3 py-1.5 rounded-lg transition-colors">
+                  📋 Importar dados anteriores
+                </button>
+              )}
             </div>
           )}
 
+          {!(altaAnterior && acidental === true) && <>
           <Field label="Plano de Saúde *" error={errors.plano}>
             <select value={plano} onChange={e => { setPlano(e.target.value); setPlanoOu('') }} className={input(errors.plano)}>
               <option value="">Selecione...</option>
@@ -240,6 +352,7 @@ export default function CadastroForm({ alaId, alaNome, unitId, numeroLeito, onCl
               {saving ? 'Salvando...' : 'Internar Paciente'}
             </button>
           </div>
+          </>}
         </form>
       </div>
     </div>

@@ -371,7 +371,7 @@ function LeitoCard({ numero, paciente, requerSaps3, swabPendente, onClick }: {
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left rounded-xl border-2 p-3 transition-all
+      className={`w-full min-h-[8.5rem] text-left rounded-xl border-2 p-3 transition-all
         ${isEmpty
           ? 'border-slate-200 bg-white hover:border-indigo-300 hover:shadow-md'
           : 'border-indigo-400 bg-indigo-50 hover:shadow-md hover:border-indigo-500'
@@ -383,22 +383,26 @@ function LeitoCard({ numero, paciente, requerSaps3, swabPendente, onClick }: {
       ) : (
         <>
           <div className="font-semibold text-slate-800 text-sm leading-tight truncate">
-            {paciente.nome.split(' ')[0]} {paciente.nome.split(' ').slice(-1)[0]}
+            {paciente.nome.split(' ')[0]} {paciente.nome.split(' ')[1] ?? ''}
           </div>
           <div className="text-xs text-slate-500 mt-1">{calcAge(paciente.data_nascimento)}</div>
           <div className="text-xs text-slate-400 truncate">{paciente.plano_saude}</div>
-          {requerSaps3 && paciente.saps3 == null && (
-            <div className="text-[11px] font-semibold text-amber-600 mt-1"
-              title="SAPS-3 não pontuado — obrigatório para dar saída">
-              ⚠️ SAPS-3
-            </div>
-          )}
-          {swabPendente && (
-            <div className="text-[11px] font-semibold text-amber-600 mt-1"
-              title="Swab de vigilância coletado, resultado ainda pendente">
-              🧫 Swab pendente
-            </div>
-          )}
+          {/* Área reservada pros badges (SAPS-3, swab): altura fixa mesmo com 0, 1 ou 2
+              badges, senão os cards da mesma linha do grid ficam com alturas diferentes. */}
+          <div className="min-h-[2.5rem] mt-1 space-y-0.5">
+            {requerSaps3 && paciente.saps3 == null && (
+              <div className="text-[11px] font-semibold text-amber-600"
+                title="SAPS-3 não pontuado — obrigatório para dar saída">
+                ⚠️ SAPS-3
+              </div>
+            )}
+            {swabPendente && (
+              <div className="text-[11px] font-semibold text-amber-600"
+                title="Swab de vigilância coletado, resultado ainda pendente">
+                🧫 Swab pendente
+              </div>
+            )}
+          </div>
         </>
       )}
     </button>
