@@ -25,10 +25,24 @@ const RASS_DESCRICOES: Record<number, string> = {
 }
 const RASS_VALORES = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4]
 
-const GLASGOW_COMPONENTES = [
-  { key: 'ao' as const, label: 'Abertura Ocular (AO)',   valores: [1, 2, 3, 4] },
-  { key: 'rv' as const, label: 'Resposta Verbal (RV)',   valores: [1, 2, 3, 4, 5] },
-  { key: 'rm' as const, label: 'Resposta Motora (RM)',   valores: [1, 2, 3, 4, 5, 6] },
+const GLASGOW_COMPONENTES: { key: 'ao' | 'rv' | 'rm'; label: string; valores: number[]; descricoes: Record<number, string> }[] = [
+  {
+    key: 'ao', label: 'Abertura Ocular (AO)', valores: [4, 3, 2, 1], descricoes: {
+      4: 'Espontânea', 3: 'Ao chamado (à voz)', 2: 'À dor', 1: 'Sem abertura ocular',
+    },
+  },
+  {
+    key: 'rv', label: 'Resposta Verbal (RV)', valores: [5, 4, 3, 2, 1], descricoes: {
+      5: 'Orientada', 4: 'Confusa', 3: 'Palavras inapropriadas',
+      2: 'Sons incompreensíveis', 1: 'Sem resposta verbal',
+    },
+  },
+  {
+    key: 'rm', label: 'Resposta Motora (RM)', valores: [6, 5, 4, 3, 2, 1], descricoes: {
+      6: 'Obedece comandos', 5: 'Localiza a dor', 4: 'Retirada inespecífica à dor',
+      3: 'Flexão anormal à dor (decorticação)', 2: 'Extensão anormal à dor (descerebração)', 1: 'Sem resposta motora',
+    },
+  },
 ]
 
 // FOUR (Full Outline of UnResponsiveness): preferida ao Glasgow em paciente
@@ -324,10 +338,12 @@ export default function NeurologicoTab({ paciente, historico, onRefresh, showToa
                   const key: 'ao' | 'rv' | 'rm' = comp.key
                   return (
                     <div key={comp.key}>
-                      <label className={labelCls}>{comp.label}</label>
+                      <label className={labelCls}>{comp.label} {valor != null && <span className="text-indigo-600 font-bold">— {comp.descricoes[valor]}</span>}</label>
                       <div className="flex gap-1.5 flex-wrap">
                         {comp.valores.map(v => (
-                          <Chip key={v} selected={valor === v} onClick={() => setField(key, valor === v ? null : v)}>{v}</Chip>
+                          <Chip key={v} selected={valor === v} onClick={() => setField(key, valor === v ? null : v)} title={comp.descricoes[v]}>
+                            {v}
+                          </Chip>
                         ))}
                       </div>
                     </div>
