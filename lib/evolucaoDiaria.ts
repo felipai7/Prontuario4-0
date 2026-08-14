@@ -51,6 +51,25 @@ const GLASGOW_RM: Record<number, string> = {
   3: 'flexão anormal à dor (decorticação)', 2: 'extensão anormal à dor (descerebração)', 1: 'sem resposta motora',
 }
 
+const FOUR_E: Record<number, string> = {
+  4: 'olhos abertos com rastreamento ou piscar ao comando', 3: 'olhos abertos sem rastreamento',
+  2: 'olhos fechados, abrem à voz alta', 1: 'olhos fechados, abrem à dor', 0: 'olhos fechados, sem abertura à dor',
+}
+const FOUR_M: Record<number, string> = {
+  4: 'sinal de positivo, punho fechado ou "V" a comando', 3: 'localizando a dor',
+  2: 'flexão à dor', 1: 'extensão à dor', 0: 'sem resposta motora à dor',
+}
+const FOUR_B: Record<number, string> = {
+  4: 'reflexos pupilar e corneano presentes', 3: 'uma pupila fixa e dilatada',
+  2: 'reflexo pupilar ou corneano ausente', 1: 'reflexos pupilar e corneano ausentes',
+  0: 'reflexos pupilar, corneano e de tosse ausentes',
+}
+const FOUR_R: Record<number, string> = {
+  4: 'padrão respiratório regular, sem via aérea artificial', 3: 'padrão de Cheyne-Stokes, sem via aérea artificial',
+  2: 'padrão irregular, sem via aérea artificial', 1: 'respirando acima da frequência do ventilador',
+  0: 'respirando na frequência do ventilador, ou em apneia',
+}
+
 function sufixoSedacao(neuro: AvaliacaoNeurologica): string {
   if (!neuro.sedacao_em_uso) return ', sem sedativos'
   const drogas = (neuro.sedativos ?? []).map(s => s === 'Outro' ? (neuro.sedativo_outro || 'sedativo não especificado') : s)
@@ -67,6 +86,12 @@ function fraseNeurologica(neuro: AvaliacaoNeurologica | null): string {
     const total = neuro.glasgow_ao + neuro.glasgow_rv + neuro.glasgow_rm
     const lead = total === 15 ? 'desperto' : total >= 13 ? 'sonolento' : total >= 9 ? 'torporoso' : 'em coma'
     return `Paciente ${lead}, ${GLASGOW_AO[neuro.glasgow_ao]}, ${GLASGOW_RV[neuro.glasgow_rv]} e ${GLASGOW_RM[neuro.glasgow_rm]}` +
+      sufixoSedacao(neuro) + '.'
+  }
+
+  if (neuro.escala === 'FOUR' && neuro.four_ocular != null && neuro.four_motor != null && neuro.four_tronco != null && neuro.four_respiratorio != null) {
+    const total = neuro.four_ocular + neuro.four_motor + neuro.four_tronco + neuro.four_respiratorio
+    return `Paciente com escala FOUR ${total}/16: ${FOUR_E[neuro.four_ocular]}, ${FOUR_M[neuro.four_motor]}, ${FOUR_B[neuro.four_tronco]}, ${FOUR_R[neuro.four_respiratorio]}` +
       sufixoSedacao(neuro) + '.'
   }
 

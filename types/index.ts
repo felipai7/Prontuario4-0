@@ -225,7 +225,7 @@ export interface ATB {
   updated_at: string
 }
 
-export type EscalaNeuro = 'RASS' | 'GLASGOW'
+export type EscalaNeuro = 'RASS' | 'GLASGOW' | 'FOUR'
 export type Sedativo = 'Propofol' | 'Midazolam' | 'Fentanil' | 'Dexmedetomidina' | 'Cetamina' | 'Outro'
 
 export interface AvaliacaoNeurologica {
@@ -238,6 +238,10 @@ export interface AvaliacaoNeurologica {
   glasgow_ao: number | null        // 1-4
   glasgow_rv: number | null        // 1-5
   glasgow_rm: number | null        // 1-6
+  four_ocular: number | null       // 0-4
+  four_motor: number | null        // 0-4
+  four_tronco: number | null       // 0-4
+  four_respiratorio: number | null // 0-4
   sedacao_em_uso: boolean
   sedativos: Sedativo[] | null
   sedativo_outro: string | null

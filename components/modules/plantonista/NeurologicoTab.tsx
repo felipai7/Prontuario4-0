@@ -31,6 +31,48 @@ const GLASGOW_COMPONENTES = [
   { key: 'rm' as const, label: 'Resposta Motora (RM)',   valores: [1, 2, 3, 4, 5, 6] },
 ]
 
+// FOUR (Full Outline of UnResponsiveness): preferida ao Glasgow em paciente
+// intubado/sedado — não depende de resposta verbal, e ainda captura reflexo
+// de tronco e padrão respiratório. Cada componente vai de 0 a 4 (total 0-16).
+const FOUR_COMPONENTES: { key: 'ocular' | 'motor' | 'tronco' | 'respiratorio'; label: string; descricoes: Record<number, string> }[] = [
+  {
+    key: 'ocular', label: 'Ocular (E)', descricoes: {
+      4: 'Abertas, rastreiam ou piscam ao comando',
+      3: 'Abertas, sem rastreamento',
+      2: 'Fechadas, abrem à voz alta',
+      1: 'Fechadas, abrem à dor',
+      0: 'Permanecem fechadas à dor',
+    },
+  },
+  {
+    key: 'motor', label: 'Motor (M)', descricoes: {
+      4: 'Sinal de positivo, punho fechado ou "V" a comando',
+      3: 'Localiza a dor',
+      2: 'Flexão à dor',
+      1: 'Extensão à dor',
+      0: 'Sem resposta à dor, ou mioclonia generalizada',
+    },
+  },
+  {
+    key: 'tronco', label: 'Tronco (B)', descricoes: {
+      4: 'Reflexos pupilar e corneano presentes',
+      3: 'Uma pupila fixa e dilatada',
+      2: 'Reflexo pupilar ou corneano ausente',
+      1: 'Reflexos pupilar e corneano ausentes',
+      0: 'Reflexos pupilar, corneano e de tosse ausentes',
+    },
+  },
+  {
+    key: 'respiratorio', label: 'Respiratório (R)', descricoes: {
+      4: 'Não intubado, padrão regular',
+      3: 'Não intubado, padrão Cheyne-Stokes',
+      2: 'Não intubado, padrão irregular',
+      1: 'Respira acima da frequência do ventilador',
+      0: 'Respira na frequência do ventilador, ou apneia',
+    },
+  },
+]
+
 const SEDATIVOS: Sedativo[] = ['Propofol', 'Midazolam', 'Fentanil', 'Dexmedetomidina', 'Cetamina', 'Outro']
 
 const labelCls = 'text-xs text-slate-500 font-medium block mb-1'
@@ -55,6 +97,7 @@ type FormState = {
   escala: EscalaNeuro
   rass: number | null
   ao: number | null; rv: number | null; rm: number | null
+  fourOcular: number | null; fourMotor: number | null; fourTronco: number | null; fourRespiratorio: number | null
   sedacao: boolean
   sedativos: Sedativo[]
   sedativoOutro: string
@@ -62,16 +105,32 @@ type FormState = {
 }
 
 function emptyForm(): FormState {
-  return { escala: 'RASS', rass: null, ao: null, rv: null, rm: null, sedacao: false, sedativos: [], sedativoOutro: '', despertarDiario: null }
+  return {
+    escala: 'RASS', rass: null, ao: null, rv: null, rm: null,
+    fourOcular: null, fourMotor: null, fourTronco: null, fourRespiratorio: null,
+    sedacao: false, sedativos: [], sedativoOutro: '', despertarDiario: null,
+  }
 }
 
 function formFromRegistro(r: AvaliacaoNeurologica): FormState {
   return {
     escala: r.escala ?? 'RASS',
     rass: r.rass, ao: r.glasgow_ao, rv: r.glasgow_rv, rm: r.glasgow_rm,
+    fourOcular: r.four_ocular, fourMotor: r.four_motor, fourTronco: r.four_tronco, fourRespiratorio: r.four_respiratorio,
     sedacao: r.sedacao_em_uso, sedativos: r.sedativos ?? [], sedativoOutro: r.sedativo_outro ?? '',
     despertarDiario: r.despertar_diario,
   }
+}
+
+function resumoEscala(r: AvaliacaoNeurologica): string {
+  if (r.escala === 'GLASGOW' && r.glasgow_ao != null && r.glasgow_rv != null && r.glasgow_rm != null) {
+    return `Glasgow ${r.glasgow_ao + r.glasgow_rv + r.glasgow_rm} (AO ${r.glasgow_ao}, RV ${r.glasgow_rv}, RM ${r.glasgow_rm})`
+  }
+  if (r.escala === 'FOUR' && r.four_ocular != null && r.four_motor != null && r.four_tronco != null && r.four_respiratorio != null) {
+    return `FOUR ${r.four_ocular + r.four_motor + r.four_tronco + r.four_respiratorio}/16 (E${r.four_ocular} M${r.four_motor} B${r.four_tronco} R${r.four_respiratorio})`
+  }
+  if (r.rass != null) return `RASS ${r.rass > 0 ? '+' : ''}${r.rass}: ${RASS_DESCRICOES[r.rass]}`
+  return 'Não avaliado'
 }
 
 export default function NeurologicoTab({ paciente, historico, onRefresh, showToast }: Props) {
@@ -95,6 +154,8 @@ export default function NeurologicoTab({ paciente, historico, onRefresh, showToa
     : undefined
 
   const glasgowTotal = form.ao != null && form.rv != null && form.rm != null ? form.ao + form.rv + form.rm : null
+  const fourTotal = form.fourOcular != null && form.fourMotor != null && form.fourTronco != null && form.fourRespiratorio != null
+    ? form.fourOcular + form.fourMotor + form.fourTronco + form.fourRespiratorio : null
 
   const setField = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm(f => ({ ...f, [k]: v }))
 
@@ -129,6 +190,8 @@ export default function NeurologicoTab({ paciente, historico, onRefresh, showToa
       escala: form.escala,
       rass: form.rass,
       glasgow_ao: form.ao, glasgow_rv: form.rv, glasgow_rm: form.rm,
+      four_ocular: form.fourOcular, four_motor: form.fourMotor,
+      four_tronco: form.fourTronco, four_respiratorio: form.fourRespiratorio,
       sedacao_em_uso: form.sedacao,
       sedativos: form.sedacao && form.sedativos.length ? form.sedativos : null,
       sedativo_outro: form.sedacao && form.sedativos.includes('Outro') ? (form.sedativoOutro.trim() || null) : null,
@@ -181,9 +244,7 @@ export default function NeurologicoTab({ paciente, historico, onRefresh, showToa
           <div>
             <p className="text-xs font-bold text-indigo-700">{fmtTurno(ultimo.turno, ultimo.data + 'T12:00:00')} (mais recente)</p>
             <p className="text-sm text-indigo-900 mt-0.5">
-              {ultimo.escala === 'GLASGOW' && ultimo.glasgow_ao != null && ultimo.glasgow_rv != null && ultimo.glasgow_rm != null
-                ? `Glasgow ${ultimo.glasgow_ao + ultimo.glasgow_rv + ultimo.glasgow_rm} (AO ${ultimo.glasgow_ao}, RV ${ultimo.glasgow_rv}, RM ${ultimo.glasgow_rm})`
-                : ultimo.rass != null ? `RASS ${ultimo.rass > 0 ? '+' : ''}${ultimo.rass}: ${RASS_DESCRICOES[ultimo.rass]}` : 'Não avaliado'}
+              {resumoEscala(ultimo)}
               {ultimo.sedacao_em_uso
                 ? `, sedado com ${(ultimo.sedativos ?? []).map(s => s === 'Outro' ? (ultimo.sedativo_outro || 'outro') : s).join(' + ') || 'sedativo não especificado'}`
                 : ', sem sedação'}
@@ -238,10 +299,11 @@ export default function NeurologicoTab({ paciente, historico, onRefresh, showToa
               <div className="flex gap-2">
                 <Chip selected={form.escala === 'RASS'} onClick={() => setField('escala', 'RASS')}>RASS</Chip>
                 <Chip selected={form.escala === 'GLASGOW'} onClick={() => setField('escala', 'GLASGOW')}>Glasgow</Chip>
+                <Chip selected={form.escala === 'FOUR'} onClick={() => setField('escala', 'FOUR')}>FOUR</Chip>
               </div>
             </div>
 
-            {form.escala === 'RASS' ? (
+            {form.escala === 'RASS' && (
               <div>
                 <label className={labelCls}>RASS {form.rass != null && <span className="text-indigo-600 font-bold">— {form.rass > 0 ? '+' : ''}{form.rass}: {RASS_DESCRICOES[form.rass]}</span>}</label>
                 <div className="flex gap-1.5 flex-wrap">
@@ -253,7 +315,9 @@ export default function NeurologicoTab({ paciente, historico, onRefresh, showToa
                   ))}
                 </div>
               </div>
-            ) : (
+            )}
+
+            {form.escala === 'GLASGOW' && (
               <div className="space-y-3">
                 {GLASGOW_COMPONENTES.map(comp => {
                   const valor = comp.key === 'ao' ? form.ao : comp.key === 'rv' ? form.rv : form.rm
@@ -271,6 +335,30 @@ export default function NeurologicoTab({ paciente, historico, onRefresh, showToa
                 })}
                 <div className={`rounded-lg p-3 text-sm font-bold ${glasgowTotal != null ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-50 text-slate-400'}`}>
                   Glasgow total: {glasgowTotal != null ? `${glasgowTotal} / 15` : 'selecione os três componentes'}
+                </div>
+              </div>
+            )}
+
+            {form.escala === 'FOUR' && (
+              <div className="space-y-3">
+                {FOUR_COMPONENTES.map(comp => {
+                  const valor = form[comp.key === 'ocular' ? 'fourOcular' : comp.key === 'motor' ? 'fourMotor' : comp.key === 'tronco' ? 'fourTronco' : 'fourRespiratorio']
+                  const key = comp.key === 'ocular' ? 'fourOcular' : comp.key === 'motor' ? 'fourMotor' : comp.key === 'tronco' ? 'fourTronco' : 'fourRespiratorio'
+                  return (
+                    <div key={comp.key}>
+                      <label className={labelCls}>{comp.label} {valor != null && <span className="text-indigo-600 font-bold">— {comp.descricoes[valor]}</span>}</label>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {[4, 3, 2, 1, 0].map(v => (
+                          <Chip key={v} selected={valor === v} onClick={() => setField(key, valor === v ? null : v)} title={comp.descricoes[v]}>
+                            {v}
+                          </Chip>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+                <div className={`rounded-lg p-3 text-sm font-bold ${fourTotal != null ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-50 text-slate-400'}`}>
+                  FOUR total: {fourTotal != null ? `${fourTotal} / 16` : 'selecione os quatro componentes'}
                 </div>
               </div>
             )}
@@ -327,9 +415,7 @@ export default function NeurologicoTab({ paciente, historico, onRefresh, showToa
               <div className="min-w-0">
                 <p className="text-xs font-bold text-slate-600">{fmtTurno(r.turno, r.data + 'T12:00:00')}</p>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  {r.escala === 'GLASGOW' && r.glasgow_ao != null && r.glasgow_rv != null && r.glasgow_rm != null
-                    ? `Glasgow ${r.glasgow_ao + r.glasgow_rv + r.glasgow_rm}`
-                    : r.rass != null ? `RASS ${r.rass > 0 ? '+' : ''}${r.rass}` : 'Não avaliado'}
+                  {resumoEscala(r)}
                   {r.sedacao_em_uso ? ', sedado' : ', sem sedação'}
                 </p>
               </div>

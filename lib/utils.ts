@@ -141,6 +141,8 @@ export function resumoNeuro(neuro: AvaliacaoNeurologica | null | undefined): str
   const partes: string[] = []
   if (neuro.escala === 'GLASGOW' && neuro.glasgow_ao != null && neuro.glasgow_rv != null && neuro.glasgow_rm != null) {
     partes.push(`Glasgow ${neuro.glasgow_ao + neuro.glasgow_rv + neuro.glasgow_rm} (AO ${neuro.glasgow_ao} + RV ${neuro.glasgow_rv} + RM ${neuro.glasgow_rm})`)
+  } else if (neuro.escala === 'FOUR' && neuro.four_ocular != null && neuro.four_motor != null && neuro.four_tronco != null && neuro.four_respiratorio != null) {
+    partes.push(`FOUR ${neuro.four_ocular + neuro.four_motor + neuro.four_tronco + neuro.four_respiratorio}/16 (E${neuro.four_ocular} + M${neuro.four_motor} + B${neuro.four_tronco} + R${neuro.four_respiratorio})`)
   } else if (neuro.rass != null) {
     partes.push(`RASS ${neuro.rass > 0 ? '+' : ''}${neuro.rass}`)
   }
