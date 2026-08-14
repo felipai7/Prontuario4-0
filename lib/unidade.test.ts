@@ -61,6 +61,7 @@ describe('normalizarCodigo', () => {
 describe('nomeDaAla', () => {
   const unidade: Unidade = {
     unitId: 'u1', nome: 'UTI Adulto', leitosAtivos: 3, outrasUnidades: 0, requerSaps3: true,
+    planosSaude: ['IPASGO', 'Unimed', 'Particular', 'Bradesco'],
     alas: [{ id: 'uti-01', nome: 'UTI 01', leitos: ['1', '2', '3'] }],
   }
 

@@ -327,6 +327,7 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
           alaNome={nomeDaAla(unidade, selectedLeito.alaId)}
           unitId={unidade.unitId}
           numeroLeito={selectedLeito.numero}
+          planosSaude={unidade.planosSaude}
           onClose={() => { setShowCadastro(false); setSelectedLeito(null) }}
           onSaved={async () => {
             setShowCadastro(false); setSelectedLeito(null)

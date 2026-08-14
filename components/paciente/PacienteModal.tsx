@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import AltaModal        from './AltaModal'
 import { fmtData, calcAge, pad, diasDesde, fmtNum, toTitleCaseNome, ultimoPorTurno, horasDesdeAdmissao, parseDataParaISO, hojeISO, sugerirProximoTurno, boundaryStart } from '@/lib/utils'
-import { PLANOS } from '@/lib/config'
+import { PLANOS_PADRAO } from '@/lib/config'
 import { nomeDaAla, type Unidade } from '@/lib/unidade'
 import { modulosAtivos, type PacienteContext } from '@/lib/modules'
 import { montarEvolucaoDiaria } from '@/lib/evolucaoDiaria'
@@ -60,6 +60,7 @@ export default function PacienteModal({
 }: Props) {
   const supabase   = createClient()
   const alas       = unidade?.alas ?? []
+  const opcoesPlanos = [...(unidade?.planosSaude ?? PLANOS_PADRAO), 'Outros']
   const [moduloId, setModuloId] = useState(modulos[0].id)
   const [tab,      setTab]      = useState(modulos[0].tabs[0].id)
   const moduloAtivo = modulos.find(m => m.id === moduloId) ?? modulos[0]
@@ -106,7 +107,7 @@ export default function PacienteModal({
   const hoje = hojeISO()
 
   function makeEditForm(p: Paciente): EditForm {
-    const knownPlano = PLANOS.includes(p.plano_saude) ? p.plano_saude : 'Outros'
+    const knownPlano = opcoesPlanos.includes(p.plano_saude) ? p.plano_saude : 'Outros'
     return {
       nome: p.nome,
       data_nascimento: p.data_nascimento,
@@ -622,7 +623,7 @@ export default function PacienteModal({
                   <EF label="Plano de saúde" error={editErrors.plano ?? editErrors.planoOu}>
                     <ESelect value={editForm.plano} onChange={e => setEditForm(f => ({...f, plano: e.target.value, planoOu: ''}))}>
                       <option value="" className="text-slate-800">Selecione...</option>
-                      {PLANOS.map(p => <option key={p} value={p} className="text-slate-800">{p}</option>)}
+                      {opcoesPlanos.map(p => <option key={p} value={p} className="text-slate-800">{p}</option>)}
                     </ESelect>
                     {editForm.plano === 'Outros' && (
                       <EInput value={editForm.planoOu} onChange={e => setEditForm(f => ({...f, planoOu: e.target.value}))}

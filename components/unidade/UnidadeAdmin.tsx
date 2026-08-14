@@ -119,6 +119,35 @@ export default function UnidadeAdmin({ souChefe, userEmail, units: unitsIniciais
       : 'SAPS-3 volta a ser exigido na alta desta unidade.')
   }
 
+  // ── Planos de saúde ────────────────────────────────────────────────────
+  const [novoPlano, setNovoPlano] = useState('')
+
+  const adicionarPlano = async (u: Unit) => {
+    const nome = novoPlano.trim()
+    if (!nome) return
+    if (u.planos_saude.some(p => p.toLowerCase() === nome.toLowerCase())) {
+      showToast('Esse plano já está na lista.', 'error'); return
+    }
+    const { error } = await supabase.from('units')
+      .update({ planos_saude: [...u.planos_saude, nome] }).eq('id', u.id)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    setNovoPlano('')
+    await recarregarUnidades()
+    showToast(`Plano "${nome}" adicionado.`)
+  }
+
+  const removerPlano = async (u: Unit, plano: string) => {
+    if (!confirm(
+      `Remover "${plano}" da lista de planos desta unidade?\n\n` +
+      `Pacientes já cadastrados com esse plano não mudam — ele só deixa de ` +
+      `aparecer como opção em novos cadastros.`)) return
+    const { error } = await supabase.from('units')
+      .update({ planos_saude: u.planos_saude.filter(p => p !== plano) }).eq('id', u.id)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    await recarregarUnidades()
+    showToast(`Plano "${plano}" removido.`)
+  }
+
   // ── Alas ────────────────────────────────────────────────────────────────
   const [novaAlaNome, setNovaAlaNome] = useState('')
 
@@ -315,6 +344,41 @@ export default function UnidadeAdmin({ souChefe, userEmail, units: unitsIniciais
             unidade são invisíveis para as equipes das outras.
           </p>
         </section>
+
+        {/* Planos de saúde */}
+        {unidadeAtual && (
+          <section className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+            <h2 className="font-semibold text-slate-700 text-sm">💳 Planos de saúde</h2>
+            <div className="flex flex-wrap gap-1.5">
+              {unidadeAtual.planos_saude.map(p => (
+                <span key={p}
+                  className="inline-flex items-center gap-1.5 text-xs rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 px-2 py-1">
+                  {p}
+                  <button onClick={() => removerPlano(unidadeAtual, p)} title="Remover plano"
+                    className="text-indigo-300 hover:text-red-500">✕</button>
+                </span>
+              ))}
+              {unidadeAtual.planos_saude.length === 0 && (
+                <p className="text-xs text-slate-400">Nenhum plano cadastrado — só "Outros" (texto livre) aparece no cadastro.</p>
+              )}
+            </div>
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+              <input value={novoPlano} onChange={e => setNovoPlano(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') adicionarPlano(unidadeAtual) }}
+                placeholder="Nome do plano (ex.: SulAmérica)"
+                className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+              <button onClick={() => adicionarPlano(unidadeAtual)} disabled={!novoPlano.trim()}
+                className="text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40
+                           text-white rounded-lg px-3 py-2 whitespace-nowrap">
+                + Adicionar
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              "Outros" continua sempre disponível no cadastro, com campo de texto livre —
+              não precisa (e não dá pra) cadastrar aqui.
+            </p>
+          </section>
+        )}
 
         {carregando && <p className="text-sm text-slate-400">Carregando...</p>}
 

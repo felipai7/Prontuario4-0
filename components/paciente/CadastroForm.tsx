@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { isDateFuture, toTitleCaseNome, normalizarNome, fmtDataHora, parseDataParaISO, hojeISO } from '@/lib/utils'
-import { PLANOS } from '@/lib/config'
 import type { Paciente, ToastData } from '@/types'
 
 interface Props {
@@ -11,6 +10,8 @@ interface Props {
   alaNome: string
   unitId: string
   numeroLeito: string
+  /** Planos cadastrados pelo chefe em /unidade — "Outros" é acrescentado aqui embaixo, sempre por último. */
+  planosSaude: string[]
   onClose: () => void
   onSaved: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
@@ -36,10 +37,11 @@ function descreverIntervalo(horas: number): string {
   return `${Math.round(horas / 24)} dias`
 }
 
-export default function CadastroForm({ alaId, alaNome, unitId, numeroLeito, onClose, onSaved, showToast }: Props) {
+export default function CadastroForm({ alaId, alaNome, unitId, numeroLeito, planosSaude, onClose, onSaved, showToast }: Props) {
   const supabase = createClient()
   const hoje     = hojeISO()
   const agoraH   = new Date().toTimeString().slice(0, 5)
+  const opcoesPlanos = [...planosSaude, 'Outros']
 
   const [nome,      setNome]      = useState('')
   const [dataNasc,  setDataNasc]  = useState('')
@@ -102,7 +104,7 @@ export default function CadastroForm({ alaId, alaNome, unitId, numeroLeito, onCl
   const importarDadosAnteriores = () => {
     const snap = altaAnterior?.snapshot
     if (!snap) return
-    if ((PLANOS as readonly string[]).includes(snap.plano_saude)) { setPlano(snap.plano_saude); setPlanoOu('') }
+    if (opcoesPlanos.includes(snap.plano_saude)) { setPlano(snap.plano_saude); setPlanoOu('') }
     else { setPlano('Outros'); setPlanoOu(snap.plano_saude) }
     setHipoteses(snap.hipoteses ?? '')
     setPesoKg(snap.peso_kg != null ? String(snap.peso_kg) : '')
@@ -299,7 +301,7 @@ export default function CadastroForm({ alaId, alaNome, unitId, numeroLeito, onCl
           <Field label="Plano de Saúde *" error={errors.plano}>
             <select value={plano} onChange={e => { setPlano(e.target.value); setPlanoOu('') }} className={input(errors.plano)}>
               <option value="">Selecione...</option>
-              {PLANOS.map(p => <option key={p} value={p}>{p}</option>)}
+              {opcoesPlanos.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
             {plano === 'Outros' && (
               <input type="text" value={planoOu} onChange={e => setPlanoOu(e.target.value)}

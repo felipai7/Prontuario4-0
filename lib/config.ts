@@ -7,7 +7,12 @@
 // exigia editar código e publicar; e duas unidades jamais poderiam coexistir na
 // mesma instalação.
 
-export const PLANOS = ['IPASGO', 'Unimed', 'Particular', 'Bradesco', 'Outros']
+// OS PLANOS DE SAÚDE TAMBÉM SAÍRAM DAQUI — moraram em `units.planos_saude`,
+// editável pelo chefe em /unidade (lib/unidade.ts: Unidade.planosSaude).
+// Isto agora é só o valor de fallback para quando a unidade ainda não
+// carregou. "Outros" não entra aqui: é sentinela fixo, acrescentado por
+// último na UI de quem monta o <select>, nunca um item do array editável.
+export const PLANOS_PADRAO = ['IPASGO', 'Unimed', 'Particular', 'Bradesco']
 
 // Listas de sugestão para os campos de droga/foco de ATB (Combobox) — o
 // campo aceita digitação livre, então estas listas são só atalhos, não um enum.
