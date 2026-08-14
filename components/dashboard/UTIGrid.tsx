@@ -7,6 +7,7 @@ import CadastroForm   from '@/components/paciente/CadastroForm'
 import ToastContainer, { useToast } from '@/components/ui/Toast'
 import { pad, fmtData, calcAge, normalizarNome } from '@/lib/utils'
 import { ehIntensivista, apenasMedicos } from '@/lib/cargos'
+import { PLANOS_PADRAO } from '@/lib/config'
 import SeletorUnidade from './SeletorUnidade'
 import { nomeDaAla, compararLeitos, type Unidade } from '@/lib/unidade'
 import type { Paciente, Unit } from '@/types'
@@ -30,6 +31,14 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
   const [showCadastro,    setShowCadastro]    = useState(false)
   const [selectedLeito,   setSelectedLeito]   = useState<{ alaId: string; numero: string } | null>(null)
   const [busca,           setBusca]           = useState('')
+
+  // Catálogo de planos de saúde: único pro app inteiro (UTI e Hospital sempre
+  // aceitaram os mesmos convênios) — carregado uma vez, não por unidade.
+  const [planosSaude, setPlanosSaude] = useState<string[]>(PLANOS_PADRAO)
+  useEffect(() => {
+    supabase.from('planos_saude').select('nome').order('created_at')
+      .then(({ data }) => { if (data) setPlanosSaude(data.map(p => p.nome)) })
+  }, [])
 
   // Realtime subscription
   useEffect(() => {
@@ -327,7 +336,7 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
           alaNome={nomeDaAla(unidade, selectedLeito.alaId)}
           unitId={unidade.unitId}
           numeroLeito={selectedLeito.numero}
-          planosSaude={unidade.planosSaude}
+          planosSaude={planosSaude}
           onClose={() => { setShowCadastro(false); setSelectedLeito(null) }}
           onSaved={async () => {
             setShowCadastro(false); setSelectedLeito(null)
@@ -343,6 +352,7 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
         <PacienteModal
           paciente={selectedPac}
           unidade={unidade}
+          planosSaude={planosSaude}
           onClose={() => setSelectedPac(null)}
           onAltaConcedida={async () => {
             setSelectedPac(null)

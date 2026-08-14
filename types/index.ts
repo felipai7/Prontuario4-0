@@ -348,8 +348,15 @@ export interface Unit {
   active: boolean
   /** Se falso, a alta não exige SAPS-3 pontuado — unidades fora da UTI (ex.: Hospital) não pontuam. */
   requer_saps3: boolean
-  /** Planos de saúde oferecidos no cadastro/edição de paciente desta unidade. "Outros" não entra aqui — é sentinela fixo da UI. */
-  planos_saude: string[]
+  created_at: string
+}
+
+/** Catálogo único de planos de saúde (compartilhado entre todas as unidades — UTI e
+ *  Hospital sempre aceitaram os mesmos convênios). "Outros" não entra aqui: é sentinela
+ *  fixo da UI, sempre acrescentado por último no <select>. */
+export interface PlanoSaude {
+  id: string
+  nome: string
   created_at: string
 }
 

@@ -3,7 +3,6 @@ import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import AltaModal        from './AltaModal'
 import { fmtData, calcAge, pad, diasDesde, fmtNum, toTitleCaseNome, ultimoPorTurno, horasDesdeAdmissao, parseDataParaISO, hojeISO, sugerirProximoTurno, boundaryStart } from '@/lib/utils'
-import { PLANOS_PADRAO } from '@/lib/config'
 import { nomeDaAla, type Unidade } from '@/lib/unidade'
 import { modulosAtivos, type PacienteContext } from '@/lib/modules'
 import { montarEvolucaoDiaria } from '@/lib/evolucaoDiaria'
@@ -16,6 +15,8 @@ interface Props {
   paciente: Paciente
   /** Planta da unidade (alas e leitos), lida do banco. */
   unidade: Unidade | null
+  /** Catálogo único de planos de saúde do app (sem o "Outros" sentinela). */
+  planosSaude: string[]
   onClose: () => void
   onAltaConcedida: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
@@ -55,12 +56,12 @@ type EditForm = {
 }
 
 export default function PacienteModal({
-  paciente, unidade, onClose, onAltaConcedida, showToast,
+  paciente, unidade, planosSaude, onClose, onAltaConcedida, showToast,
   onLeitoAnterior, onProximoLeito, temLeitoAnterior, temProximoLeito,
 }: Props) {
   const supabase   = createClient()
   const alas       = unidade?.alas ?? []
-  const opcoesPlanos = [...(unidade?.planosSaude ?? PLANOS_PADRAO), 'Outros']
+  const opcoesPlanos = [...planosSaude, 'Outros']
   const [moduloId, setModuloId] = useState(modulos[0].id)
   const [tab,      setTab]      = useState(modulos[0].tabs[0].id)
   const moduloAtivo = modulos.find(m => m.id === moduloId) ?? modulos[0]

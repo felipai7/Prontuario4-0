@@ -1,5 +1,4 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { PLANOS_PADRAO } from '@/lib/config'
 
 /**
  * A planta da unidade, lida do banco.
@@ -27,8 +26,6 @@ export interface Unidade {
   outrasUnidades: number
   /** Se falso, a alta nesta unidade não exige SAPS-3 pontuado (ex.: Hospital). */
   requerSaps3: boolean
-  /** Planos de saúde cadastrados pelo chefe para esta unidade (sem o "Outros" sentinela). */
-  planosSaude: string[]
 }
 
 /** Formato cru vindo do PostgREST (alas com leitos embutidos). */
@@ -100,15 +97,17 @@ export async function carregarUnidade(
 ): Promise<Unidade | null> {
   const { data: staffRows } = await supabase
     .from('staff')
-    .select('unit_id, created_at, units(name, requer_saps3, planos_saude)')
+    .select('unit_id, created_at, units(name, requer_saps3)')
     .eq('user_id', userId)
     .eq('active', true)
     // Ordem estável: sem isso, quem trabalha em duas unidades cairia numa ou
     // noutra a cada carregamento, sem explicação.
     .order('created_at')
 
-  type UnitRow = { name: string; requer_saps3: boolean; planos_saude: string[] | null }
-  type Vinculo = { unit_id: string; units: UnitRow | UnitRow[] | null }
+  type Vinculo = {
+    unit_id: string
+    units: { name: string; requer_saps3: boolean } | { name: string; requer_saps3: boolean }[] | null
+  }
   const vinculos = (staffRows ?? []) as Vinculo[]
 
   const vinculo = (preferida && vinculos.find(v => v.unit_id === preferida)) || vinculos[0]
@@ -120,7 +119,6 @@ export async function carregarUnidade(
   const uObj = Array.isArray(u) ? u[0] : u
   const nome = uObj?.name ?? 'Unidade'
   const requerSaps3 = uObj?.requer_saps3 ?? true
-  const planosSaude = uObj?.planos_saude ?? PLANOS_PADRAO
 
   const { data: alasRows } = await supabase
     .from('alas')
@@ -144,7 +142,6 @@ export async function carregarUnidade(
     leitosAtivos: alas.reduce((n, a) => n + a.leitos.length, 0),
     outrasUnidades: vinculos.length - 1,
     requerSaps3,
-    planosSaude,
   }
 }
 
