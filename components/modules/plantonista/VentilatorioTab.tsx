@@ -2,11 +2,13 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { fmtData, diasDesde, fmtTurno, sugerirProximoTurno, hojeISO } from '@/lib/utils'
-import type { Paciente, SuporteVentilatorio, ModalidadeVentilatoria, DispositivoO2, ViaAereaVM, ToastData } from '@/types'
+import type { Paciente, SuporteVentilatorio, ModalidadeVentilatoria, DispositivoO2, ViaAereaVM, Dispositivo, ToastData } from '@/types'
 
 interface Props {
   paciente: Paciente
   historico: SuporteVentilatorio[]
+  /** Só pra cruzar com o dispositivo TOT e alertar "TOT sem VM" — não editado aqui. */
+  dispositivos: Dispositivo[]
   /** Registro é da fisioterapia; os demais veem em modo leitura. */
   podeEditar: boolean
   onRefresh: () => void
@@ -64,9 +66,11 @@ function resumoLinha(v: SuporteVentilatorio): string {
   return `Ventilação mecânica${v.vm_via ? ` via ${v.vm_via}` : ''}`
 }
 
-export default function VentilatorioTab({ paciente, historico, podeEditar, onRefresh, showToast }: Props) {
+export default function VentilatorioTab({ paciente, historico, dispositivos, podeEditar, onRefresh, showToast }: Props) {
   const supabase = createClient()
   const hoje = hojeISO()
+
+  const totInstalado = dispositivos.some(d => !d.data_remocao && d.tipo === 'TOT')
 
   const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null)
   const [editingRegistro, setEditingRegistro] = useState<SuporteVentilatorio | null>(null)
@@ -161,6 +165,13 @@ export default function VentilatorioTab({ paciente, historico, podeEditar, onRef
         </div>
       </div>
 
+      {totInstalado && ultimo?.modalidade !== 'ventilacao_mecanica' && (
+        <div className="border border-amber-300 bg-amber-50 rounded-xl p-3 text-sm text-amber-800">
+          ⚠️ Há <strong>TOT</strong> registrado como dispositivo instalado, mas o paciente
+          não está marcado em ventilação mecânica — confira se o registro está atualizado.
+        </div>
+      )}
+
       {formMode === null && ultimo && (
         <div className="border border-indigo-200 bg-indigo-50 rounded-xl p-3 flex items-center justify-between">
           <div>
@@ -171,6 +182,12 @@ export default function VentilatorioTab({ paciente, historico, podeEditar, onRef
                 <span className="font-bold"> — {diasDesde(ultimo.vm_data_inicio)} dia(s) de VM (desde {fmtData(ultimo.vm_data_inicio)})</span>
               )}
             </p>
+            {ultimo.modalidade === 'ventilacao_mecanica' && (
+              <p className="text-xs text-indigo-500 mt-1">
+                Em VM não precisa registrar de novo a cada turno — o sistema mantém
+                automaticamente até você mudar a modalidade (ex: extubação).
+              </p>
+            )}
           </div>
           {podeEditar && (
             <button onClick={() => startEdit(ultimo)}

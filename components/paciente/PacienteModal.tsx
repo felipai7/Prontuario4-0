@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import AltaModal        from './AltaModal'
-import { fmtData, calcAge, pad, diasDesde, fmtNum, toTitleCaseNome, ultimoPorTurno, horasDesdeAdmissao, parseDataParaISO, hojeISO } from '@/lib/utils'
+import { fmtData, calcAge, pad, diasDesde, fmtNum, toTitleCaseNome, ultimoPorTurno, horasDesdeAdmissao, parseDataParaISO, hojeISO, sugerirProximoTurno, boundaryStart } from '@/lib/utils'
 import { PLANOS } from '@/lib/config'
 import { nomeDaAla, type Unidade } from '@/lib/unidade'
 import { modulosAtivos, type PacienteContext } from '@/lib/modules'
@@ -180,9 +180,39 @@ export default function PacienteModal({
     const { data } = await supabase.from('avaliacoes_neurologicas').select('*').eq('paciente_id', pac.id).order('data')
     if (data) setNeuroHistorico(data as AvaliacaoNeurologica[])
   }
+  /**
+   * VM é tácita (não pede novo registro a cada turno): se o último registro
+   * já é ventilação mecânica e o próximo turno sugerido já venceu, repete o
+   * registro sozinho — em loop, pra recuperar vários turnos perdidos de uma
+   * vez se a ficha ficar dias sem ser aberta. O indicador de ventilador-dia
+   * (indicadores_fase1.sql) continua contando por linha data+turno; isso só
+   * tira o clique manual do meio do caminho. A constraint unique
+   * (paciente_id, data, turno) evita duplicar se duas sessões carregarem ao
+   * mesmo tempo — nesse caso o insert perdedor simplesmente erra e o loop para.
+   */
+  const preencherVMTacita = async (historicoInicial: SuporteVentilatorio[]): Promise<SuporteVentilatorio[]> => {
+    let atual = historicoInicial
+    for (let i = 0; i < 60; i++) {
+      const ultimo = ultimoPorTurno(atual)
+      if (!ultimo || ultimo.modalidade !== 'ventilacao_mecanica') break
+      const sugestao = sugerirProximoTurno(atual)
+      const fimSugestao = boundaryStart(sugestao.data, sugestao.turno).getTime() + 12 * 3_600_000
+      if (fimSugestao > Date.now()) break
+      const { data, error } = await supabase.from('suportes_ventilatorios').insert({
+        paciente_id: pac.id, data: sugestao.data, turno: sugestao.turno,
+        modalidade: 'ventilacao_mecanica', o2_dispositivo: null, o2_fluxo_l_min: null,
+        vm_via: ultimo.vm_via, vm_data_inicio: ultimo.vm_data_inicio,
+      }).select().single()
+      if (error || !data) break
+      atual = [...atual, data as SuporteVentilatorio]
+    }
+    return atual
+  }
   const loadVentilatorio = async () => {
     const { data } = await supabase.from('suportes_ventilatorios').select('*').eq('paciente_id', pac.id).order('data')
-    if (data) setVentHistorico(data as SuporteVentilatorio[])
+    if (!data) return
+    const historico = pac.ativo ? await preencherVMTacita(data as SuporteVentilatorio[]) : (data as SuporteVentilatorio[])
+    setVentHistorico(historico)
   }
   const loadIntercorrencias = async () => {
     const { data } = await supabase.from('intercorrencias').select('*').eq('paciente_id', pac.id).order('horario', { ascending: false })

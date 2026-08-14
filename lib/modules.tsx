@@ -140,6 +140,7 @@ const ventilatorio: TabDef = {
   label: '🫁 Ventilatório',
   dona: { profissaoDona: 'fisioterapeuta' },
   render: ctx => <VentilatorioTab paciente={ctx.paciente} historico={ctx.ventHistorico}
+    dispositivos={ctx.dispositivos}
     podeEditar={ctx.podeEditar} onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
 }
 
@@ -184,7 +185,7 @@ const enfermagem: TabDef = {
   id: 'enfermagem',
   label: '💉 Dispositivos e LPP',
   render: ctx => <EnfermagemTab paciente={ctx.paciente} dispositivos={ctx.dispositivos}
-    lpps={ctx.lpps} swabs={ctx.swabs} podeEditar={ctx.podeEditar}
+    lpps={ctx.lpps} swabs={ctx.swabs} ventHistorico={ctx.ventHistorico} podeEditar={ctx.podeEditar}
     onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
 }
 

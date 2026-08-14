@@ -1,9 +1,9 @@
 'use client'
 import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { fmtData, diasDesde, hojeISO } from '@/lib/utils'
+import { fmtData, diasDesde, hojeISO, ultimoPorTurno } from '@/lib/utils'
 import type {
-  Paciente, Dispositivo, TipoDispositivo, LppEvento, EstagioLPP, SwabVigilancia, ToastData,
+  Paciente, Dispositivo, TipoDispositivo, LppEvento, EstagioLPP, SwabVigilancia, SuporteVentilatorio, ToastData,
 } from '@/types'
 
 interface Props {
@@ -11,6 +11,8 @@ interface Props {
   dispositivos: Dispositivo[]
   lpps: LppEvento[]
   swabs: SwabVigilancia[]
+  /** Só pra cruzar com dispositivos e alertar "VM sem TOT/TQT" — não editado aqui. */
+  ventHistorico: SuporteVentilatorio[]
   podeEditar: boolean
   onRefresh: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
@@ -22,13 +24,16 @@ const TIPOS: { id: TipoDispositivo; label: string; emoji: string }[] = [
   { id: 'PAI',   label: 'Cateter de pressão arterial invasiva', emoji: '🩸' },
   { id: 'CDL',   label: 'Cateter de diálise',                 emoji: '🧪' },
   { id: 'DRENO', label: 'Dreno',                              emoji: '🧫' },
+  { id: 'TOT',   label: 'Tubo orotraqueal',                   emoji: '🫁' },
+  { id: 'TQT',   label: 'Traqueostomia',                      emoji: '🫀' },
   { id: 'OUTRO', label: 'Outro dispositivo',                  emoji: '🔧' },
 ]
 
 // CVC/DRENO/OUTRO podem ter mais de um simultâneo (múltiplos sítios/drenos ao
-// mesmo tempo é rotina). SVD/PAI/CDL ficam travados a 1 por vez — clinicamente
-// não há cenário de dois ao mesmo tempo no mesmo paciente; ainda dá pra trocar
-// no mesmo dia (retira e insere de novo), só não acumular dois "instalados".
+// mesmo tempo é rotina). SVD/PAI/CDL/TOT/TQT ficam travados a 1 por vez —
+// clinicamente não há cenário de duas vias aéreas ao mesmo tempo (TOT vira
+// TQT, não soma); ainda dá pra trocar no mesmo dia (retira e insere de novo),
+// só não acumular dois "instalados".
 const PERMITE_MULTIPLOS = new Set<TipoDispositivo>(['CVC', 'DRENO', 'OUTRO'])
 
 // Sítio de inserção (CVC/PAI/CDL) é opcional; descrição de DRENO/OUTRO é o que
@@ -36,20 +41,26 @@ const PERMITE_MULTIPLOS = new Set<TipoDispositivo>(['CVC', 'DRENO', 'OUTRO'])
 const OBS_OBRIGATORIA = new Set<TipoDispositivo>(['DRENO', 'OUTRO'])
 const OBS_LABEL: Record<TipoDispositivo, string> = {
   CVC: 'Sítio de inserção', SVD: 'Observação', PAI: 'Sítio de inserção',
-  CDL: 'Sítio de inserção', DRENO: 'Qual dreno e onde está inserido', OUTRO: 'Descrição',
+  CDL: 'Sítio de inserção', DRENO: 'Qual dreno e onde está inserido',
+  TOT: 'Observação (nº, fixação)', TQT: 'Observação', OUTRO: 'Descrição',
 }
 const OBS_PLACEHOLDER: Record<TipoDispositivo, string> = {
   CVC: 'Ex: jugular direita', SVD: '', PAI: 'Ex: radial esquerda',
-  CDL: 'Ex: femoral direita', DRENO: 'Ex: Penrose em flanco direito', OUTRO: 'Descreva o dispositivo',
+  CDL: 'Ex: femoral direita', DRENO: 'Ex: Penrose em flanco direito',
+  TOT: 'Ex: nº 7,5, fixado em 22cm', TQT: '', OUTRO: 'Descreva o dispositivo',
 }
 
 const ESTAGIOS: EstagioLPP[] = ['1', '2', '3', '4', 'Não classificável', 'Tissular profunda']
 
 
 export default function EnfermagemTab({
-  paciente, dispositivos, lpps, swabs, podeEditar, onRefresh, showToast,
+  paciente, dispositivos, lpps, swabs, ventHistorico, podeEditar, onRefresh, showToast,
 }: Props) {
   const supabase = createClient()
+
+  const ventAtual = ultimoPorTurno(ventHistorico)
+  const emVM = ventAtual?.modalidade === 'ventilacao_mecanica'
+  const viaAereaInstalada = dispositivos.some(d => !d.data_remocao && (d.tipo === 'TOT' || d.tipo === 'TQT'))
 
   const [tipoNovo, setTipoNovo] = useState<TipoDispositivo | ''>('')
   const [dataInsercao, setDataInsercao] = useState(hojeISO)
@@ -158,6 +169,13 @@ export default function EnfermagemTab({
 
   return (
     <div className="space-y-4">
+      {emVM && !viaAereaInstalada && (
+        <div className="border border-amber-300 bg-amber-50 rounded-xl p-3 text-sm text-amber-800">
+          ⚠️ Paciente está em <strong>ventilação mecânica</strong>, mas não há TOT ou TQT
+          registrado como dispositivo instalado — registre a via aérea abaixo.
+        </div>
+      )}
+
       {/* Dispositivos instalados */}
       <section className="border border-slate-200 rounded-xl p-4 space-y-3">
         <div>
