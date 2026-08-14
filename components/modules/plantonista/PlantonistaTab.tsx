@@ -44,6 +44,34 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs,
     supabase.auth.getUser().then(({ data }) => setAutorEmail(data.user?.email ?? ''))
   }, [])
 
+  // ── Histórico patológico pregresso e medicações de uso contínuo ──────────
+  // Contexto da internação como um todo, não por turno — por isso mora direto
+  // em `pacientes`, e não numa tabela filha. Reseta ao trocar de paciente
+  // (setas de leito reaproveitam o mesmo componente), mas não some se um
+  // realtime update do MESMO paciente chegar enquanto alguém está digitando.
+  const [hpp,         setHpp]         = useState(paciente.historico_patologico_pregresso ?? '')
+  const [medicacoes,  setMedicacoes]  = useState(paciente.medicacoes_uso_continuo ?? '')
+  const [savingHist,  setSavingHist]  = useState(false)
+  useEffect(() => {
+    setHpp(paciente.historico_patologico_pregresso ?? '')
+    setMedicacoes(paciente.medicacoes_uso_continuo ?? '')
+  }, [paciente.id])
+
+  const histDirty = hpp !== (paciente.historico_patologico_pregresso ?? '')
+    || medicacoes !== (paciente.medicacoes_uso_continuo ?? '')
+
+  const handleSalvarHistorico = async () => {
+    setSavingHist(true)
+    const { error } = await supabase.from('pacientes').update({
+      historico_patologico_pregresso: hpp.trim() || null,
+      medicacoes_uso_continuo: medicacoes.trim() || null,
+    }).eq('id', paciente.id)
+    setSavingHist(false)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    showToast('Histórico e medicações atualizados!')
+    onRefresh()
+  }
+
   // ── Form de nova intercorrência ────────────────────────────────────────────
   const [formOpen,  setFormOpen]  = useState(false)
   const [horario,   setHorario]   = useState(agoraLocal)
@@ -179,6 +207,31 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs,
             </div>
           )}
         </div>
+      </section>
+
+      {/* Histórico patológico pregresso e medicações de uso contínuo */}
+      <section className="border border-slate-200 rounded-xl p-4 space-y-3">
+        <h3 className="font-semibold text-slate-700">📋 Histórico e Medicações</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>Histórico Patológico Pregresso</label>
+            <textarea value={hpp} onChange={e => setHpp(e.target.value)} rows={4}
+              placeholder="Ex: HAS, DM2, Fibrilação atrial..." className={`${inputCls} resize-none`} />
+          </div>
+          <div>
+            <label className={labelCls}>Medicações de Uso Contínuo</label>
+            <textarea value={medicacoes} onChange={e => setMedicacoes(e.target.value)} rows={4}
+              placeholder="Ex: Losartana 50mg VO 1x/dia, Metformina 850mg VO 2x/dia..." className={`${inputCls} resize-none`} />
+          </div>
+        </div>
+        {histDirty && (
+          <div className="flex justify-end">
+            <button onClick={handleSalvarHistorico} disabled={savingHist}
+              className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors">
+              {savingHist ? 'Salvando...' : 'Salvar'}
+            </button>
+          </div>
+        )}
       </section>
 
       {/* Intercorrências e condutas */}

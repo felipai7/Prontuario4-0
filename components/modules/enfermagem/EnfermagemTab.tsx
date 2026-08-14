@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { fmtData, diasDesde } from '@/lib/utils'
+import { fmtData, diasDesde, hojeISO } from '@/lib/utils'
 import type {
   Paciente, Dispositivo, TipoDispositivo, LppEvento, EstagioLPP, SwabVigilancia, ToastData,
 } from '@/types'
@@ -45,7 +45,6 @@ const OBS_PLACEHOLDER: Record<TipoDispositivo, string> = {
 
 const ESTAGIOS: EstagioLPP[] = ['1', '2', '3', '4', 'Não classificável', 'Tissular profunda']
 
-const hojeISO = () => new Date().toISOString().split('T')[0]
 
 export default function EnfermagemTab({
   paciente, dispositivos, lpps, swabs, podeEditar, onRefresh, showToast,

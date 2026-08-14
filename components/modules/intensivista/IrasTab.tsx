@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { fmtData } from '@/lib/utils'
+import { fmtData, hojeISO } from '@/lib/utils'
 import type {
   Paciente, IrasEvento, IrasSepseChoque, TipoIras,
   SuporteVentilatorio, Dispositivo, ToastData,
@@ -33,7 +33,6 @@ const TIPOS: { id: TipoIras; label: string }[] = [
 ]
 const LABEL: Record<TipoIras, string> = Object.fromEntries(TIPOS.map(t => [t.id, t.label])) as Record<TipoIras, string>
 
-const hojeISO = () => new Date().toISOString().split('T')[0]
 
 export default function IrasTab({
   paciente, eventos, sepse, ventHistorico, dispositivos, podeEditar, onRefresh, showToast,

@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { getTurno } from '@/lib/utils'
+import { getTurno, hojeISO } from '@/lib/utils'
 import TabelaRolavel from '@/components/ui/TabelaRolavel'
 import type { Paciente, SinalVital, ToastData } from '@/types'
 
@@ -99,6 +99,9 @@ function rowToPayload(pacienteId: string, dateStr: string, hour: number, row: Ro
   const h = hour.toString().padStart(2, '0')
   let d = new Date(dateStr + 'T00:00:00')
   if (hour < 7) d.setDate(d.getDate() + 1)
+  // toISOString().split aqui é seguro (ao contrário de hojeISO em outros pontos
+  // deste arquivo): `d` sempre tem o horário travado em meia-noite local, e
+  // meia-noite + 3h (fuso de Brasília) nunca vira o dia seguinte em UTC.
   const iso = `${d.toISOString().split('T')[0]}T${h}:00:00`
   const horario = new Date(iso)
   const pamManual = row.pam ? parseFloat(row.pam) : null
@@ -123,7 +126,7 @@ function emptyRow(): RowInput {
   return { temperatura:'', pas:'', pad:'', pam:'', fc:'', fr:'', sato2:'', hgt:'' }
 }
 
-function todayStr() { return new Date().toISOString().split('T')[0] }
+function todayStr() { return hojeISO() }
 
 // Returns the "shift start date" for grouping: noturno 00-06h belongs to previous day's shift
 function shiftDate(sv: SinalVital): string {
@@ -131,7 +134,7 @@ function shiftDate(sv: SinalVital): string {
   if (sv.turno === 'noturno' && d.getHours() < 7) {
     d.setDate(d.getDate() - 1)
   }
-  return d.toISOString().split('T')[0]
+  return hojeISO(d)
 }
 
 type PeriodGroup = {
@@ -314,7 +317,7 @@ export default function SinaisVitaisTab({ paciente, sinais, onRefresh, showToast
       if (!resp.ok) throw new Error(data.error)
       const { leituras, data: dataExtracao } = data
       if (!leituras?.length) { showToast('Nenhuma leitura encontrada', 'warn'); return }
-      let dateStr = new Date().toISOString().split('T')[0]
+      let dateStr = hojeISO()
       if (dataExtracao) {
         const [d, mo, y] = (dataExtracao as string).split('/')
         if (d && mo && y) dateStr = `${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}`

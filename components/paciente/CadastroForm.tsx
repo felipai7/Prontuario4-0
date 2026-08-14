@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { isDateFuture, toTitleCaseNome, normalizarNome, fmtDataHora, parseDataParaISO } from '@/lib/utils'
+import { isDateFuture, toTitleCaseNome, normalizarNome, fmtDataHora, parseDataParaISO, hojeISO } from '@/lib/utils'
 import { PLANOS } from '@/lib/config'
 import type { Paciente, ToastData } from '@/types'
 
@@ -38,7 +38,7 @@ function descreverIntervalo(horas: number): string {
 
 export default function CadastroForm({ alaId, alaNome, unitId, numeroLeito, onClose, onSaved, showToast }: Props) {
   const supabase = createClient()
-  const hoje     = new Date().toISOString().split('T')[0]
+  const hoje     = hojeISO()
   const agoraH   = new Date().toTimeString().slice(0, 5)
 
   const [nome,      setNome]      = useState('')

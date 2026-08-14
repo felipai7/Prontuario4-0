@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { hojeISO } from '@/lib/utils'
 import type { Shift, SwapRequest, Staff, ShiftType, ToastData } from '@/types'
 
 interface Props {
@@ -38,7 +39,7 @@ export default function SwapRequests({ unitId, staffList, shiftTypesList, meuSta
   const load = async () => {
     if (!unitId) return
     setLoading(true)
-    const hoje = new Date().toISOString().split('T')[0]
+    const hoje = hojeISO()
 
     const [{ data: plantoesData, error: plantoesErr }, { data: swapsData, error: swapsErr }] = await Promise.all([
       meuStaffId

@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { fmtData, diasDesde, fmtTurno, sugerirProximoTurno } from '@/lib/utils'
+import { fmtData, diasDesde, fmtTurno, sugerirProximoTurno, hojeISO } from '@/lib/utils'
 import type { Paciente, SuporteVentilatorio, ModalidadeVentilatoria, DispositivoO2, ViaAereaVM, ToastData } from '@/types'
 
 interface Props {
@@ -66,7 +66,7 @@ function resumoLinha(v: SuporteVentilatorio): string {
 
 export default function VentilatorioTab({ paciente, historico, podeEditar, onRefresh, showToast }: Props) {
   const supabase = createClient()
-  const hoje = new Date().toISOString().split('T')[0]
+  const hoje = hojeISO()
 
   const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null)
   const [editingRegistro, setEditingRegistro] = useState<SuporteVentilatorio | null>(null)

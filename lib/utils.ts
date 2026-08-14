@@ -173,6 +173,25 @@ export function resumoVentilatorio(v: SuporteVentilatorio | null | undefined): s
 export const HORA_INICIO_DIURNO = 7
 export const HORA_INICIO_NOTURNO = 19
 
+/**
+ * Data de hoje (ou de um instante qualquer) em ISO (AAAA-MM-DD), no fuso
+ * LOCAL do navegador — não em UTC.
+ *
+ * `d.toISOString().split('T')[0]` parece equivalente, mas não é:
+ * toISOString() converte pra UTC antes de formatar, e Brasília está 3h
+ * atrás. Entre 21h e 23h59 (hora local), a data em UTC já virou amanhã — todo
+ * campo que usava esse padrão como "hoje" mostrava o dia seguinte nessa
+ * janela (e ainda rejeitava a data real como "não pode ser futura"). Usa os
+ * getters locais do Date, os mesmos que getTurno/boundaryStart já usam — se
+ * um dia mudar a suposição de fuso de um pro outro, muda nos dois juntos.
+ */
+export function hojeISO(d: Date = new Date()): string {
+  const ano = d.getFullYear()
+  const mes = String(d.getMonth() + 1).padStart(2, '0')
+  const dia = String(d.getDate()).padStart(2, '0')
+  return `${ano}-${mes}-${dia}`
+}
+
 export function getTurno(dt: Date): 'diurno' | 'noturno' {
   const h = dt.getHours()
   return h >= HORA_INICIO_DIURNO && h < HORA_INICIO_NOTURNO ? 'diurno' : 'noturno'
@@ -223,10 +242,10 @@ export function sugerirProximoTurno<T extends { data: string; turno: 'diurno' | 
   const ultimo = ultimoPorTurno(historico)
   if (!ultimo) {
     const agora = new Date()
-    return { data: agora.toISOString().split('T')[0], turno: getTurno(agora) }
+    return { data: hojeISO(agora), turno: getTurno(agora) }
   }
   const proximoInicio = new Date(boundaryStart(ultimo.data, ultimo.turno).getTime() + 12 * 3_600_000)
-  return { data: proximoInicio.toISOString().split('T')[0], turno: getTurno(proximoInicio) }
+  return { data: hojeISO(proximoInicio), turno: getTurno(proximoInicio) }
 }
 
 // ── Cálculos de Balanço Hídrico ───────────────────────────────────────────

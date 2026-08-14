@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { fmtData } from '@/lib/utils'
+import { fmtData, hojeISO } from '@/lib/utils'
 import type {
   Paciente, FisioEvento, FisioAvaliacaoDiaria, TipoEventoFisio,
   SuporteVentilatorio, ToastData,
@@ -24,7 +24,6 @@ const TIPOS: { id: TipoEventoFisio; label: string; emoji: string }[] = [
   { id: 'traqueostomia',   label: 'Traqueostomia',   emoji: '🔧' },
 ]
 
-const hojeISO = () => new Date().toISOString().split('T')[0]
 
 /** Descrição legível do evento, para o histórico. */
 function descrever(e: FisioEvento): string {

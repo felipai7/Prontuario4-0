@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { fmtData, diasDesde } from '@/lib/utils'
+import { fmtData, diasDesde, hojeISO } from '@/lib/utils'
 import type {
   Paciente, NutricaoAvaliacao, NutricaoDia, PeriodoBalanco, SuporteVentilatorio,
   CuidadosHorizontais, AuditoriaIntensivista, ToastData,
@@ -57,7 +57,6 @@ function opioideInfo(cuidados: CuidadosHorizontais | null, auditoria: AuditoriaI
   return `marcado até ${fmtData(ultimaMudanca.split('T')[0])} (há ${dias}d)`
 }
 
-const hojeISO = () => new Date().toISOString().split('T')[0]
 
 /** Campo de porcentagem: vazio = não recebeu por essa via no dia. */
 function Pct({ label, valor, onChange, disabled, dica }: {

@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { fmtData, calcAge } from '@/lib/utils'
+import { fmtData, calcAge, hojeISO } from '@/lib/utils'
 import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, TipoSaida, ToastData } from '@/types'
 
 // O tipo de saída é o que sustenta todo o bloco de mortalidade dos indicadores.
@@ -50,7 +50,7 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
   // Data/hora da saída: pré-preenchida com agora, mas editável — o registro é
   // muitas vezes feito depois do fato, e a hora define o corte de óbito <24h.
   const [tipoSaida, setTipoSaida] = useState<TipoSaida | ''>('')
-  const [dataSaida, setDataSaida] = useState(() => new Date().toISOString().split('T')[0])
+  const [dataSaida, setDataSaida] = useState(() => hojeISO())
   const [horaSaida, setHoraSaida] = useState(() => new Date().toTimeString().slice(0, 5))
 
   // Sem SAPS 3 não há saída: sem ele o paciente fica fora do SMR para sempre,
@@ -327,7 +327,7 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Data da saída *</label>
                   <input type="date" value={dataSaida} onChange={e => setDataSaida(e.target.value)}
-                    max={new Date().toISOString().split('T')[0]}
+                    max={hojeISO()}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400" />
                 </div>
                 <div>

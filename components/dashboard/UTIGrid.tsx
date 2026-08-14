@@ -273,7 +273,7 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
       )}
 
       {/* Grid */}
-      <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+      <main className="max-w-7xl mx-auto px-4 py-6 space-y-4">
         {!unidade ? (
           // Sem vínculo em `staff`, o RLS não devolveria paciente nenhum. Dizer
           // isso é muito melhor do que mostrar um mapa vazio, que se leria como
@@ -296,11 +296,11 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
           const ocAla = pacientesVisiveis.filter(p => p.ala_id === ala.id).length
           return (
             <section key={ala.id}>
-              <div className="flex items-center gap-3 mb-3">
+              <div className="flex items-center gap-3 mb-2">
                 <h2 className="text-lg font-bold text-slate-700">{ala.nome}</h2>
                 <span className="text-sm text-slate-400">{ocAla}/{ala.leitos.length} ocupados</span>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
                 {ala.leitos.map(leito => {
                   const pac = getPaciente(ala.id, leito)
                   return (
@@ -371,13 +371,13 @@ function LeitoCard({ numero, paciente, requerSaps3, swabPendente, onClick }: {
   return (
     <button
       onClick={onClick}
-      className={`w-full min-h-[8.5rem] text-left rounded-xl border-2 p-3 transition-all
+      className={`w-full min-h-[6.75rem] text-left rounded-xl border-2 p-2 transition-all
         ${isEmpty
           ? 'border-slate-200 bg-white hover:border-indigo-300 hover:shadow-md'
           : 'border-indigo-400 bg-indigo-50 hover:shadow-md hover:border-indigo-500'
         }`}
     >
-      <div className="text-xs font-bold text-slate-400 mb-1">Leito {pad(numero)}</div>
+      <div className="text-xs font-bold text-slate-400 mb-0.5">Leito {pad(numero)}</div>
       {isEmpty ? (
         <div className="text-slate-300 text-xs italic">Vazio</div>
       ) : (
@@ -385,11 +385,11 @@ function LeitoCard({ numero, paciente, requerSaps3, swabPendente, onClick }: {
           <div className="font-semibold text-slate-800 text-sm leading-tight truncate">
             {paciente.nome.split(' ')[0]} {paciente.nome.split(' ')[1] ?? ''}
           </div>
-          <div className="text-xs text-slate-500 mt-1">{calcAge(paciente.data_nascimento)}</div>
+          <div className="text-xs text-slate-500">{calcAge(paciente.data_nascimento)}</div>
           <div className="text-xs text-slate-400 truncate">{paciente.plano_saude}</div>
           {/* Área reservada pros badges (SAPS-3, swab): altura fixa mesmo com 0, 1 ou 2
               badges, senão os cards da mesma linha do grid ficam com alturas diferentes. */}
-          <div className="min-h-[2.5rem] mt-1 space-y-0.5">
+          <div className="min-h-[2rem] mt-0.5 space-y-0.5">
             {requerSaps3 && paciente.saps3 == null && (
               <div className="text-[11px] font-semibold text-amber-600"
                 title="SAPS-3 não pontuado — obrigatório para dar saída">

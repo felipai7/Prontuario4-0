@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { fmtData, diaAtualATB } from '@/lib/utils'
+import { fmtData, diaAtualATB, hojeISO } from '@/lib/utils'
 import { ATBS_SUGERIDOS, FOCOS_INFECCIOSOS } from '@/lib/config'
 import Combobox from '@/components/ui/Combobox'
 import AuditoriaIntensivistaView from './AuditoriaIntensivista'
@@ -65,7 +65,7 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
   // ── ATB form ─────────────────────────────────────────────────────────────
   const [atbFormOpen,   setAtbFormOpen]   = useState(false)
   const [atbDroga,      setAtbDroga]      = useState('')
-  const [atbInicio,     setAtbInicio]     = useState(() => new Date().toISOString().split('T')[0])
+  const [atbInicio,     setAtbInicio]     = useState(() => hojeISO())
   const [atbDiaInicial, setAtbDiaInicial] = useState<0 | 1>(0)
   const [atbDias,       setAtbDias]       = useState('')
   const [atbFoco,       setAtbFoco]       = useState('')
@@ -81,7 +81,7 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
   const resetAtbForm = () => {
     setAtbFormOpen(false); setAtbEditingId(null)
     setAtbDroga(''); setAtbDias(''); setAtbFoco(''); setAtbDiaInicial(0)
-    setAtbInicio(new Date().toISOString().split('T')[0])
+    setAtbInicio(hojeISO())
   }
 
   const handleEditarATB = (atb: ATB) => {
@@ -266,7 +266,7 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
   // ── Orientações e Condutas (histórico por data) ────────────────────────────
   const [orientFormMode, setOrientFormMode]     = useState<'add' | 'edit' | null>(null)
   const [orientEditing,  setOrientEditing]      = useState<RegistroIntensivista | null>(null)
-  const [orientDate,     setOrientDate]         = useState(() => new Date().toISOString().split('T')[0])
+  const [orientDate,     setOrientDate]         = useState(() => hojeISO())
   const [orientTexto,    setOrientTexto]        = useState('')
   const [orientSaving,   setOrientSaving]       = useState(false)
   const [orientHistoryOpen, setOrientHistoryOpen] = useState(false)
@@ -279,7 +279,7 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
     : undefined
 
   const openOrientAdd = () => {
-    setOrientDate(new Date().toISOString().split('T')[0])
+    setOrientDate(hojeISO())
     setOrientTexto('')
     setOrientFormMode('add')
   }

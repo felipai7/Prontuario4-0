@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import AltaModal        from './AltaModal'
-import { fmtData, calcAge, pad, diasDesde, fmtNum, toTitleCaseNome, ultimoPorTurno, horasDesdeAdmissao, parseDataParaISO } from '@/lib/utils'
+import { fmtData, calcAge, pad, diasDesde, fmtNum, toTitleCaseNome, ultimoPorTurno, horasDesdeAdmissao, parseDataParaISO, hojeISO } from '@/lib/utils'
 import { PLANOS } from '@/lib/config'
 import { nomeDaAla, type Unidade } from '@/lib/unidade'
 import { modulosAtivos, type PacienteContext } from '@/lib/modules'
@@ -103,7 +103,7 @@ export default function PacienteModal({
   const [evoText,  setEvoText]  = useState('')
   const [evoCopied, setEvoCopied] = useState(false)
 
-  const hoje = new Date().toISOString().split('T')[0]
+  const hoje = hojeISO()
 
   function makeEditForm(p: Paciente): EditForm {
     const knownPlano = PLANOS.includes(p.plano_saude) ? p.plano_saude : 'Outros'

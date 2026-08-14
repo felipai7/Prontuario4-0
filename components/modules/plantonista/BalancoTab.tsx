@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import {
   calcAguaEndogena, calcPerdasInsensiveis, calcBalanco,
   calcAcumuladoTotal, calcAcumuladoMovel, calcDiurese24h, calcFirstPeriod, calcNextPeriod,
-  fmtTurno, colorParcial, getTurno, fmtNum, boundaryStart, fmtDataHora
+  fmtTurno, colorParcial, getTurno, fmtNum, boundaryStart, fmtDataHora, hojeISO
 } from '@/lib/utils'
 import TabelaRolavel from '@/components/ui/TabelaRolavel'
 import type { Paciente, PeriodoBalanco, ToastData } from '@/types'
@@ -63,7 +63,7 @@ const ROWS: RowDef[] = [
 // Separator between gains block and losses block
 const SEPARATOR_AFTER = 'agua_endogena'
 
-function todayStr() { return new Date().toISOString().split('T')[0] }
+function todayStr() { return hojeISO() }
 
 /** Turno padrão de 12h a partir de uma data + turno escolhidos livremente. Reaproveita o
  * mesmo limite de turno (07:00/19:00) usado em calcNextPeriod/getNextBoundary. */
@@ -276,7 +276,7 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
 
   const abrirNovoTurno = () => {
     if (!sugerido) { showToast('Não foi possível calcular o próximo turno', 'error'); return }
-    setFormDate(sugerido.inicio.toISOString().split('T')[0])
+    setFormDate(hojeISO(sugerido.inicio))
     setFormTurno(sugerido.turno)
     setFormMode('add')
   }
