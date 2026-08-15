@@ -479,6 +479,7 @@ export interface SwapRequest {
   shift_id: string
   requester_id: string
   target_staff_id: string
+  tipo: 'oferta' | 'pedido'
   status: SwapStatus
   reason: string | null
   created_at: string

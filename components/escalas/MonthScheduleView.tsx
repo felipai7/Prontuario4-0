@@ -144,12 +144,31 @@ export default function MonthScheduleView({ unitId, staffList, shiftTypesList, s
     setEnviandoPara(targetStaffId)
     const { error } = await supabase.from('swap_requests').insert({
       unit_id: unitId, shift_id: passarPlantaoShift.id, requester_id: meuStaffId,
-      target_staff_id: targetStaffId,
+      target_staff_id: targetStaffId, tipo: 'oferta',
     })
     setEnviandoPara(null)
     if (error) { showToast('Erro ao solicitar troca: ' + error.message, 'error'); return }
     showToast(`Troca solicitada para ${staffMap[targetStaffId] ?? 'colega'} — aguardando resposta.`)
     setPassarPlantaoShift(null)
+  }
+
+  // ── Pedir plantão de um colega: sentido inverso — clicar no nome do
+  // colega num dia X. Aqui quem precisa aceitar é o próprio dono atual do
+  // plantão (accept_swap trata tipo='pedido' e transfere pra quem pediu).
+  const [pedirPlantaoShift, setPedirPlantaoShift] = useState<Shift | null>(null)
+  const [pedindo,           setPedindo]           = useState(false)
+
+  const handlePedirPlantao = async () => {
+    if (!meuStaffId || !pedirPlantaoShift || !pedirPlantaoShift.staff_id) return
+    setPedindo(true)
+    const { error } = await supabase.from('swap_requests').insert({
+      unit_id: unitId, shift_id: pedirPlantaoShift.id, requester_id: meuStaffId,
+      target_staff_id: pedirPlantaoShift.staff_id, tipo: 'pedido',
+    })
+    setPedindo(false)
+    if (error) { showToast('Erro ao pedir plantão: ' + error.message, 'error'); return }
+    showToast(`Pedido enviado para ${staffMap[pedirPlantaoShift.staff_id] ?? 'colega'} — aguardando resposta.`)
+    setPedirPlantaoShift(null)
   }
 
   return (
@@ -168,7 +187,7 @@ export default function MonthScheduleView({ unitId, staffList, shiftTypesList, s
       {meuStaffId && (
         <p className="text-xs text-slate-500 flex items-center gap-1.5">
           <span className="inline-block w-3 h-3 rounded bg-indigo-100 border border-indigo-400 align-middle"></span>
-          Em destaque: seus plantões — clique no seu nome num dia pra passar o plantão pra um colega
+          Em destaque: seus plantões — clique no seu nome pra passar pra um colega, ou no nome de um colega pra pedir o plantão dele
         </p>
       )}
 
@@ -265,6 +284,13 @@ export default function MonthScheduleView({ unitId, staffList, shiftTypesList, s
                           {s.staff_id ? staffMap[s.staff_id] ?? '?' : '—'}
                           {s.status === 'swapped' && ' 🔄'}
                         </button>
+                      ) : meuStaffId && s.staff_id ? (
+                        <button onClick={() => setPedirPlantaoShift(s)}
+                          title="Pedir este plantão"
+                          className="font-medium break-words text-slate-800 underline decoration-dotted decoration-slate-300 hover:text-indigo-600 hover:decoration-indigo-400 text-left">
+                          {staffMap[s.staff_id] ?? '?'}
+                          {s.status === 'swapped' && ' 🔄'}
+                        </button>
                       ) : (
                         <p className="font-medium break-words text-slate-800">
                           {s.staff_id ? staffMap[s.staff_id] ?? '?' : '—'}
@@ -309,6 +335,35 @@ export default function MonthScheduleView({ unitId, staffList, shiftTypesList, s
                 ))}
               </ul>
             )}
+          </div>
+        </div>
+      )}
+
+      {pedirPlantaoShift && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+          onClick={e => e.target === e.currentTarget && setPedirPlantaoShift(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-slate-800 text-lg">🙋 Pedir plantão</h2>
+              <button onClick={() => setPedirPlantaoShift(null)} className="text-slate-400 hover:text-slate-700 text-lg">✕</button>
+            </div>
+            <p className="text-sm text-slate-600">
+              {fmtDiaSemana(pedirPlantaoShift.date)} ·{' '}
+              {pedirPlantaoShift.shift_type_id ? shiftTypeMap[pedirPlantaoShift.shift_type_id] ?? '?' : '?'}
+              {' '}— atualmente com{' '}
+              <strong>{pedirPlantaoShift.staff_id ? staffMap[pedirPlantaoShift.staff_id] ?? '?' : '?'}</strong>.
+              O pedido fica pendente até {pedirPlantaoShift.staff_id ? staffMap[pedirPlantaoShift.staff_id] ?? 'o colega' : 'o colega'} aceitar.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setPedirPlantaoShift(null)}
+                className="text-xs font-medium text-slate-500 border border-slate-200 rounded-lg px-3 py-1.5">
+                Cancelar
+              </button>
+              <button onClick={handlePedirPlantao} disabled={pedindo}
+                className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-lg">
+                {pedindo ? 'Enviando...' : 'Pedir plantão'}
+              </button>
+            </div>
           </div>
         </div>
       )}

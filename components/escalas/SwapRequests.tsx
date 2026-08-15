@@ -20,6 +20,14 @@ function fmtData(d: string): string {
   return new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
+// Arredonda pra baixo (troca criada há poucas horas conta como "hoje", não
+// "1 dia") — o chefe quer saber há quanto tempo já dá pra cobrar.
+function diasDesde(iso: string): string {
+  const dias = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
+  if (dias <= 0) return 'hoje'
+  return dias === 1 ? '1 dia' : `${dias} dias`
+}
+
 const STATUS_LABEL: Record<string, string> = {
   pending: 'Pendente', accepted: 'Aceita', rejected: 'Recusada', cancelled: 'Cancelada',
 }
@@ -76,7 +84,7 @@ export default function SwapRequests({ unitId, staffList, shiftTypesList, meuSta
     setSaving(true)
     const { error } = await supabase.from('swap_requests').insert({
       unit_id: unitId, shift_id: shiftIdEscolhido, requester_id: meuStaffId,
-      target_staff_id: targetStaffId,
+      target_staff_id: targetStaffId, tipo: 'oferta',
     })
     setSaving(false)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
@@ -109,6 +117,8 @@ export default function SwapRequests({ unitId, staffList, shiftTypesList, meuSta
   const recebidas = swaps.filter(s => s.target_staff_id === meuStaffId && s.status === 'pending')
   const minhas = swaps.filter(s => s.requester_id === meuStaffId)
   const todas = swaps
+  // Mais antiga primeiro — é a que já dá pra cobrar há mais tempo.
+  const pendentesGeral = swaps.filter(s => s.status === 'pending').sort((a, b) => a.created_at.localeCompare(b.created_at))
 
   const linhaPlantao = (shiftId: string) => {
     const s = shiftsById[shiftId]
@@ -168,7 +178,11 @@ export default function SwapRequests({ unitId, staffList, shiftTypesList, meuSta
                   <li key={s.id} className="flex items-center justify-between gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm">
                     <div className="min-w-0">
                       <p className="text-slate-800">{linhaPlantao(s.shift_id)}</p>
-                      <p className="text-xs text-slate-500">De {staffMap[s.requester_id] ?? '?'}</p>
+                      <p className="text-xs text-slate-500">
+                        {s.tipo === 'pedido'
+                          ? <>{staffMap[s.requester_id] ?? '?'} pediu este plantão seu</>
+                          : <>De {staffMap[s.requester_id] ?? '?'}</>}
+                      </p>
                     </div>
                     <div className="flex gap-1.5 flex-shrink-0">
                       <button onClick={() => handleAccept(s.id)}
@@ -190,7 +204,9 @@ export default function SwapRequests({ unitId, staffList, shiftTypesList, meuSta
                   <li key={s.id} className="flex items-center justify-between gap-2 border border-slate-200 rounded-lg px-3 py-2 text-sm">
                     <div className="min-w-0">
                       <p className="text-slate-800">{linhaPlantao(s.shift_id)}</p>
-                      <p className="text-xs text-slate-500">Para {staffMap[s.target_staff_id] ?? '?'} · {STATUS_LABEL[s.status]}</p>
+                      <p className="text-xs text-slate-500">
+                        {s.tipo === 'pedido' ? 'Pedido a' : 'Para'} {staffMap[s.target_staff_id] ?? '?'} · {STATUS_LABEL[s.status]}
+                      </p>
                     </div>
                     {s.status === 'pending' && (
                       <button onClick={() => handleCancel(s.id)}
@@ -204,13 +220,36 @@ export default function SwapRequests({ unitId, staffList, shiftTypesList, meuSta
             </div>
           )}
 
+          {souChefe && pendentesGeral.length > 0 && (
+            <div className="space-y-2 pt-2 border-t border-slate-200">
+              <p className="text-xs font-bold text-amber-700 uppercase tracking-wide">
+                ⏳ Pendentes de aceite — cobrar quem falta responder ({pendentesGeral.length})
+              </p>
+              <ul className="space-y-1.5">
+                {pendentesGeral.map(s => (
+                  <li key={s.id} className="flex items-center justify-between gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm">
+                    <div className="min-w-0">
+                      <p className="text-slate-800">{linhaPlantao(s.shift_id)}</p>
+                      <p className="text-xs text-slate-500">
+                        {staffMap[s.requester_id] ?? '?'} {s.tipo === 'pedido' ? 'pediu o plantão de' : 'ofereceu o plantão a'} {staffMap[s.target_staff_id] ?? '?'}
+                      </p>
+                    </div>
+                    <span className="text-xs font-bold text-amber-700 flex-shrink-0 text-right">
+                      aguardando {staffMap[s.target_staff_id] ?? '?'}<br />há {diasDesde(s.created_at)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {souChefe && todas.length > 0 && (
             <div className="space-y-2 pt-2 border-t border-slate-200">
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Todas as trocas da unidade ({todas.length})</p>
               <ul className="space-y-1 max-h-64 overflow-y-auto">
                 {todas.map(s => (
                   <li key={s.id} className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-                    {linhaPlantao(s.shift_id)} · {staffMap[s.requester_id] ?? '?'} → {staffMap[s.target_staff_id] ?? '?'} · <span className="font-semibold">{STATUS_LABEL[s.status]}</span>
+                    {linhaPlantao(s.shift_id)} · {staffMap[s.requester_id] ?? '?'} {s.tipo === 'pedido' ? 'pediu de' : '→'} {staffMap[s.target_staff_id] ?? '?'} · <span className="font-semibold">{STATUS_LABEL[s.status]}</span>
                   </li>
                 ))}
               </ul>
