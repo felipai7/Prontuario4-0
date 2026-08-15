@@ -131,6 +131,27 @@ export default function MonthScheduleView({ unitId, staffList, shiftTypesList, s
     load()
   }
 
+  // ── Passar plantão direto da grade: clicar no próprio nome num dia X ───────
+  // Atalho pro mesmo fluxo que já existe em SwapRequests.tsx (aba separada),
+  // só que já com o plantão daquele dia pré-escolhido — sem precisar navegar
+  // e escolher o plantão de novo numa lista.
+  const [passarPlantaoShift, setPassarPlantaoShift] = useState<Shift | null>(null)
+  const [enviandoPara,       setEnviandoPara]       = useState<string | null>(null)
+  const colegas = useMemo(() => staffAtivo.filter(s => s.id !== meuStaffId), [staffAtivo, meuStaffId])
+
+  const handleEnviarPlantao = async (targetStaffId: string) => {
+    if (!meuStaffId || !passarPlantaoShift) return
+    setEnviandoPara(targetStaffId)
+    const { error } = await supabase.from('swap_requests').insert({
+      unit_id: unitId, shift_id: passarPlantaoShift.id, requester_id: meuStaffId,
+      target_staff_id: targetStaffId,
+    })
+    setEnviandoPara(null)
+    if (error) { showToast('Erro ao solicitar troca: ' + error.message, 'error'); return }
+    showToast(`Troca solicitada para ${staffMap[targetStaffId] ?? 'colega'} — aguardando resposta.`)
+    setPassarPlantaoShift(null)
+  }
+
   return (
     <section className="bg-white border border-slate-200 rounded-xl p-4 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -147,7 +168,7 @@ export default function MonthScheduleView({ unitId, staffList, shiftTypesList, s
       {meuStaffId && (
         <p className="text-xs text-slate-500 flex items-center gap-1.5">
           <span className="inline-block w-3 h-3 rounded bg-indigo-100 border border-indigo-400 align-middle"></span>
-          Em destaque: seus plantões
+          Em destaque: seus plantões — clique no seu nome num dia pra passar o plantão pra um colega
         </p>
       )}
 
@@ -237,8 +258,15 @@ export default function MonthScheduleView({ unitId, staffList, shiftTypesList, s
                           className="w-full border border-slate-300 rounded px-0.5 py-0.5 text-[9px] sm:text-[11px] bg-white">
                           {staffAtivo.map(st => <option key={st.id} value={st.id}>{st.full_name}</option>)}
                         </select>
+                      ) : ehMeu && meuStaffId ? (
+                        <button onClick={() => setPassarPlantaoShift(s)}
+                          title="Passar este plantão para um colega"
+                          className="font-medium break-words text-indigo-900 underline decoration-dotted decoration-indigo-400 hover:text-indigo-600 text-left">
+                          {s.staff_id ? staffMap[s.staff_id] ?? '?' : '—'}
+                          {s.status === 'swapped' && ' 🔄'}
+                        </button>
                       ) : (
-                        <p className={`font-medium break-words ${ehMeu ? 'text-indigo-900' : 'text-slate-800'}`}>
+                        <p className="font-medium break-words text-slate-800">
                           {s.staff_id ? staffMap[s.staff_id] ?? '?' : '—'}
                           {s.status === 'swapped' && ' 🔄'}
                         </p>
@@ -249,6 +277,39 @@ export default function MonthScheduleView({ unitId, staffList, shiftTypesList, s
               </div>
             )
           })}
+        </div>
+      )}
+
+      {passarPlantaoShift && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+          onClick={e => e.target === e.currentTarget && setPassarPlantaoShift(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-slate-800 text-lg">🔄 Passar plantão</h2>
+              <button onClick={() => setPassarPlantaoShift(null)} className="text-slate-400 hover:text-slate-700 text-lg">✕</button>
+            </div>
+            <p className="text-sm text-slate-600">
+              {fmtDiaSemana(passarPlantaoShift.date)} ·{' '}
+              {passarPlantaoShift.shift_type_id ? shiftTypeMap[passarPlantaoShift.shift_type_id] ?? '?' : '?'}.
+              Escolha quem assume — a troca fica pendente até o colega aceitar.
+            </p>
+
+            {colegas.length === 0 ? (
+              <p className="text-sm text-slate-400">Nenhum outro colega ativo nesta unidade.</p>
+            ) : (
+              <ul className="space-y-1.5 max-h-64 overflow-y-auto">
+                {colegas.map(c => (
+                  <li key={c.id}>
+                    <button onClick={() => handleEnviarPlantao(c.id)} disabled={enviandoPara !== null}
+                      className="w-full text-left border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50
+                                 disabled:opacity-50 rounded-lg px-3 py-2 text-sm text-slate-700 font-medium transition-colors">
+                      {enviandoPara === c.id ? 'Enviando...' : c.full_name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       )}
     </section>
