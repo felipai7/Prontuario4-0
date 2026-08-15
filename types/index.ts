@@ -124,6 +124,17 @@ export interface PeriodoBalanco {
 
 export type TipoSaida = 'alta' | 'obito' | 'transferencia'
 
+/** Um período de pacientes_unidades_historico — devolvido por
+ *  buscar_historico_paciente/auditoria_detalhe_paciente. */
+export interface PeriodoUnidade {
+  unit_id: string
+  unit_nome: string
+  ala_id: string
+  conta_indicador: boolean
+  desde: string
+  ate: string | null
+}
+
 export interface ResumoAlta {
   id: string
   paciente_id: string | null
@@ -348,6 +359,9 @@ export interface Unit {
   active: boolean
   /** Se falso, a alta não exige SAPS-3 pontuado — unidades fora da UTI (ex.: Hospital) não pontuam. */
   requer_saps3: boolean
+  /** Decide módulos/rótulos (lib/modules.tsx): 'uti' = 5 módulos de sempre,
+   *  'enfermaria' = só Médico + Internos. */
+  tipo_unidade: 'uti' | 'enfermaria'
   created_at: string
 }
 
@@ -369,6 +383,10 @@ export interface Ala {
   nome: string
   ordem: number
   ativa: boolean
+  /** Ala de trânsito (leito suspenso): só recebe por transferência, some do
+   *  dashboard quando vazia e fora dos indicadores enquanto o paciente está
+   *  nela. */
+  rotativo: boolean
   created_at: string
 }
 

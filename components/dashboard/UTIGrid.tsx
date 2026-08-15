@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import PacienteModal  from '@/components/paciente/PacienteModal'
 import CadastroForm   from '@/components/paciente/CadastroForm'
+import FinalizarAdmissaoModal from '@/components/paciente/FinalizarAdmissaoModal'
 import ToastContainer, { useToast } from '@/components/ui/Toast'
 import { pad, fmtData, calcAge, normalizarNome } from '@/lib/utils'
 import { ehIntensivista, apenasMedicos } from '@/lib/cargos'
@@ -31,6 +32,10 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
   const [showCadastro,    setShowCadastro]    = useState(false)
   const [selectedLeito,   setSelectedLeito]   = useState<{ alaId: string; numero: string } | null>(null)
   const [busca,           setBusca]           = useState('')
+  // Leito na ala rotativo: clicar (ou soltar um paciente de lá num leito
+  // normal) abre "Finalizar Admissão" em vez da ficha/move silencioso —
+  // é a ação que corrige data/hora e cobra o SAPS-3 de novo.
+  const [finalizarTarget, setFinalizarTarget] = useState<{ paciente: Paciente; alaInicial?: string; leitoInicial?: string } | null>(null)
 
   // Catálogo de planos de saúde: único pro app inteiro (UTI e Hospital sempre
   // aceitaram os mesmos convênios) — carregado uma vez, não por unidade.
@@ -120,8 +125,10 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
     pacientes.find(p => p.ala_id === alaId && p.numero_leito === leito && p.ativo)
 
   const handleLeitoClick = (alaId: string, numero: string, pac: Paciente | undefined) => {
-    if (pac) { setSelectedPac(pac) }
-    else     { setSelectedLeito({ alaId, numero }); setShowCadastro(true) }
+    const ala = alas.find(a => a.id === alaId)
+    if (pac && ala?.rotativo) { setFinalizarTarget({ paciente: pac }) }
+    else if (pac)             { setSelectedPac(pac) }
+    else                      { setSelectedLeito({ alaId, numero }); setShowCadastro(true) }
   }
 
   // Arrastar o card de um paciente até um leito vazio transfere na hora — o
@@ -133,6 +140,14 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
     const pacienteAtual = pacientes.find(p => p.id === pacienteId)
     if (!pacienteAtual) return
     if (pacienteAtual.ala_id === novaAlaId && pacienteAtual.numero_leito === novoLeito) return
+
+    // Saindo da ala de trânsito pra um leito normal: não é um move silencioso,
+    // é a admissão de verdade — abre o formulário que corrige data/hora e
+    // cobra o SAPS-3, já com o leito solto pré-preenchido.
+    if (alas.find(a => a.id === pacienteAtual.ala_id)?.rotativo) {
+      setFinalizarTarget({ paciente: pacienteAtual, alaInicial: novaAlaId, leitoInicial: novoLeito })
+      return
+    }
 
     const { data: ocupante } = await supabase.from('pacientes')
       .select('id, nome').eq('ala_id', novaAlaId).eq('numero_leito', novoLeito).eq('ativo', true).maybeSingle()
@@ -169,7 +184,11 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
   const validLeitos = new Set(alas.flatMap(a => a.leitos))
   const pacientesVisiveis  = pacientes.filter(p => validLeitos.has(p.numero_leito))
   const pacientesFantasmas = pacientes.filter(p => !validLeitos.has(p.numero_leito))
-  const ocupados = pacientesVisiveis.length
+  // Ala de trânsito fica fora da ocupação exibida — mesmo critério do
+  // denominador (unidade.leitosAtivos, lib/unidade.ts), senão "ocupados"
+  // podia passar de "total" com alguém temporariamente no rotativo.
+  const alasRotativoIds = new Set(alas.filter(a => a.rotativo).map(a => a.id))
+  const ocupados = pacientesVisiveis.filter(p => !alasRotativoIds.has(p.ala_id)).length
   const total    = unidade?.leitosAtivos ?? 0
 
   // Setas de leito na ficha do paciente: avançam/retrocedem por número de
@@ -225,6 +244,14 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
                              px-3 py-1.5 rounded-lg text-white text-sm font-medium transition-colors"
                 >
                   🏗️ Unidade
+                </button>
+                <button
+                  onClick={() => router.push('/auditoria')}
+                  title="Todos os pacientes e admissões, de todas as unidades"
+                  className="bg-white/20 hover:bg-white/30 border border-white/30
+                             px-3 py-1.5 rounded-lg text-white text-sm font-medium transition-colors"
+                >
+                  🗂️ Auditoria
                 </button>
               </>
             )}
@@ -324,31 +351,45 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
             <p className="text-sm font-bold text-amber-800">A unidade ainda não tem alas e leitos cadastrados</p>
             <p className="text-xs text-amber-700">Cadastre a planta da UTI para o mapa de leitos aparecer.</p>
           </div>
-        ) : alas.map(ala => {
+        ) : alas.filter(ala => {
+          // Ala de trânsito só aparece com gente nela — vazia, é ruído no
+          // dashboard (não é um lugar onde alguém deveria "ficar" de propósito).
+          if (!ala.rotativo) return true
+          return pacientesVisiveis.some(p => p.ala_id === ala.id)
+        }).map(ala => {
           const ocAla = pacientesVisiveis.filter(p => p.ala_id === ala.id).length
           return (
             <section key={ala.id}>
               <div className="flex items-center gap-3 mb-2">
-                <h2 className="text-lg font-bold text-slate-700">{ala.nome}</h2>
+                <h2 className="text-lg font-bold text-slate-700">
+                  {ala.rotativo && '🔁 '}{ala.nome}
+                </h2>
                 <span className="text-sm text-slate-400">{ocAla}/{ala.leitos.length} ocupados</span>
+                {ala.rotativo && (
+                  <span className="text-xs text-sky-600">ala de trânsito — leito suspenso</span>
+                )}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
                 {ala.leitos.map(leito => {
                   const pac = getPaciente(ala.id, leito)
                   const alvo = `${ala.id}:${leito}`
+                  // Ala de trânsito só recebe por transferir_paciente — arrastar
+                  // um paciente pra lá diretamente não é um caminho válido.
+                  const aceitaDrop = !pac && !ala.rotativo
                   return (
                     <LeitoCard
                       key={leito}
                       numero={leito}
                       paciente={pac}
+                      rotativo={ala.rotativo}
                       requerSaps3={unidade?.requerSaps3 ?? true}
                       swabPendente={!!pac && swabsPendentesIds.has(pac.id)}
                       onClick={() => handleLeitoClick(ala.id, leito, pac)}
                       isDragTarget={dragOverAlvo === alvo}
                       onDragStartPaciente={pac ? (e => e.dataTransfer.setData('text/plain', pac.id)) : undefined}
-                      onDragOverVazio={!pac ? (e => { e.preventDefault(); setDragOverAlvo(alvo) }) : undefined}
-                      onDragLeaveVazio={!pac ? (() => setDragOverAlvo(a => a === alvo ? null : a)) : undefined}
-                      onDropVazio={!pac ? (e => {
+                      onDragOverVazio={aceitaDrop ? (e => { e.preventDefault(); setDragOverAlvo(alvo) }) : undefined}
+                      onDragLeaveVazio={aceitaDrop ? (() => setDragOverAlvo(a => a === alvo ? null : a)) : undefined}
+                      onDropVazio={aceitaDrop ? (e => {
                         e.preventDefault()
                         setDragOverAlvo(null)
                         const pacienteId = e.dataTransfer.getData('text/plain')
@@ -403,6 +444,22 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
         />
       )}
 
+      {finalizarTarget && unidade && (
+        <FinalizarAdmissaoModal
+          paciente={finalizarTarget.paciente}
+          unidade={unidade}
+          alaInicial={finalizarTarget.alaInicial}
+          leitoInicial={finalizarTarget.leitoInicial}
+          onClose={() => setFinalizarTarget(null)}
+          onFinalizado={async () => {
+            setFinalizarTarget(null)
+            await refreshPacientes()
+            showToast('Admissão finalizada.')
+          }}
+          showToast={showToast}
+        />
+      )}
+
       <ToastContainer toasts={toasts} remove={removeToast} />
     </div>
   )
@@ -411,10 +468,13 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
 // ── Leito Card ────────────────────────────────────────────────────────────
 
 function LeitoCard({
-  numero, paciente, requerSaps3, swabPendente, onClick, isDragTarget,
+  numero, paciente, rotativo, requerSaps3, swabPendente, onClick, isDragTarget,
   onDragStartPaciente, onDragOverVazio, onDragLeaveVazio, onDropVazio,
 }: {
   numero: string; paciente: Paciente | undefined; requerSaps3: boolean; swabPendente: boolean; onClick: () => void
+  /** Leito na ala de trânsito — visual distinto, sem cobrar SAPS-3 (a
+   *  admissão de verdade ainda não aconteceu, ver Finalizar Admissão). */
+  rotativo?: boolean
   /** true quando um card de paciente está sendo arrastado sobre ESTE leito vazio. */
   isDragTarget?: boolean
   /** Só passado quando há paciente — inicia o arraste (id do paciente no dataTransfer). */
@@ -434,13 +494,15 @@ function LeitoCard({
       onDragOver={onDragOverVazio}
       onDragLeave={onDragLeaveVazio}
       onDrop={onDropVazio}
-      title={!isEmpty ? 'Arraste para um leito vazio pra transferir' : undefined}
+      title={rotativo && !isEmpty ? 'Clique para finalizar a admissão num leito definitivo'
+        : !isEmpty ? 'Arraste para um leito vazio pra transferir' : undefined}
       className={`w-full min-h-[6.75rem] text-left rounded-xl border-2 p-2 transition-all
         ${isEmpty
           ? isDragTarget
             ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-300'
-            : 'border-slate-200 bg-white hover:border-indigo-300 hover:shadow-md'
-          : 'border-indigo-400 bg-indigo-50 hover:shadow-md hover:border-indigo-500 cursor-grab active:cursor-grabbing'
+            : rotativo ? 'border-dashed border-sky-200 bg-sky-50/50' : 'border-slate-200 bg-white hover:border-indigo-300 hover:shadow-md'
+          : rotativo ? 'border-dashed border-sky-400 bg-sky-50 hover:shadow-md hover:border-sky-500'
+                     : 'border-indigo-400 bg-indigo-50 hover:shadow-md hover:border-indigo-500 cursor-grab active:cursor-grabbing'
         }`}
     >
       <div className="text-xs font-bold text-slate-400 mb-0.5">Leito {pad(numero)}</div>
@@ -458,17 +520,23 @@ function LeitoCard({
           {/* Área reservada pros badges (SAPS-3, swab): altura fixa mesmo com 0, 1 ou 2
               badges, senão os cards da mesma linha do grid ficam com alturas diferentes. */}
           <div className="min-h-[2rem] mt-0.5 space-y-0.5">
-            {requerSaps3 && paciente.saps3 == null && (
-              <div className="text-[11px] font-semibold text-amber-600"
-                title="SAPS-3 não pontuado — obrigatório para dar saída">
-                ⚠️ SAPS-3
-              </div>
-            )}
-            {swabPendente && (
-              <div className="text-[11px] font-semibold text-amber-600"
-                title="Swab de vigilância coletado, resultado ainda pendente">
-                🧫 Swab pendente
-              </div>
+            {rotativo ? (
+              <div className="text-[11px] font-semibold text-sky-600">🔁 aguardando leito</div>
+            ) : (
+              <>
+                {requerSaps3 && paciente.saps3 == null && (
+                  <div className="text-[11px] font-semibold text-amber-600"
+                    title="SAPS-3 não pontuado — obrigatório para dar saída">
+                    ⚠️ SAPS-3
+                  </div>
+                )}
+                {swabPendente && (
+                  <div className="text-[11px] font-semibold text-amber-600"
+                    title="Swab de vigilância coletado, resultado ainda pendente">
+                    🧫 Swab pendente
+                  </div>
+                )}
+              </>
             )}
           </div>
         </>

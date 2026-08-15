@@ -244,6 +244,30 @@ export const MODULOS: readonly ModuloDef[] = [
   },
 ]
 
+// ── Módulos da enfermaria (Hospital): só Médico + Internos ──────────────────
+//
+// "Internos" é a mesma permissão de "Médico Plantonista" de hoje, só com
+// rótulo diferente — nenhuma regra nova (decisão do plano: "só o nome
+// muda"). Dispositivos/LPP/Swabs (aba `enfermagem`) entra dentro de
+// Internos porque o módulo de Enfermagem inteiro fica oculto na enfermaria
+// — reaproveita o TabDef como já existe, sem separar dispositivos do resto
+// (decisão do plano).
+const MODULOS_ENFERMARIA: readonly ModuloDef[] = [
+  {
+    id: 'medico',
+    label: '📋 Médico',
+    profissaoDona: 'medico',
+    exigeChefe: true,
+    tabs: [cuidadosHorizontais, iras, examesLab, examesImagem],
+  },
+  {
+    id: 'internos',
+    label: '🩺 Internos',
+    profissaoDona: 'medico',
+    tabs: [painelPlantao, balanco, examesLab, sinais, hemodinamica, neurologico, ventilatorio, examesImagem, enfermagem],
+  },
+]
+
 // ── Módulo único legado (flag desligada): as 6 abas clássicas ───────────────
 
 const LEGACY: ModuloDef = {
@@ -256,7 +280,10 @@ const LEGACY: ModuloDef = {
   ],
 }
 
-/** Módulos visíveis na sessão atual, conforme a feature flag. */
-export function modulosAtivos(): readonly ModuloDef[] {
-  return featureFlags.novaEstrutura ? MODULOS : [LEGACY]
+/** Módulos visíveis na sessão atual, conforme a feature flag e o tipo da
+ *  unidade — 'uti' mantém os 5 módulos de sempre, 'enfermaria' mostra só
+ *  Médico + Internos (ver decisão 6/7 do plano de transferência). */
+export function modulosAtivos(tipoUnidade: 'uti' | 'enfermaria' = 'uti'): readonly ModuloDef[] {
+  if (!featureFlags.novaEstrutura) return [LEGACY]
+  return tipoUnidade === 'enfermaria' ? MODULOS_ENFERMARIA : MODULOS
 }

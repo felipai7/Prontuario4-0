@@ -2,14 +2,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import AltaModal        from './AltaModal'
-import { fmtData, calcAge, pad, diasDesde, fmtNum, toTitleCaseNome, ultimoPorTurno, horasDesdeAdmissao, parseDataParaISO, hojeISO, sugerirProximoTurno, boundaryStart, soDigitos } from '@/lib/utils'
+import TransferirModal         from './TransferirModal'
+import FinalizarAdmissaoModal  from './FinalizarAdmissaoModal'
+import { fmtData, fmtDataHora, calcAge, pad, diasDesde, fmtNum, toTitleCaseNome, ultimoPorTurno, horasDesdeAdmissao, parseDataParaISO, hojeISO, sugerirProximoTurno, boundaryStart, soDigitos } from '@/lib/utils'
 import { nomeDaAla, type Unidade } from '@/lib/unidade'
 import { modulosAtivos, type PacienteContext } from '@/lib/modules'
 import { montarEvolucaoDiaria } from '@/lib/evolucaoDiaria'
 import { podeEditarModulo } from '@/lib/cargos'
-import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, FisioEvento, FisioAvaliacaoDiaria, Dispositivo, LppEvento, NutricaoAvaliacao, NutricaoDia, AuditoriaIntensivista, IrasEvento, IrasSepseChoque, SwabVigilancia, ToastData, Cargo } from '@/types'
-
-const modulos = modulosAtivos()
+import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, FisioEvento, FisioAvaliacaoDiaria, Dispositivo, LppEvento, NutricaoAvaliacao, NutricaoDia, AuditoriaIntensivista, IrasEvento, IrasSepseChoque, SwabVigilancia, ToastData, Cargo, PeriodoUnidade, ResumoAlta } from '@/types'
 
 interface Props {
   paciente: Paciente
@@ -64,6 +64,9 @@ export default function PacienteModal({
   const supabase   = createClient()
   const alas       = unidade?.alas ?? []
   const opcoesPlanos = [...planosSaude, 'Outros']
+  // Recalculado a cada render (não é caro) porque `unidade` pode mudar sem
+  // desmontar o modal — navegar de leito entre UTI e Hospital, por exemplo.
+  const modulos = modulosAtivos(unidade?.tipoUnidade)
   const [moduloId, setModuloId] = useState(modulos[0].id)
   const [tab,      setTab]      = useState(modulos[0].tabs[0].id)
   const moduloAtivo = modulos.find(m => m.id === moduloId) ?? modulos[0]
@@ -93,6 +96,15 @@ export default function PacienteModal({
   const [cargo, setCargo] = useState<Cargo | null>(null)
   const [loading,       setLoading]       = useState(true)
   const [showAlta,      setShowAlta]      = useState(false)
+  const [showTransferir, setShowTransferir] = useState(false)
+  const [showFinalizar,  setShowFinalizar]  = useState(false)
+  /** Histórico de internações — carregado sob demanda ao abrir a seção,
+   *  não no loadData() principal: é informação de apoio, não crítica pro
+   *  fluxo do dia a dia. */
+  const [historicoOpen,   setHistoricoOpen]   = useState(false)
+  const [historicoLoading, setHistoricoLoading] = useState(false)
+  const [historicoPeriodos, setHistoricoPeriodos] = useState<PeriodoUnidade[]>([])
+  const [historicoAltas,    setHistoricoAltas]    = useState<ResumoAlta[]>([])
   const [pac,           setPac]           = useState<Paciente>(paciente)
   const [editing,       setEditing]       = useState(false)
   /** Pop-up (não o banner fixo abaixo do cabeçalho) — interrompe ao ABRIR a
@@ -318,6 +330,8 @@ export default function PacienteModal({
     setEditErrors({})
     setEditForm(makeEditForm(paciente))
     setShowAlta(false)
+    setShowTransferir(false); setShowFinalizar(false)
+    setHistoricoOpen(false); setHistoricoPeriodos([]); setHistoricoAltas([])
     aiAbortRef.current?.abort()
     setAiOpen(false); setAiText(null); setAiLoading(false)
     setEvoOpen(false); setEvoText(''); setEvoCopied(false)
@@ -420,6 +434,20 @@ export default function PacienteModal({
     } finally {
       setAiLoading(false)
     }
+  }
+
+  const toggleHistorico = async () => {
+    const abrindo = !historicoOpen
+    setHistoricoOpen(abrindo)
+    if (!abrindo || historicoPeriodos.length > 0 || historicoLoading) return
+    setHistoricoLoading(true)
+    const [{ data: periodos }, { data: altas }] = await Promise.all([
+      supabase.rpc('buscar_historico_paciente', { p_paciente_id: pac.id }),
+      supabase.rpc('buscar_altas_paciente', { p_paciente_id: pac.id }),
+    ])
+    setHistoricoPeriodos((periodos as PeriodoUnidade[]) ?? [])
+    setHistoricoAltas((altas as ResumoAlta[]) ?? [])
+    setHistoricoLoading(false)
   }
 
   const handleSaveEdit = async () => {
@@ -642,6 +670,19 @@ export default function PacienteModal({
                   className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${editing ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white hover:bg-white/20'}`}>
                   ✏️ Editar
                 </button>
+                {alas.find(a => a.id === pac.ala_id)?.rotativo ? (
+                  <button onClick={() => setShowFinalizar(true)} disabled={loading || !unidade}
+                    title={loading ? 'Aguarde o carregamento dos dados do paciente' : 'Alocar leito definitivo e confirmar a admissão'}
+                    className="bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
+                    🛏️ Finalizar Admissão
+                  </button>
+                ) : (
+                  <button onClick={() => setShowTransferir(true)} disabled={loading}
+                    title={loading ? 'Aguarde o carregamento dos dados do paciente' : 'Transferir para outra unidade'}
+                    className="bg-white/15 hover:bg-white/25 border border-white/25 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
+                    🔁 Transferir
+                  </button>
+                )}
                 <button onClick={() => setShowAlta(true)} disabled={loading}
                   title={loading ? 'Aguarde o carregamento dos dados do paciente' : undefined}
                   className="bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
@@ -924,6 +965,56 @@ export default function PacienteModal({
               </div>
             )}
 
+            <div className="mb-4">
+              <button onClick={toggleHistorico}
+                className="text-xs font-semibold text-slate-500 hover:text-indigo-600 flex items-center gap-1">
+                {historicoOpen ? '▲' : '▼'} 🗂️ Histórico de internações
+              </button>
+              {historicoOpen && (
+                <div className="mt-2 border border-slate-200 rounded-xl p-3 bg-slate-50 text-xs space-y-2">
+                  {historicoLoading ? (
+                    <p className="text-slate-400">Carregando...</p>
+                  ) : historicoPeriodos.length === 0 ? (
+                    <p className="text-slate-400">Sem períodos registrados.</p>
+                  ) : (
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="text-slate-400">
+                          <th className="font-medium pr-3 pb-1">Unidade</th>
+                          <th className="font-medium pr-3 pb-1">Ala</th>
+                          <th className="font-medium pr-3 pb-1">Desde</th>
+                          <th className="font-medium pb-1">Até</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {historicoPeriodos.map((p, i) => (
+                          <tr key={i} className="text-slate-700">
+                            <td className="pr-3 py-0.5">{p.unit_nome}</td>
+                            <td className="pr-3 py-0.5">
+                              {p.ala_id}{!p.conta_indicador && <span className="text-sky-600 ml-1">(trânsito)</span>}
+                            </td>
+                            <td className="pr-3 py-0.5">{fmtDataHora(p.desde)}</td>
+                            <td className="py-0.5">{p.ate ? fmtDataHora(p.ate) : 'atual'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                  {historicoAltas.length > 0 && (
+                    <div className="pt-2 border-t border-slate-200">
+                      <p className="font-medium text-slate-500 mb-1">Saídas registradas</p>
+                      {historicoAltas.map(a => (
+                        <p key={a.id} className="text-slate-700">
+                          {a.tipo_saida === 'transferencia' ? '🔁 Transferência' : a.tipo_saida === 'obito' ? '🕯️ Óbito' : '🏠 Alta'}
+                          {' — '}{fmtDataHora(a.data_alta)}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {loading ? (
               <div className="flex items-center justify-center py-16">
                 <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
@@ -950,6 +1041,25 @@ export default function PacienteModal({
           requerSaps3={unidade?.requerSaps3 ?? true}
           onClose={() => setShowAlta(false)}
           onAltaConcedida={onAltaConcedida}
+          showToast={showToast}
+        />
+      )}
+
+      {showTransferir && (
+        <TransferirModal
+          paciente={pac}
+          onClose={() => setShowTransferir(false)}
+          onTransferido={onAltaConcedida}
+          showToast={showToast}
+        />
+      )}
+
+      {showFinalizar && unidade && (
+        <FinalizarAdmissaoModal
+          paciente={pac}
+          unidade={unidade}
+          onClose={() => setShowFinalizar(false)}
+          onFinalizado={onAltaConcedida}
           showToast={showToast}
         />
       )}

@@ -68,6 +68,7 @@ export default function UnidadeAdmin({ souChefe, userEmail, units: unitsIniciais
 
   // ── Unidade ─────────────────────────────────────────────────────────────
   const [novaUnidade, setNovaUnidade] = useState('')
+  const [novoTipoUnidade, setNovoTipoUnidade] = useState<'uti' | 'enfermaria'>('uti')
 
   const recarregarUnidades = useCallback(async (): Promise<Unit[]> => {
     const { data } = await supabase.from('units').select('*').order('name')
@@ -86,7 +87,7 @@ export default function UnidadeAdmin({ souChefe, userEmail, units: unitsIniciais
     setNovaUnidade('')
 
     const antes = new Set(units.map(u => u.id))
-    const lista = await recarregarUnidades()
+    let lista = await recarregarUnidades()
     // Já pula para a unidade nova: o passo seguinte é sempre cadastrar as alas
     // e os leitos dela, e sem isso ela nasce sem mapa de leitos.
     //
@@ -94,9 +95,27 @@ export default function UnidadeAdmin({ souChefe, userEmail, units: unitsIniciais
     // devolvido pela RPC (que não chega como string simples) nem pelo nome
     // (que pode repetir). Assim não depende do formato da resposta.
     const nova = lista.find(u => !antes.has(u.id))
-    if (nova) setUnidadeId(nova.id)
+    if (nova) {
+      setUnidadeId(nova.id)
+      // criar_unidade não recebe tipo_unidade — nasce 'uti' por default e
+      // corrige aqui com um update comum, mesmo padrão de alternarRequerSaps3.
+      if (novoTipoUnidade !== 'uti') {
+        await supabase.from('units').update({ tipo_unidade: novoTipoUnidade }).eq('id', nova.id)
+        lista = await recarregarUnidades()
+      }
+    }
 
     showToast(`Unidade "${nome}" criada. Cadastre as alas e os leitos dela.`)
+  }
+
+  const alternarTipoUnidade = async (u: Unit) => {
+    const novo = u.tipo_unidade === 'uti' ? 'enfermaria' : 'uti'
+    const { error } = await supabase.from('units').update({ tipo_unidade: novo }).eq('id', u.id)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    await recarregarUnidades()
+    showToast(novo === 'enfermaria'
+      ? 'Unidade agora mostra só os módulos Médico + Internos.'
+      : 'Unidade volta a mostrar os 5 módulos da UTI.')
   }
 
   const renomearUnidade = async (u: Unit) => {
@@ -170,6 +189,7 @@ export default function UnidadeAdmin({ souChefe, userEmail, units: unitsIniciais
 
   // ── Alas ────────────────────────────────────────────────────────────────
   const [novaAlaNome, setNovaAlaNome] = useState('')
+  const [novaAlaRotativo, setNovaAlaRotativo] = useState(false)
 
   const criarAla = async () => {
     const nome = novaAlaNome.trim()
@@ -179,11 +199,20 @@ export default function UnidadeAdmin({ souChefe, userEmail, units: unitsIniciais
     if (alas.some(a => a.codigo === codigo)) { showToast('Já existe uma ala com esse código.', 'error'); return }
 
     const { error } = await supabase.from('alas').insert({
-      unit_id: unidadeId, codigo, nome, ordem: alas.length + 1,
+      unit_id: unidadeId, codigo, nome, ordem: alas.length + 1, rotativo: novaAlaRotativo,
     })
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
     setNovaAlaNome('')
+    setNovaAlaRotativo(false)
     showToast(`Ala "${nome}" criada (código ${codigo}).`)
+    carregar(unidadeId)
+  }
+
+  const alternarRotativo = async (a: Ala) => {
+    if (!a.rotativo && alas.some(x => x.rotativo && x.id !== a.id) &&
+        !confirm(`Já existe uma ala de trânsito nesta unidade. Marcar "${a.nome}" também como trânsito?`)) return
+    const { error } = await supabase.from('alas').update({ rotativo: !a.rotativo }).eq('id', a.id)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
     carregar(unidadeId)
   }
 
@@ -341,6 +370,13 @@ export default function UnidadeAdmin({ souChefe, userEmail, units: unitsIniciais
                     className="w-3.5 h-3.5 accent-indigo-600" />
                   Exigir SAPS-3 na alta
                 </label>
+                <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600 cursor-pointer"
+                  title="UTI mostra os 5 módulos de sempre. Enfermaria mostra só Médico + Internos.">
+                  <input type="checkbox" checked={unidadeAtual.tipo_unidade === 'enfermaria'}
+                    onChange={() => alternarTipoUnidade(unidadeAtual)}
+                    className="w-3.5 h-3.5 accent-indigo-600" />
+                  É enfermaria (não UTI)
+                </label>
               </>
             )}
             <p className="text-xs text-slate-400 ml-auto">
@@ -353,6 +389,11 @@ export default function UnidadeAdmin({ souChefe, userEmail, units: unitsIniciais
               onKeyDown={e => { if (e.key === 'Enter') criarUnidade() }}
               placeholder="Nome de uma nova unidade (ex.: UTI Cardiológica)"
               className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <select value={novoTipoUnidade} onChange={e => setNovoTipoUnidade(e.target.value as 'uti' | 'enfermaria')}
+              className="border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white">
+              <option value="uti">UTI (5 módulos)</option>
+              <option value="enfermaria">Enfermaria (Médico + Internos)</option>
+            </select>
             <button onClick={criarUnidade} disabled={!novaUnidade.trim()}
               className="text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40
                          text-white rounded-lg px-3 py-2 whitespace-nowrap">
@@ -426,6 +467,11 @@ export default function UnidadeAdmin({ souChefe, userEmail, units: unitsIniciais
                     <h2 className="font-semibold text-slate-700">{ala.nome}</h2>
                     <code className="text-[11px] bg-slate-100 text-slate-500 rounded px-1.5 py-0.5">{ala.codigo}</code>
                     {!ala.ativa && <span className="text-[11px] text-amber-600 font-medium">desativada</span>}
+                    {ala.rotativo && (
+                      <span className="text-[11px] text-sky-700 bg-sky-50 border border-sky-200 rounded-full px-2 py-0.5 font-medium">
+                        🔁 trânsito
+                      </span>
+                    )}
                     <span className="text-xs text-slate-400">
                       {meus.filter(vigente).length} leito(s) vigente(s)
                     </span>
@@ -433,6 +479,11 @@ export default function UnidadeAdmin({ souChefe, userEmail, units: unitsIniciais
                       <button onClick={() => renomearAla(ala)}
                         className="text-xs text-slate-500 hover:text-indigo-600 border border-slate-200 rounded-lg px-2 py-1">
                         Renomear
+                      </button>
+                      <button onClick={() => alternarRotativo(ala)}
+                        title="Ala de trânsito: só recebe paciente por transferência, some do dashboard quando vazia e fica fora dos indicadores"
+                        className="text-xs text-slate-500 hover:text-indigo-600 border border-slate-200 rounded-lg px-2 py-1">
+                        {ala.rotativo ? 'Tirar de trânsito' : 'Marcar como trânsito'}
                       </button>
                       <button onClick={() => alternarAla(ala)}
                         className="text-xs text-slate-500 hover:text-indigo-600 border border-slate-200 rounded-lg px-2 py-1">
@@ -509,6 +560,12 @@ export default function UnidadeAdmin({ souChefe, userEmail, units: unitsIniciais
                   onKeyDown={e => { if (e.key === 'Enter') criarAla() }}
                   placeholder="Nome da ala (ex.: UTI 03)"
                   className="flex-1 min-w-[12rem] border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600 cursor-pointer whitespace-nowrap"
+                  title="Leito suspenso: só recebe paciente por transferência de outra unidade, some do dashboard quando vazia e fica fora dos indicadores">
+                  <input type="checkbox" checked={novaAlaRotativo} onChange={e => setNovaAlaRotativo(e.target.checked)}
+                    className="w-3.5 h-3.5 accent-indigo-600" />
+                  Ala de trânsito
+                </label>
                 <button onClick={criarAla} disabled={!novaAlaNome.trim()}
                   className="text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40
                              text-white rounded-lg px-3 py-2">

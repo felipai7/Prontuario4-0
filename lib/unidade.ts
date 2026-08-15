@@ -14,6 +14,10 @@ export interface Ala {
   nome: string
   /** Códigos dos leitos vigentes hoje, em ordem. Texto: "3" num leito simples, "01A" num código de porta. */
   leitos: string[]
+  /** Ala de trânsito (leito suspenso): só recebe por transferência, some do
+   *  dashboard quando vazia e fora dos indicadores enquanto o paciente está
+   *  nela — ver supabase/registro_unico_transferencia.sql. */
+  rotativo: boolean
 }
 
 export interface Unidade {
@@ -26,6 +30,9 @@ export interface Unidade {
   outrasUnidades: number
   /** Se falso, a alta nesta unidade não exige SAPS-3 pontuado (ex.: Hospital). */
   requerSaps3: boolean
+  /** Decide módulos/rótulos (lib/modules.tsx): 'uti' = 5 módulos de sempre,
+   *  'enfermaria' = só Médico + Internos. */
+  tipoUnidade: 'uti' | 'enfermaria'
 }
 
 /** Formato cru vindo do PostgREST (alas com leitos embutidos). */
@@ -33,6 +40,7 @@ interface AlaRow {
   codigo: string
   nome: string
   ordem: number
+  rotativo: boolean
   leitos: LeitoRow[]
 }
 
@@ -97,17 +105,15 @@ export async function carregarUnidade(
 ): Promise<Unidade | null> {
   const { data: staffRows } = await supabase
     .from('staff')
-    .select('unit_id, created_at, units(name, requer_saps3)')
+    .select('unit_id, created_at, units(name, requer_saps3, tipo_unidade)')
     .eq('user_id', userId)
     .eq('active', true)
     // Ordem estável: sem isso, quem trabalha em duas unidades cairia numa ou
     // noutra a cada carregamento, sem explicação.
     .order('created_at')
 
-  type Vinculo = {
-    unit_id: string
-    units: { name: string; requer_saps3: boolean } | { name: string; requer_saps3: boolean }[] | null
-  }
+  type UnitCols = { name: string; requer_saps3: boolean; tipo_unidade: 'uti' | 'enfermaria' }
+  type Vinculo = { unit_id: string; units: UnitCols | UnitCols[] | null }
   const vinculos = (staffRows ?? []) as Vinculo[]
 
   const vinculo = (preferida && vinculos.find(v => v.unit_id === preferida)) || vinculos[0]
@@ -119,10 +125,11 @@ export async function carregarUnidade(
   const uObj = Array.isArray(u) ? u[0] : u
   const nome = uObj?.name ?? 'Unidade'
   const requerSaps3 = uObj?.requer_saps3 ?? true
+  const tipoUnidade = uObj?.tipo_unidade ?? 'uti'
 
   const { data: alasRows } = await supabase
     .from('alas')
-    .select('codigo, nome, ordem, leitos(numero, ativo_desde, ativo_ate)')
+    .select('codigo, nome, ordem, rotativo, leitos(numero, ativo_desde, ativo_ate)')
     .eq('unit_id', vinculo.unit_id)
     .eq('ativa', true)
     .order('ordem')
@@ -133,15 +140,20 @@ export async function carregarUnidade(
     id: a.codigo,
     nome: a.nome,
     leitos: leitosVigentes(a.leitos, hoje),
+    rotativo: a.rotativo,
   }))
 
   return {
     unitId: vinculo.unit_id,
     nome,
     alas,
-    leitosAtivos: alas.reduce((n, a) => n + a.leitos.length, 0),
+    // Ala de trânsito fica fora — mesmo critério de leitos_dia_mes/leitos_ativos
+    // no banco (registro_unico_transferencia.sql): sem isso o header mostraria
+    // uma ocupação que nunca bate com o indicador oficial.
+    leitosAtivos: alas.filter(a => !a.rotativo).reduce((n, a) => n + a.leitos.length, 0),
     outrasUnidades: vinculos.length - 1,
     requerSaps3,
+    tipoUnidade,
   }
 }
 

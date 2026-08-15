@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { fmtData, calcAge, hojeISO } from '@/lib/utils'
 import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, TipoSaida, ToastData } from '@/types'
@@ -30,14 +30,6 @@ interface Props {
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
 }
 
-/** Unidade em que o usuário logado também é staff — candidata a receber a transferência. */
-interface UnidadeDestino { id: string; nome: string }
-/** Ala da unidade destino. Disponibilidade de leito só é conferida no servidor
- *  (transferir_para_unidade): sob RLS, o cliente não enxerga ocupação de uma
- *  unidade que não é a ativa da sessão, então qualquer contagem feita aqui
- *  seria só otimismo. */
-interface AlaDestino { codigo: string; nome: string }
-
 type Step = 'confirm' | 'discharging' | 'alta_ok' | 'generating' | 'review'
 
 export default function AltaModal({ paciente, exames, periodos, sinais, examesImagem, dvas, atbs, cuidados, neuro, ventilatorio, requerSaps3, onClose, onAltaConcedida, showToast }: Props) {
@@ -57,85 +49,6 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
   // e a alta é a última chance de cobrar. Fora da UTI (unidade sem
   // requerSaps3) essa cobrança não faz sentido — o escore nem existe lá.
   const semSaps3 = requerSaps3 && paciente.saps3 == null
-
-  // ── Transferência para leito hospitalar (opcional, só quando tipo = alta) ──
-  const [transferir,          setTransferir]          = useState(false)
-  const [unidadesDestino,     setUnidadesDestino]      = useState<UnidadeDestino[]>([])
-  const [unitDestinoId,       setUnitDestinoId]        = useState('')
-  const [alasDestino,         setAlasDestino]          = useState<AlaDestino[]>([])
-  const [alaDestinoCodigo,    setAlaDestinoCodigo]     = useState('')
-
-  // Unidades onde o usuário logado também é staff, além da unidade atual do
-  // paciente — candidatas a receber a transferência. Carregado uma vez.
-  useEffect(() => {
-    let cancelado = false
-    ;(async () => {
-      const { data: auth } = await supabase.auth.getUser()
-      if (!auth.user) return
-      const { data } = await supabase
-        .from('staff')
-        .select('unit_id, units(id, name)')
-        .eq('user_id', auth.user.id).eq('active', true).neq('unit_id', paciente.unit_id)
-      if (cancelado) return
-      type Row = { unit_id: string; units: { id: string; name: string } | { id: string; name: string }[] | null }
-      const rows = (data ?? []) as Row[]
-      const lista = rows.map(r => {
-        const u = Array.isArray(r.units) ? r.units[0] : r.units
-        return { id: r.unit_id, nome: u?.name ?? 'Unidade' }
-      })
-      setUnidadesDestino(lista)
-    })()
-    return () => { cancelado = true }
-  }, [])
-
-  // Alas da unidade destino escolhida (alas/leitos não são estreitados por
-  // na_unidade_ativa — só pacientes —, então essa leitura funciona normalmente
-  // mesmo com a UTI como unidade ativa da sessão).
-  useEffect(() => {
-    if (!unitDestinoId) { setAlasDestino([]); setAlaDestinoCodigo(''); return }
-    let cancelado = false
-    ;(async () => {
-      const { data } = await supabase.from('alas').select('codigo, nome')
-        .eq('unit_id', unitDestinoId).eq('ativa', true).order('ordem')
-      if (cancelado) return
-      setAlasDestino((data as AlaDestino[]) ?? [])
-      setAlaDestinoCodigo('')
-    })()
-    return () => { cancelado = true }
-  }, [unitDestinoId])
-
-  /**
-   * Cria o paciente do lado da unidade destino, ligado à alta que acabou de
-   * acontecer. Via RPC (não INSERT direto): a policy de pacientes exige
-   * na_unidade_ativa(unit_id) além de sou_da_unidade — a UTI é a unidade
-   * ativa no momento da alta, não o destino, então um INSERT do cliente
-   * sempre voltaria 403. transferir_para_unidade contorna isso de propósito,
-   * com sua própria checagem de que o chamador é staff da unidade destino.
-   *
-   * O resultado vira toast, não estado local: onAltaConcedida (chamado logo
-   * depois disto) fecha a ficha do paciente, e qualquer UI dentro do
-   * AltaModal desmonta antes de ser vista.
-   */
-  const transferirParaHospital = async (resumoAltaIdCriado: string | null) => {
-    const alaInfo = alasDestino.find(a => a.codigo === alaDestinoCodigo)
-    if (!alaInfo) return
-
-    const { error } = await supabase.rpc('transferir_para_unidade', {
-      p_nome: paciente.nome,
-      p_data_nascimento: paciente.data_nascimento,
-      p_plano_saude: paciente.plano_saude,
-      p_peso_kg: paciente.peso_kg,
-      p_hipoteses: paciente.hipoteses,
-      p_unit_destino: unitDestinoId,
-      p_ala_destino_codigo: alaInfo.codigo,
-      p_origem_uti_alta_id: resumoAltaIdCriado,
-    })
-    if (error) {
-      showToast('Alta feita, mas a transferência falhou: ' + error.message, 'error')
-      return
-    }
-    showToast(`Também registrado em ${unidadesDestino.find(u => u.id === unitDestinoId)?.nome} — ${alaInfo.nome}.`)
-  }
 
   /** Instante da saída em ISO, a partir dos campos locais. */
   const saidaISO = () => new Date(`${dataSaida}T${horaSaida}:00`).toISOString()
@@ -165,7 +78,6 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
     }).select('id').single()
     setResumoAltaId(data?.id ?? null)
     await supabase.from('pacientes').update({ ativo: false }).eq('id', paciente.id)
-    if (transferir && alaDestinoCodigo) await transferirParaHospital(data?.id ?? null)
     onAltaConcedida()
     setAlreadyDischarged(true)
     setBusy(false)
@@ -228,7 +140,6 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
       ...camposSaida(),
     }).select('id').single()
     await supabase.from('pacientes').update({ ativo: false }).eq('id', paciente.id)
-    if (transferir && alaDestinoCodigo) await transferirParaHospital(data?.id ?? null)
     onAltaConcedida()
     setBusy(false)
     onClose()
@@ -337,35 +248,7 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
                 </div>
               </div>
 
-              {tipoSaida === 'alta' && unidadesDestino.length > 0 && (
-                <div className="border border-indigo-200 bg-indigo-50 rounded-xl p-4 space-y-2">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={transferir}
-                      onChange={e => setTransferir(e.target.checked)}
-                      className="w-4 h-4 accent-indigo-600" />
-                    <span className="text-sm font-semibold text-indigo-900">🏥 Transferir para leito hospitalar</span>
-                  </label>
-                  {transferir && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                      <select value={unitDestinoId} onChange={e => setUnitDestinoId(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
-                        <option value="">Unidade destino...</option>
-                        {unidadesDestino.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}
-                      </select>
-                      <select value={alaDestinoCodigo} onChange={e => setAlaDestinoCodigo(e.target.value)}
-                        disabled={!unitDestinoId}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white disabled:opacity-50">
-                        <option value="">Ala destino...</option>
-                        {alasDestino.map(a => (
-                          <option key={a.codigo} value={a.codigo}>{a.nome}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <button onClick={handleAltaDireta} disabled={!tipoSaida || semSaps3 || (transferir && !alaDestinoCodigo)}
+              <button onClick={handleAltaDireta} disabled={!tipoSaida || semSaps3}
                 className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed
                            text-white font-bold py-3 rounded-xl transition-colors">
                 ✅ Registrar Saída Agora
@@ -377,7 +260,7 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
                 <div className="flex-1 border-t border-slate-200" />
               </div>
 
-              <button onClick={handleGenerateFirst} disabled={!tipoSaida || semSaps3 || (transferir && !alaDestinoCodigo)}
+              <button onClick={handleGenerateFirst} disabled={!tipoSaida || semSaps3}
                 className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed
                            text-white font-semibold py-3 rounded-xl transition-colors text-sm">
                 🤖 Gerar Resumo com IA e Registrar Saída
