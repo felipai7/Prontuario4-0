@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { isDateFuture, toTitleCaseNome, normalizarNome, fmtDataHora, parseDataParaISO, hojeISO } from '@/lib/utils'
+import { isDateFuture, toTitleCaseNome, normalizarNome, fmtDataHora, parseDataParaISO, hojeISO, soDigitos } from '@/lib/utils'
 import type { Paciente, ToastData } from '@/types'
 
 interface Props {
@@ -12,6 +12,8 @@ interface Props {
   numeroLeito: string
   /** Planos cadastrados pelo chefe em /unidade — "Outros" é acrescentado aqui embaixo, sempre por último. */
   planosSaude: string[]
+  /** Se falso (ex.: Hospital), SAPS-3 não se aplica — sem aviso, sem bloqueio. */
+  requerSaps3: boolean
   onClose: () => void
   onSaved: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
@@ -37,7 +39,7 @@ function descreverIntervalo(horas: number): string {
   return `${Math.round(horas / 24)} dias`
 }
 
-export default function CadastroForm({ alaId, alaNome, unitId, numeroLeito, planosSaude, onClose, onSaved, showToast }: Props) {
+export default function CadastroForm({ alaId, alaNome, unitId, numeroLeito, planosSaude, requerSaps3, onClose, onSaved, showToast }: Props) {
   const supabase = createClient()
   const hoje     = hojeISO()
   const agoraH   = new Date().toTimeString().slice(0, 5)
@@ -53,6 +55,10 @@ export default function CadastroForm({ alaId, alaNome, unitId, numeroLeito, plan
   const [hipoteses, setHipoteses] = useState('')
   const [oncologico, setOncologico] = useState(false)
   const [saps3,     setSaps3]     = useState('')
+  /** Só libera internar sem SAPS-3 depois de um clique consciente — sem isso,
+   *  "deixar pra depois" virava o caminho de menor esforço e o escore nunca
+   *  era pontuado na janela certa (dados da 1ª hora). */
+  const [cienteSemSaps3, setCienteSemSaps3] = useState(false)
   const [errors,    setErrors]    = useState<Record<string, string>>({})
   const [saving,    setSaving]    = useState(false)
 
@@ -150,7 +156,7 @@ export default function CadastroForm({ alaId, alaNome, unitId, numeroLeito, plan
     else if (isDateFuture(dataInt)) e.dataInt = 'Não pode ser futura'
     if (!horaInt)      e.horaInt  = 'Obrigatório'
     if (saps3) {
-      const n = parseFloat(saps3)
+      const n = parseInt(saps3, 10)
       if (Number.isNaN(n) || n < 0 || n > 300) e.saps3 = 'SAPS-3 inválido'
     }
     setErrors(e)
@@ -177,7 +183,7 @@ export default function CadastroForm({ alaId, alaNome, unitId, numeroLeito, plan
       numero_leito:    numeroLeito,
       oncologico,
       readmissao_de:   confirmouReint && altaAnterior ? altaAnterior.id : null,
-      saps3:              saps3 ? parseFloat(saps3) : null,
+      saps3:              saps3 ? parseInt(saps3, 10) : null,
       saps3_calculado_em: saps3 ? new Date().toISOString() : null,
     })
 
@@ -320,15 +326,35 @@ export default function CadastroForm({ alaId, alaNome, unitId, numeroLeito, plan
             </Field>
           </div>
 
-          <Field label="SAPS-3" error={errors.saps3}>
-            <input type="number" value={saps3} onChange={e => setSaps3(e.target.value)}
-              placeholder="Escore" min="0" max="300" step="1" className={input(errors.saps3)} />
-            <p className="text-xs text-slate-400 mt-1">
-              {saps3
-                ? 'Pontuado na admissão — é aqui que o escore vale.'
-                : 'Pode ficar para depois, mas será cobrado até a saída. O escore usa os dados da primeira hora.'}
-            </p>
+          <Field label="SAPS-3 — pontuação (escore), não a mortalidade predita" error={errors.saps3}>
+            <input type="text" inputMode="numeric" value={saps3}
+              onChange={e => setSaps3(soDigitos(e.target.value))}
+              placeholder="Ex: 45 (escore, entre 0 e 300)" className={input(errors.saps3)} />
+            {saps3 && (
+              <p className="text-xs text-slate-400 mt-1">
+                Pontuado na admissão — é aqui que o escore vale.
+              </p>
+            )}
           </Field>
+
+          {!saps3 && requerSaps3 && (
+            <div className="border border-amber-300 bg-amber-50 rounded-lg p-3">
+              <p className="text-sm font-semibold text-amber-900">⚠️ SAPS-3 não preenchido</p>
+              <p className="text-xs text-amber-800 mt-1">
+                Pontue agora, na admissão — é quando o escore vale (usa os dados da 1ª hora
+                de internação). Deixar para depois derruba a qualidade do indicador de
+                mortalidade esperada da unidade.
+              </p>
+              <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                <input type="checkbox" checked={cienteSemSaps3}
+                  onChange={e => setCienteSemSaps3(e.target.checked)}
+                  className="w-4 h-4 accent-amber-600" />
+                <span className="text-xs font-medium text-amber-900">
+                  Estou ciente que deveria inserir o SAPS-3 agora e vou prosseguir sem preenchê-lo
+                </span>
+              </label>
+            </div>
+          )}
 
           <Field label="Hipóteses Diagnósticas">
             <textarea value={hipoteses} onChange={e => setHipoteses(e.target.value)}
@@ -348,7 +374,8 @@ export default function CadastroForm({ alaId, alaNome, unitId, numeroLeito, plan
               className="flex-1 border border-slate-300 text-slate-700 font-semibold py-2.5 rounded-lg hover:bg-slate-50 text-sm">
               Cancelar
             </button>
-            <button type="submit" disabled={saving}
+            <button type="submit" disabled={saving || (requerSaps3 && !saps3 && !cienteSemSaps3)}
+              title={requerSaps3 && !saps3 && !cienteSemSaps3 ? 'Pontue o SAPS-3 ou confirme que está ciente da ausência dele' : undefined}
               className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50
                          text-white font-semibold py-2.5 rounded-lg text-sm transition-colors">
               {saving ? 'Salvando...' : 'Internar Paciente'}

@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import AltaModal        from './AltaModal'
-import { fmtData, calcAge, pad, diasDesde, fmtNum, toTitleCaseNome, ultimoPorTurno, horasDesdeAdmissao, parseDataParaISO, hojeISO, sugerirProximoTurno, boundaryStart } from '@/lib/utils'
+import { fmtData, calcAge, pad, diasDesde, fmtNum, toTitleCaseNome, ultimoPorTurno, horasDesdeAdmissao, parseDataParaISO, hojeISO, sugerirProximoTurno, boundaryStart, soDigitos } from '@/lib/utils'
 import { nomeDaAla, type Unidade } from '@/lib/unidade'
 import { modulosAtivos, type PacienteContext } from '@/lib/modules'
 import { montarEvolucaoDiaria } from '@/lib/evolucaoDiaria'
@@ -95,6 +95,10 @@ export default function PacienteModal({
   const [showAlta,      setShowAlta]      = useState(false)
   const [pac,           setPac]           = useState<Paciente>(paciente)
   const [editing,       setEditing]       = useState(false)
+  /** Pop-up (não o banner fixo abaixo do cabeçalho) — interrompe ao ABRIR a
+   *  ficha, uma vez por abertura/troca de leito, pra tirar o incentivo de
+   *  simplesmente ignorar o banner passivo. */
+  const [showSapsPopup, setShowSapsPopup] = useState(false)
 
   // AI evaluation state
   const [aiOpen,    setAiOpen]    = useState(false)
@@ -317,6 +321,7 @@ export default function PacienteModal({
     aiAbortRef.current?.abort()
     setAiOpen(false); setAiText(null); setAiLoading(false)
     setEvoOpen(false); setEvoText(''); setEvoCopied(false)
+    setShowSapsPopup((unidade?.requerSaps3 ?? true) && paciente.saps3 == null)
   }, [paciente.id])
 
   useEffect(() => {
@@ -445,7 +450,7 @@ export default function PacienteModal({
 
     const pesoNum = editForm.peso_kg ? parseFloat(editForm.peso_kg) : null
     if (pesoNum !== null && (pesoNum < 1 || pesoNum > 300)) errs.peso_kg = 'Peso inválido (1–300 Kg)'
-    const saps3Num = editForm.saps3 ? parseFloat(editForm.saps3) : null
+    const saps3Num = editForm.saps3 ? parseInt(editForm.saps3, 10) : null
     if (saps3Num !== null && (saps3Num < 0 || saps3Num > 300)) errs.saps3 = 'SAPS-3 inválido'
     setEditErrors(errs)
     if (Object.keys(errs).length > 0) return
@@ -523,6 +528,33 @@ export default function PacienteModal({
       {/* p-1 no celular: os 16px de cada lado custavam ~9% da largura útil de um
           iPhone, e isso sai justamente do conteúdo. No desktop segue p-4. */}
       <div className="fixed inset-0 bg-black/60 z-40 flex items-start justify-center p-1 sm:p-4 overflow-y-auto">
+        {/* Pop-up de SAPS-3 ausente: interrompe ao abrir a ficha (uma vez por
+            abertura/troca de leito) — o banner fixo dentro do cabeçalho fica
+            fácil de rolar e ignorar; isto aqui exige um clique pra sair do
+            caminho. */}
+        {showSapsPopup && (
+          <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-3 text-center">
+              <p className="text-4xl">📊</p>
+              <h3 className="text-lg font-bold text-slate-800">SAPS-3 não pontuado</h3>
+              <p className="text-sm text-slate-600">
+                <strong>{pac.nome}</strong> ainda não tem a pontuação (escore) do SAPS-3
+                registrada. Pontue com os dados da 1ª hora de internação — atrasar
+                prejudica a qualidade do indicador de mortalidade esperada da unidade.
+              </p>
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => setShowSapsPopup(false)}
+                  className="flex-1 border border-slate-300 text-slate-600 font-semibold py-2 rounded-lg text-sm hover:bg-slate-50 transition-colors">
+                  Depois
+                </button>
+                <button onClick={() => { setShowSapsPopup(false); setEditing(true) }}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 rounded-lg text-sm transition-colors">
+                  Pontuar agora
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {/* Setas de leito: trocam o paciente sem fechar o modal, então o
             módulo/aba que estava aberto continua o mesmo no leito seguinte
             (ex.: balanço hídrico do leito 3 → balanço hídrico do leito 4). */}
@@ -650,9 +682,9 @@ export default function PacienteModal({
                     <EInput type="number" step="0.1" min="1" max="300" value={editForm.peso_kg}
                       onChange={e => setEditForm(f => ({...f, peso_kg: e.target.value}))}/>
                   </EF>
-                  <EF label="SAPS-3" error={editErrors.saps3}>
-                    <EInput type="number" step="1" min="0" max="300" value={editForm.saps3}
-                      onChange={e => setEditForm(f => ({...f, saps3: e.target.value}))}/>
+                  <EF label="SAPS-3 — pontuação (escore), não a mortalidade predita" error={editErrors.saps3}>
+                    <EInput type="text" inputMode="numeric" placeholder="Ex: 45" value={editForm.saps3}
+                      onChange={e => setEditForm(f => ({...f, saps3: soDigitos(e.target.value)}))}/>
                   </EF>
                   <EF label="UTI">
                     <ESelect value={editForm.ala_id}

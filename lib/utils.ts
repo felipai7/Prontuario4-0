@@ -187,6 +187,12 @@ export const HORA_INICIO_NOTURNO = 19
  * getters locais do Date, os mesmos que getTurno/boundaryStart já usam — se
  * um dia mudar a suposição de fuso de um pro outro, muda nos dois juntos.
  */
+/** Filtra a digitação pra só dígitos — usado no SAPS-3, que é sempre um inteiro
+ *  (0-300): sem isso o campo numérico deixa passar decimal e sinal. */
+export function soDigitos(v: string): string {
+  return v.replace(/\D/g, '')
+}
+
 export function hojeISO(d: Date = new Date()): string {
   const ano = d.getFullYear()
   const mes = String(d.getMonth() + 1).padStart(2, '0')
