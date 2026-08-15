@@ -15,6 +15,8 @@ interface Props {
   paciente: Paciente
   /** Planta da unidade (alas e leitos), lida do banco. */
   unidade: Unidade | null
+  /** Pacientes ativos da unidade — dá pra ver quem ocupa cada leito ao transferir. */
+  pacientesAtivos: Paciente[]
   /** Catálogo único de planos de saúde do app (sem o "Outros" sentinela). */
   planosSaude: string[]
   onClose: () => void
@@ -56,7 +58,7 @@ type EditForm = {
 }
 
 export default function PacienteModal({
-  paciente, unidade, planosSaude, onClose, onAltaConcedida, showToast,
+  paciente, unidade, pacientesAtivos, planosSaude, onClose, onAltaConcedida, showToast,
   onLeitoAnterior, onProximoLeito, temLeitoAnterior, temProximoLeito,
 }: Props) {
   const supabase   = createClient()
@@ -564,6 +566,12 @@ export default function PacienteModal({
                       🫁 VM{ventAtual.vm_via ? ` · ${ventAtual.vm_via}` : ''}{ventAtual.vm_data_inicio ? ` · ${diasDesde(ventAtual.vm_data_inicio)}d` : ''}
                     </span>
                   )}
+                  {cuidados?.previsao_alta && cuidados.previsao_alta <= hoje && (
+                    <span className="bg-amber-500/90 border border-amber-200/60 text-amber-950 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap"
+                      title={`Previsão de alta: ${fmtData(cuidados.previsao_alta)}`}>
+                      🚪 Previsão de alta {cuidados.previsao_alta === hoje ? 'é hoje' : `venceu há ${diasDesde(cuidados.previsao_alta)}d`}
+                    </span>
+                  )}
                 </div>
                 <p className="text-indigo-200 text-sm mt-1">
                   📅 {fmtData(pac.data_nascimento)} ({calcAge(pac.data_nascimento)}) &nbsp;·&nbsp;
@@ -645,15 +653,34 @@ export default function PacienteModal({
                       {alas.map(a => <option key={a.id} value={a.id} className="text-slate-800">{a.nome}</option>)}
                     </ESelect>
                   </EF>
-                  <EF label="Leito" error={editErrors.numero_leito}>
-                    <ESelect value={editForm.numero_leito}
-                      onChange={e => setEditForm(f => ({...f, numero_leito: e.target.value}))}>
-                      <option value="" className="text-slate-800">Selecione...</option>
-                      {(alas.find(a => a.id === editForm.ala_id)?.leitos ?? []).map(l => (
-                        <option key={l} value={String(l)} className="text-slate-800">Leito {String(l).padStart(2,'0')}</option>
-                      ))}
-                    </ESelect>
-                  </EF>
+                  <div className="sm:col-span-2">
+                    <EF label="Leito" error={editErrors.numero_leito}>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(alas.find(a => a.id === editForm.ala_id)?.leitos ?? []).map(l => {
+                          const ocupante = pacientesAtivos.find(p =>
+                            p.ala_id === editForm.ala_id && p.numero_leito === l && p.id !== pac.id)
+                          const selecionado = editForm.numero_leito === l
+                          return (
+                            <button key={l} type="button" disabled={!!ocupante}
+                              onClick={() => setEditForm(f => ({ ...f, numero_leito: l }))}
+                              title={ocupante ? `Ocupado por ${ocupante.nome}` : 'Livre'}
+                              className={`text-xs font-semibold rounded-lg border px-2.5 py-1.5 transition-colors ${
+                                selecionado
+                                  ? 'bg-indigo-600 border-indigo-600 text-white'
+                                  : ocupante
+                                    ? 'bg-red-50 border-red-200 text-red-400 cursor-not-allowed line-through'
+                                    : 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100'
+                              }`}>
+                              {pad(l)}
+                            </button>
+                          )
+                        })}
+                        {(alas.find(a => a.id === editForm.ala_id)?.leitos ?? []).length === 0 && (
+                          <p className="text-xs text-indigo-200">Nenhum leito cadastrado nesta UTI.</p>
+                        )}
+                      </div>
+                    </EF>
+                  </div>
                   <EF label="Data de internação" error={editErrors.data_internacao}>
                     <EInput type="date" value={editForm.data_internacao} max={hoje}
                       onPaste={e => {

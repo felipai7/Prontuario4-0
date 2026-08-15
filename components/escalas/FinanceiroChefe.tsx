@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
+import ExcelJS from 'exceljs'
 import { createClient } from '@/lib/supabase/client'
 import type { Shift, ShiftPayment, ShiftType, Staff, ToastData } from '@/types'
 
@@ -156,25 +157,99 @@ export default function FinanceiroChefe({ unitId, staffList, shiftTypesList, sho
     win.document.close()
   }
 
-  const handleExportarCsv = () => {
-    const linhas = [
-      ['Data', 'Profissional', 'Turno', 'Valor', 'Status'],
-      ...pagamentos.map(p => [
-        fmtData(p.shift.date),
-        p.shift.staff_id ? staffMap[p.shift.staff_id] ?? '?' : '—',
-        p.shift.shift_type_id ? shiftTypeMap[p.shift.shift_type_id] ?? '?' : '?',
-        p.payment_value.toFixed(2).replace('.', ','),
-        p.payment_status === 'paid' ? 'Pago' : 'Pendente',
-      ]),
+  const [gerandoExcel, setGerandoExcel] = useState(false)
+
+  // Mesma estrutura do relatório impresso (handleGerarRelatorio) — seções por
+  // plantonista com subtotal, depois a conclusão — só que como planilha de
+  // verdade: cabeçalho em negrito, cores e subtotais já formatados, em vez do
+  // CSV plano que só listava linha a linha sem nenhuma organização visual.
+  const CORES = {
+    titulo: 'FF3730A3', faixaGrupo: 'FFEEF2FF', headerTabela: 'FFF1F5F9',
+    subtotal: 'FFE0E7FF', conclusaoHeader: 'FF3730A3', linhaBorda: 'FFE2E8F0',
+  }
+  const handleExportarExcel = async () => {
+    setGerandoExcel(true)
+    const wb = new ExcelJS.Workbook()
+    wb.creator = 'ProMed UTI'
+    wb.created = new Date()
+    const ws = wb.addWorksheet('Financeiro', { views: [{ showGridLines: false }] })
+    ws.columns = [
+      { key: 'a', width: 14 }, { key: 'b', width: 26 }, { key: 'c', width: 16 },
+      { key: 'd', width: 14 }, { key: 'e', width: 14 },
     ]
-    const csv = linhas.map(l => l.map(c => `"${c}"`).join(';')).join('\n')
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+
+    const linhaBorda = { top: { style: 'thin' as const, color: { argb: CORES.linhaBorda } } }
+    const moeda = '"R$" #,##0.00'
+
+    const titulo = ws.addRow(['Relatório de pagamentos'])
+    titulo.getCell(1).font = { bold: true, size: 16, color: { argb: CORES.titulo } }
+    ws.mergeCells(titulo.number, 1, titulo.number, 5)
+
+    const subtitulo = ws.addRow([`${fmtMesAno(ref)} — gerado em ${new Date().toLocaleString('pt-BR')}`])
+    subtitulo.getCell(1).font = { italic: true, size: 10, color: { argb: 'FF64748B' } }
+    ws.mergeCells(subtitulo.number, 1, subtitulo.number, 5)
+    ws.addRow([])
+
+    for (const g of totaisPorPlantonista) {
+      const cabecalhoGrupo = ws.addRow([g.nome])
+      cabecalhoGrupo.font = { bold: true, size: 12 }
+      cabecalhoGrupo.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: CORES.faixaGrupo } } })
+      ws.mergeCells(cabecalhoGrupo.number, 1, cabecalhoGrupo.number, 5)
+
+      const header = ws.addRow(['Data', 'Turno', '', 'Valor', 'Status'])
+      header.font = { bold: true, size: 10, color: { argb: 'FF475569' } }
+      header.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: CORES.headerTabela } } })
+
+      for (const p of g.pagamentos) {
+        const linha = ws.addRow([
+          fmtData(p.shift.date),
+          p.shift.shift_type_id ? shiftTypeMap[p.shift.shift_type_id] ?? '?' : '?',
+          '',
+          p.payment_value,
+          p.payment_status === 'paid' ? 'Pago' : 'Pendente',
+        ])
+        linha.getCell(4).numFmt = moeda
+      }
+
+      const subtotal = ws.addRow(['', `Subtotal — ${g.nome}`, '', g.total, ''])
+      subtotal.font = { bold: true }
+      subtotal.getCell(4).numFmt = moeda
+      subtotal.eachCell(c => { c.border = linhaBorda })
+      ws.addRow([])
+    }
+
+    ws.addRow([])
+    const conclusaoTitulo = ws.addRow(['Conclusão — total por plantonista'])
+    conclusaoTitulo.font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } }
+    conclusaoTitulo.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: CORES.conclusaoHeader } } })
+    ws.mergeCells(conclusaoTitulo.number, 1, conclusaoTitulo.number, 5)
+
+    const conclusaoHeader = ws.addRow(['Plantonista', '', 'Plantões', 'Total', 'Pago / Pendente'])
+    conclusaoHeader.font = { bold: true, size: 10, color: { argb: 'FF475569' } }
+    conclusaoHeader.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: CORES.headerTabela } } })
+
+    for (const g of totaisPorPlantonista) {
+      const linha = ws.addRow([g.nome, '', g.pagamentos.length, g.total, `${fmtValor(g.totalPago)} / ${fmtValor(g.totalPendente)}`])
+      linha.getCell(4).numFmt = moeda
+    }
+
+    const linhaTotal = ws.addRow(['Total geral do mês', '', pagamentos.length, total, `Já pago: ${fmtValor(totalPago)}`])
+    linhaTotal.font = { bold: true, size: 12 }
+    linhaTotal.getCell(4).numFmt = moeda
+    linhaTotal.eachCell(c => {
+      c.border = { top: { style: 'medium' as const, color: { argb: 'FF1E293B' } } }
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: CORES.subtotal } }
+    })
+
+    const buffer = await wb.xlsx.writeBuffer()
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `financeiro_${primeiroDiaMes(ref)}.csv`
+    a.download = `financeiro_${primeiroDiaMes(ref)}.xlsx`
     a.click()
     URL.revokeObjectURL(url)
+    setGerandoExcel(false)
   }
 
   const total = pagamentos.reduce((acc, p) => acc + p.payment_value, 0)
@@ -196,9 +271,9 @@ export default function FinanceiroChefe({ unitId, staffList, shiftTypesList, sho
                 className="text-xs font-medium text-slate-500 hover:text-indigo-600 border border-slate-200 rounded-lg px-2 py-1.5">
                 📄 Relatório
               </button>
-              <button onClick={handleExportarCsv}
-                className="text-xs font-medium text-slate-500 hover:text-indigo-600 border border-slate-200 rounded-lg px-2 py-1.5">
-                ⬇️ CSV
+              <button onClick={handleExportarExcel} disabled={gerandoExcel}
+                className="text-xs font-medium text-slate-500 hover:text-indigo-600 disabled:opacity-50 border border-slate-200 rounded-lg px-2 py-1.5">
+                {gerandoExcel ? 'Gerando...' : '⬇️ Excel'}
               </button>
             </>
           )}

@@ -124,6 +124,29 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
     else     { setSelectedLeito({ alaId, numero }); setShowCadastro(true) }
   }
 
+  // Arrastar o card de um paciente até um leito vazio transfere na hora — o
+  // mesmo caminho do lápis de editar em PacienteModal, só que sem abrir o
+  // formulário. dragOverAlvo destaca só o card exato sob o cursor.
+  const [dragOverAlvo, setDragOverAlvo] = useState<string | null>(null)
+
+  const moverPaciente = async (pacienteId: string, novaAlaId: string, novoLeito: string) => {
+    const pacienteAtual = pacientes.find(p => p.id === pacienteId)
+    if (!pacienteAtual) return
+    if (pacienteAtual.ala_id === novaAlaId && pacienteAtual.numero_leito === novoLeito) return
+
+    const { data: ocupante } = await supabase.from('pacientes')
+      .select('id, nome').eq('ala_id', novaAlaId).eq('numero_leito', novoLeito).eq('ativo', true).maybeSingle()
+    if (ocupante && ocupante.id !== pacienteId) {
+      showToast(`Leito ${pad(novoLeito)} já está ocupado por ${ocupante.nome}`, 'error'); return
+    }
+
+    const { error } = await supabase.from('pacientes')
+      .update({ ala_id: novaAlaId, numero_leito: novoLeito }).eq('id', pacienteId)
+    if (error) { showToast('Erro ao transferir: ' + error.message, 'error'); return }
+    await refreshPacientes()
+    showToast(`${pacienteAtual.nome.split(' ')[0]} transferido para o leito ${pad(novoLeito)}.`)
+  }
+
   const handleLogout = async () => {
     await supabase.auth.signOut()
     // Recarregamento completo, e não router.push: sem isso o nome/e-mail e as
@@ -312,6 +335,7 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
                 {ala.leitos.map(leito => {
                   const pac = getPaciente(ala.id, leito)
+                  const alvo = `${ala.id}:${leito}`
                   return (
                     <LeitoCard
                       key={leito}
@@ -320,6 +344,16 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
                       requerSaps3={unidade?.requerSaps3 ?? true}
                       swabPendente={!!pac && swabsPendentesIds.has(pac.id)}
                       onClick={() => handleLeitoClick(ala.id, leito, pac)}
+                      isDragTarget={dragOverAlvo === alvo}
+                      onDragStartPaciente={pac ? (e => e.dataTransfer.setData('text/plain', pac.id)) : undefined}
+                      onDragOverVazio={!pac ? (e => { e.preventDefault(); setDragOverAlvo(alvo) }) : undefined}
+                      onDragLeaveVazio={!pac ? (() => setDragOverAlvo(a => a === alvo ? null : a)) : undefined}
+                      onDropVazio={!pac ? (e => {
+                        e.preventDefault()
+                        setDragOverAlvo(null)
+                        const pacienteId = e.dataTransfer.getData('text/plain')
+                        if (pacienteId) moverPaciente(pacienteId, ala.id, leito)
+                      }) : undefined}
                     />
                   )
                 })}
@@ -352,6 +386,7 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
         <PacienteModal
           paciente={selectedPac}
           unidade={unidade}
+          pacientesAtivos={pacientes}
           planosSaude={planosSaude}
           onClose={() => setSelectedPac(null)}
           onAltaConcedida={async () => {
@@ -374,23 +409,44 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
 
 // ── Leito Card ────────────────────────────────────────────────────────────
 
-function LeitoCard({ numero, paciente, requerSaps3, swabPendente, onClick }: {
+function LeitoCard({
+  numero, paciente, requerSaps3, swabPendente, onClick, isDragTarget,
+  onDragStartPaciente, onDragOverVazio, onDragLeaveVazio, onDropVazio,
+}: {
   numero: string; paciente: Paciente | undefined; requerSaps3: boolean; swabPendente: boolean; onClick: () => void
+  /** true quando um card de paciente está sendo arrastado sobre ESTE leito vazio. */
+  isDragTarget?: boolean
+  /** Só passado quando há paciente — inicia o arraste (id do paciente no dataTransfer). */
+  onDragStartPaciente?: (e: React.DragEvent) => void
+  /** Só passados quando o leito está vazio — vira alvo de soltar. */
+  onDragOverVazio?: (e: React.DragEvent) => void
+  onDragLeaveVazio?: (e: React.DragEvent) => void
+  onDropVazio?: (e: React.DragEvent) => void
 }) {
   const isEmpty = !paciente
 
   return (
     <button
       onClick={onClick}
+      draggable={!isEmpty}
+      onDragStart={onDragStartPaciente}
+      onDragOver={onDragOverVazio}
+      onDragLeave={onDragLeaveVazio}
+      onDrop={onDropVazio}
+      title={!isEmpty ? 'Arraste para um leito vazio pra transferir' : undefined}
       className={`w-full min-h-[6.75rem] text-left rounded-xl border-2 p-2 transition-all
         ${isEmpty
-          ? 'border-slate-200 bg-white hover:border-indigo-300 hover:shadow-md'
-          : 'border-indigo-400 bg-indigo-50 hover:shadow-md hover:border-indigo-500'
+          ? isDragTarget
+            ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-300'
+            : 'border-slate-200 bg-white hover:border-indigo-300 hover:shadow-md'
+          : 'border-indigo-400 bg-indigo-50 hover:shadow-md hover:border-indigo-500 cursor-grab active:cursor-grabbing'
         }`}
     >
       <div className="text-xs font-bold text-slate-400 mb-0.5">Leito {pad(numero)}</div>
       {isEmpty ? (
-        <div className="text-slate-300 text-xs italic">Vazio</div>
+        <div className={`text-xs italic ${isDragTarget ? 'text-indigo-500 font-semibold not-italic' : 'text-slate-300'}`}>
+          {isDragTarget ? 'Soltar aqui' : 'Vazio'}
+        </div>
       ) : (
         <>
           <div className="font-semibold text-slate-800 text-sm leading-tight truncate">
