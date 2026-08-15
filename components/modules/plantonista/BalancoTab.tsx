@@ -137,6 +137,8 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
   const camposComPontoInvalido = (): string[] =>
     [...CAMPOS_GANHO, ...CAMPOS_PERDA].filter(k => temPontoInvalido(form[k as keyof FormState]))
 
+  // Cronológico (mais antigo primeiro) — base pro acumulado e pra toda a lógica
+  // de "próximo turno"/contiguidade, que dependem de ordem crescente no tempo.
   const sorted = [...periodos].sort((a, b) =>
     new Date(a.inicio).getTime() - new Date(b.inicio).getTime()
   )
@@ -146,6 +148,11 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
     const prev = i === 0 ? 0 : acc[i - 1]
     return [...acc, prev + calcBalanco(p).parcial]
   }, [])
+  const acumuladoPorId = new Map(sorted.map((p, i) => [p.id, acumulados[i]]))
+
+  // Só pra exibição da tabela — mais recente primeiro, igual Exames. O cálculo
+  // (acima) continua em ordem cronológica por baixo.
+  const sortedDesc = [...sorted].reverse()
 
   // Débito urinário 24h: sum diurese from newest periods covering 24h of horas_periodo
   const { horas: duHoras, total: duTotal } = calcDiurese24h(periodos)
@@ -194,6 +201,11 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
     new Date(ultimoRegistrado.fim).getTime() !== periodSpec.inicio.getTime()
   )
 
+  // Turno cujo início ainda não chegou — bloqueia. Foi assim que um lançamento
+  // acidental criou turnos futuros pro paciente errado: nada impedia escolher
+  // uma data ainda não vivida no seletor livre.
+  const periodoFuturo = !!periodSpec && periodSpec.inicio.getTime() > Date.now()
+
   const peso    = paciente.peso_kg ?? 70
   const horas   = formMode === 'edit' && editingPeriodo ? editingPeriodo.horas_periodo : (periodSpec?.horas ?? 12)
   const aguaEnd = calcAguaEndogena(horas)
@@ -203,6 +215,7 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
   const handleSave = async () => {
     if (!periodSpec) return
     if (periodoDuplicado) { showToast('Já existe um registro para esse turno — edite-o em vez de duplicar', 'error'); return }
+    if (periodoFuturo) { showToast('Esse turno ainda não começou — não dá pra lançar balanço de um turno futuro', 'error'); return }
     const comPonto = camposComPontoInvalido()
     if (comPonto.length > 0) {
       showToast(`Use vírgula, não ponto, em: ${comPonto.map(k => LABELS[k]).join(', ')}`, 'error'); return
@@ -272,6 +285,21 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
 
   const cancelForm = () => {
     setFormMode(null); setEditingPeriodo(null); setForm(emptyForm()); setDiarreica(false)
+  }
+
+  // ── Delete ──
+  // Turno inteiro, não só um campo — pra corrigir de vez um turno lançado por
+  // engano (data/paciente errado), em vez de zerar campo a campo editando.
+  const handleDeletePeriodo = async (p: PeriodoBalanco) => {
+    if (!confirm(
+      `Excluir o turno ${fmtTurno(p.turno, p.inicio)} por completo?\n\n` +
+      `Isso apaga o registro inteiro (não dá pra desfazer) e recalcula o acumulado ` +
+      `dos turnos seguintes.`)) return
+    const { error } = await supabase.from('periodos_balanco').delete().eq('id', p.id)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    if (formMode === 'edit' && editingPeriodo?.id === p.id) cancelForm()
+    onRefresh()
+    showToast('Turno excluído.')
   }
 
   const abrirNovoTurno = () => {
@@ -425,7 +453,7 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
             <div className="flex flex-wrap items-end gap-3">
               <div>
                 <label className="text-xs text-slate-500 block mb-1">Data</label>
-                <input type="date" value={formDate} onChange={e => setFormDate(e.target.value)}
+                <input type="date" value={formDate} max={todayStr()} onChange={e => setFormDate(e.target.value)}
                   className="border border-slate-300 rounded-lg px-2 py-1.5 text-base bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
               </div>
               <div className="flex rounded-lg overflow-hidden border border-slate-300">
@@ -441,7 +469,10 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
               {periodoDuplicado && (
                 <p className="text-xs text-red-600 font-semibold">⚠️ Já existe registro para este turno — edite-o na tabela abaixo</p>
               )}
-              {!periodoDuplicado && periodoNaoContiguo && ultimoRegistrado && (
+              {!periodoDuplicado && periodoFuturo && (
+                <p className="text-xs text-red-600 font-semibold">⚠️ Esse turno ainda não começou — escolha um turno já iniciado</p>
+              )}
+              {!periodoDuplicado && !periodoFuturo && periodoNaoContiguo && ultimoRegistrado && (
                 <p className="text-xs text-amber-600 font-semibold">
                   ⚠️ Turno não é contíguo ao último registrado (encerrado em {fmtDataHora(ultimoRegistrado.fim)}) —
                   o saldo acumulado assume turnos sem lacunas
@@ -516,7 +547,7 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
           )}
 
           <button onClick={formMode === 'add' ? handleSave : handleUpdate}
-            disabled={saving || (formMode === 'add' && !!periodoDuplicado) || camposComPontoInvalido().length > 0}
+            disabled={saving || (formMode === 'add' && (!!periodoDuplicado || periodoFuturo)) || camposComPontoInvalido().length > 0}
             className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors">
             {saving ? 'Salvando...' : formMode === 'add' ? 'Registrar Balanço' : 'Atualizar Balanço'}
           </button>
@@ -536,13 +567,19 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
                 <th className="sticky left-0 z-20 bg-slate-100 px-3 py-2.5 text-left font-bold text-slate-700 border-b-2 border-r-2 border-slate-300 min-w-[150px]">
                   Componente
                 </th>
-                {sorted.map((p, i) => (
+                {sortedDesc.map(p => (
                   <th key={p.id} className="px-2 py-2 bg-slate-100 border-b-2 border-r border-slate-200 text-center min-w-[80px]">
                     <p className="font-bold text-slate-800 text-xs whitespace-nowrap">{fmtTurno(p.turno, p.inicio)}</p>
-                    <button onClick={() => startEdit(p)} title="Editar este turno"
-                      className={`mt-1 text-xs transition-colors ${formMode === 'edit' && editingPeriodo?.id === p.id ? 'text-amber-500' : 'text-indigo-300 hover:text-indigo-600'}`}>
-                      ✏️
-                    </button>
+                    <div className="mt-1 flex items-center justify-center gap-1.5">
+                      <button onClick={() => startEdit(p)} title="Editar este turno"
+                        className={`text-xs transition-colors ${formMode === 'edit' && editingPeriodo?.id === p.id ? 'text-amber-500' : 'text-indigo-300 hover:text-indigo-600'}`}>
+                        ✏️
+                      </button>
+                      <button onClick={() => handleDeletePeriodo(p)} title="Excluir este turno inteiro"
+                        className="text-xs text-red-300 hover:text-red-600 transition-colors">
+                        🗑️
+                      </button>
+                    </div>
                   </th>
                 ))}
               </tr>
@@ -567,8 +604,8 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
                       style={{ background: rowBg || undefined }}>
                       {row.label}
                     </td>
-                    {sorted.map((p, i) => {
-                      const v   = getVal(row.key, p, acumulados[i])
+                    {sortedDesc.map(p => {
+                      const v   = getVal(row.key, p, acumuladoPorId.get(p.id) ?? 0)
                       const cls = cellCls(row.type, v)
                       const isEditing = formMode === 'edit' && editingPeriodo?.id === p.id
                       const title = row.key === 'outros' && p.outros_nome ? p.outros_nome : undefined

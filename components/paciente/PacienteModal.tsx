@@ -542,13 +542,14 @@ export default function PacienteModal({
 
           {/* Header */}
           <div className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white px-3 sm:px-6 py-4 rounded-t-2xl flex-shrink-0">
-            {/* No celular a identificação fica ACIMA dos botões, em vez de ao lado.
-                Lado a lado, os botões (flex-shrink-0 + whitespace-nowrap) somam
-                ~420px e não cedem, então o bloco do nome era espremido até
-                largura ZERO — o texto quebrava letra a letra e o cabeçalho
-                passava de 900px, empurrando todo o conteúdo para fora da tela. */}
-            <div className="flex flex-col sm:flex-row items-start justify-between gap-2 sm:gap-4">
-              <div className="min-w-0 w-full sm:flex-1">
+            {/* Abaixo de md (768px) a identificação fica ACIMA dos botões, em vez de
+                ao lado — lado a lado, os 5 botões somam ~420px e não cedem, então
+                o bloco do nome era espremido (texto truncado ou quebrado letra a
+                letra) numa faixa de larguras "nem celular nem desktop largo"
+                (janela não-maximizada, por exemplo). md: em vez de sm: (640px) dá
+                mais fôlego pros botões antes de tentar o layout lado a lado. */}
+            <div className="flex flex-col md:flex-row items-start justify-between gap-2 md:gap-4">
+              <div className="min-w-0 w-full md:flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="text-xl font-bold truncate">{pac.nome}</h2>
                   {pac.paliativo && (
@@ -588,7 +589,13 @@ export default function PacienteModal({
                   <p className="text-indigo-300 text-xs mt-1 italic">🩺 {fmtHipoteses(pac.hipoteses)}</p>
                 )}
               </div>
-              <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto sm:flex-nowrap sm:flex-shrink-0">
+              {/* sm:flex-nowrap forçava os 5 botões numa linha só a partir de 640px,
+                  o que sobrava espaço nenhum pro nome+badges em larguras
+                  intermediárias (ex.: janela não-maximizada) — o bloco do nome
+                  era espremido até quebrar palavra a palavra. Deixando os botões
+                  quebrarem linha (mantendo cada um inteiro, sem espremer) resolve
+                  sem reintroduzir o bug original do celular. */}
+              <div className="flex items-center gap-2 flex-wrap w-full md:w-auto md:flex-shrink-0 md:justify-end">
                 <button onClick={handleAbrirEvolucao} disabled={loading}
                   title={loading ? 'Aguarde o carregamento dos dados do paciente' : 'Evolução diária compilada dos resumos de cada aba (sem IA)'}
                   className="bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
