@@ -7,11 +7,11 @@ import CadastroForm   from '@/components/paciente/CadastroForm'
 import FinalizarAdmissaoModal from '@/components/paciente/FinalizarAdmissaoModal'
 import ToastContainer, { useToast } from '@/components/ui/Toast'
 import { pad, fmtData, calcAge, normalizarNome } from '@/lib/utils'
-import { ehIntensivista, apenasMedicos } from '@/lib/cargos'
+import { ehIntensivista, apenasMedicos, PROFISSOES } from '@/lib/cargos'
 import { PLANOS_PADRAO } from '@/lib/config'
 import SeletorUnidade from './SeletorUnidade'
 import { nomeDaAla, compararLeitos, type Unidade } from '@/lib/unidade'
-import type { Paciente, Unit } from '@/types'
+import type { Paciente, Unit, Profissao } from '@/types'
 
 interface Props {
   initialPacientes: Paciente[]
@@ -162,6 +162,37 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
     showToast(`${pacienteAtual.nome.split(' ')[0]} transferido para o leito ${pad(novoLeito)}.`)
   }
 
+  // Primeiro acesso: quem ainda não tem vínculo em `staff` (unidade === null)
+  // escolhe a própria unidade/profissão aqui — nível nasce sempre plantonista,
+  // travado no corpo da RPC (supabase/perfil_autoatendimento.sql), não no
+  // client. Só busca a lista de unidades quando realmente precisa dela.
+  const [unidadesAtivas, setUnidadesAtivas] = useState<{ id: string; name: string }[]>([])
+  const [novoUnitId, setNovoUnitId] = useState('')
+  const [novoNomeAcesso, setNovoNomeAcesso] = useState('')
+  const [novaProfissaoAcesso, setNovaProfissaoAcesso] = useState<Profissao>('medico')
+  const [registrandoAcesso, setRegistrandoAcesso] = useState(false)
+
+  useEffect(() => {
+    if (unidade) return
+    supabase.rpc('listar_unidades_ativas').then(({ data, error }) => {
+      if (!error && data) setUnidadesAtivas(data as { id: string; name: string }[])
+    })
+  }, [unidade])
+
+  const handleRegistrarAcesso = async () => {
+    if (!novoUnitId) { showToast('Escolha a unidade', 'error'); return }
+    if (!novoNomeAcesso.trim()) { showToast('Informe seu nome completo', 'error'); return }
+    setRegistrandoAcesso(true)
+    const { error } = await supabase.rpc('registrar_meu_acesso', {
+      p_unit_id: novoUnitId, p_full_name: novoNomeAcesso.trim(), p_profissao: novaProfissaoAcesso,
+    })
+    setRegistrandoAcesso(false)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    // Recarregamento completo: carregarUnidade() precisa rodar de novo no
+    // servidor com o vínculo recém-criado — mesmo padrão de LoginForm/SeletorUnidade.
+    window.location.assign('/dashboard')
+  }
+
   const handleLogout = async () => {
     await supabase.auth.signOut()
     // Recarregamento completo, e não router.push: sem isso o nome/e-mail e as
@@ -270,6 +301,13 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
               )}
             </button>
             <button
+              onClick={() => router.push('/perfil')}
+              className="bg-white/20 hover:bg-white/30 border border-white/30
+                         px-3 py-1.5 rounded-lg text-white text-sm font-medium transition-colors"
+            >
+              👤 Meu perfil
+            </button>
+            <button
               onClick={handleLogout}
               className="bg-white/20 hover:bg-white/30 border border-white/30
                          px-3 py-1.5 rounded-lg text-white text-sm font-medium transition-colors"
@@ -334,16 +372,50 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
       {/* Grid */}
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-4">
         {!unidade ? (
-          // Sem vínculo em `staff`, o RLS não devolveria paciente nenhum. Dizer
-          // isso é muito melhor do que mostrar um mapa vazio, que se leria como
-          // "a UTI está sem ninguém internado".
-          <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-6 text-center space-y-1">
-            <p className="text-2xl">🔑</p>
-            <p className="text-sm font-bold text-amber-800">Seu usuário não está vinculado a nenhuma unidade</p>
-            <p className="text-xs text-amber-700">
-              Peça ao responsável da UTI para cadastrar você na equipe. Sem o vínculo,
-              o sistema não tem como saber quais pacientes são seus.
-            </p>
+          // Sem vínculo em `staff`, o RLS não devolveria paciente nenhum. Em vez
+          // de só avisar, deixa a própria pessoa escolher unidade e profissão —
+          // nível nasce plantonista, travado na RPC (ver handleRegistrarAcesso).
+          <div className="bg-white border border-slate-200 rounded-xl px-6 py-6 max-w-md mx-auto space-y-4">
+            <div className="text-center space-y-1">
+              <p className="text-2xl">🔑</p>
+              <p className="text-sm font-bold text-slate-800">Primeiro acesso</p>
+              <p className="text-xs text-slate-500">
+                Escolha a unidade onde você vai trabalhar e sua profissão. Seu nível
+                de acesso começa como Plantonista — virar chefe depende de um chefe
+                já existente te promover depois, na tela de Equipe das Escalas.
+              </p>
+            </div>
+            <div className="space-y-2 text-left">
+              <div>
+                <label className="text-xs text-slate-500 font-medium block mb-1">Unidade</label>
+                <select value={novoUnitId} onChange={e => setNovoUnitId(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white
+                             focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                  <option value="">Selecione...</option>
+                  {unidadesAtivas.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 font-medium block mb-1">Profissão</label>
+                <select value={novaProfissaoAcesso} onChange={e => setNovaProfissaoAcesso(e.target.value as Profissao)}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white
+                             focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                  {PROFISSOES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 font-medium block mb-1">Nome completo</label>
+                <input value={novoNomeAcesso} onChange={e => setNovoNomeAcesso(e.target.value)}
+                  placeholder="Seu nome completo"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white
+                             focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              </div>
+            </div>
+            <button onClick={handleRegistrarAcesso} disabled={registrandoAcesso}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50
+                         text-white text-sm font-bold px-4 py-2.5 rounded-lg">
+              {registrandoAcesso ? 'Entrando...' : 'Entrar na unidade'}
+            </button>
           </div>
         ) : alas.length === 0 ? (
           <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-6 text-center space-y-1">

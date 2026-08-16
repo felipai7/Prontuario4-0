@@ -51,6 +51,26 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
 
   useEffect(() => { loadStaff(selectedUnitId) }, [selectedUnitId])
 
+  // Lista recolhida por padrão — mesmo idioma de FinanceiroPlantonista.tsx
+  // (useState(false) + botão ▼/▲), mas aqui é um bloco só, não por cargo.
+  const [equipeAberta, setEquipeAberta] = useState(false)
+
+  // Todas as contas do Supabase Auth do projeto, pra mostrar/trocar o e-mail
+  // vinculado de cada membro. Só carrega para quem é chefe (é quem vê essa
+  // seção) e só quando a unidade muda — não é preciso recarregar a cada render.
+  const [contasSupabase, setContasSupabase] = useState<{ id: string; email: string }[]>([])
+  useEffect(() => {
+    if (!souChefeDaSelecionada) { setContasSupabase([]); return }
+    supabase.rpc('listar_contas_supabase').then(({ data, error }) => {
+      if (!error && data) setContasSupabase(data as { id: string; email: string }[])
+    })
+  }, [selectedUnitId, souChefeDaSelecionada])
+  const emailPorUserId = useMemo(() => {
+    const m = new Map<string, string>()
+    contasSupabase.forEach(c => m.set(c.id, c.email))
+    return m
+  }, [contasSupabase])
+
   // A equipe da unidade inclui enfermeiros, fisios e nutricionistas, mas a
   // ESCALA hoje é só dos médicos. Sem este recorte, eles apareceriam como
   // opção de plantonista nos seletores de turno.
@@ -80,10 +100,12 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
   const [editNome, setEditNome] = useState('')
   const [editProfissao, setEditProfissao] = useState<Profissao>('medico')
   const [editNivel, setEditNivel] = useState<Nivel>('plantonista')
+  const [editUserId, setEditUserId] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
 
   const handleStartEdit = (s: Staff) => {
     setEditingId(s.id); setEditNome(s.full_name); setEditProfissao(s.profissao); setEditNivel(s.nivel)
+    setEditUserId(s.user_id ?? '')
   }
   const handleCancelEdit = () => setEditingId(null)
 
@@ -94,6 +116,7 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
     const { error } = await supabase.from('staff').update({
       full_name: editNome.trim(), profissao: editProfissao,
       nivel: editProfissao === 'medico' ? editNivel : 'plantonista',
+      user_id: editUserId || null,
     }).eq('id', editingId)
     setSavingEdit(false)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
@@ -174,9 +197,15 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
 
         {selectedUnitId && souChefeDaSelecionada && (
           <section className="bg-white border border-slate-200 rounded-xl p-4 space-y-4">
-            <h3 className="font-semibold text-slate-700">👥 Equipe da unidade</h3>
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="font-semibold text-slate-700">👥 Equipe da unidade</h3>
+              <button onClick={() => setEquipeAberta(a => !a)}
+                className="text-xs font-medium text-indigo-600 border border-indigo-200 hover:bg-indigo-50 rounded-lg px-2.5 py-1.5">
+                {equipeAberta ? '▲ Ocultar' : `▼ Ver equipe (${staffList.length})`}
+              </button>
+            </div>
 
-            {loadingStaff ? (
+            {equipeAberta && (loadingStaff ? (
               <p className="text-sm text-slate-400">Carregando...</p>
             ) : staffList.length === 0 ? (
               <p className="text-sm text-slate-400">Nenhum membro cadastrado nesta unidade.</p>
@@ -204,6 +233,13 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
                             </select>
                           )}
                         </div>
+                        <div>
+                          <label className={labelCls}>Conta vinculada (e-mail)</label>
+                          <select value={editUserId} onChange={e => setEditUserId(e.target.value)} className={inputCls}>
+                            <option value="">— sem conta vinculada —</option>
+                            {contasSupabase.map(c => <option key={c.id} value={c.id}>{c.email}</option>)}
+                          </select>
+                        </div>
                         <div className="flex justify-end gap-2">
                           <button onClick={handleCancelEdit}
                             className="text-xs font-medium text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg px-3 py-1.5">
@@ -220,6 +256,11 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
                         <div className="min-w-0">
                           <p className={`text-sm font-medium ${s.active ? 'text-slate-800' : 'text-slate-400 line-through'}`}>{s.full_name}</p>
                           <p className="text-xs text-slate-400">{labelCargo(s)}</p>
+                          {s.user_id && emailPorUserId.get(s.user_id) ? (
+                            <p className="text-xs text-slate-400">{emailPorUserId.get(s.user_id)}</p>
+                          ) : (
+                            <p className="text-xs text-amber-600">⚠️ sem conta vinculada</p>
+                          )}
                         </div>
                         {souChefeDaSelecionada && (
                           <div className="flex items-center gap-2 flex-shrink-0">
@@ -240,7 +281,7 @@ export default function EscalasHome({ units, myStaff, userEmail }: Props) {
                   </li>
                 ))}
               </ul>
-            )}
+            ))}
 
             {souChefeDaSelecionada && (
               <div className="bg-slate-50 rounded-lg p-3 space-y-2">
