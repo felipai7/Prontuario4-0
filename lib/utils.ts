@@ -200,6 +200,11 @@ export function hojeISO(d: Date = new Date()): string {
   return `${ano}-${mes}-${dia}`
 }
 
+/** Amanhã em ISO — usado no alerta de previsão de alta na véspera. */
+export function amanhaISO(d: Date = new Date()): string {
+  return hojeISO(new Date(d.getTime() + 24 * 3600 * 1000))
+}
+
 export function getTurno(dt: Date): 'diurno' | 'noturno' {
   const h = dt.getHours()
   return h >= HORA_INICIO_DIURNO && h < HORA_INICIO_NOTURNO ? 'diurno' : 'noturno'

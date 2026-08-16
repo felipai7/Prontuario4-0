@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { calcBalanco, calcAcumuladoMovel, calcDiurese24h, diaAtualATB, diasDesde, fmtNum, fmtTurno, hojeISO, balancoDaUnidade } from '@/lib/utils'
+import { calcBalanco, calcAcumuladoMovel, calcDiurese24h, diaAtualATB, diasDesde, fmtNum, fmtTurno, hojeISO, amanhaISO, balancoDaUnidade } from '@/lib/utils'
 import { fmtData } from '@/lib/utils'
 import type { Paciente, SinalVital, DVA, PeriodoBalanco, ATB, CuidadosHorizontais, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, SwabVigilancia, ExameImagem, ToastData } from '@/types'
 
@@ -135,6 +135,10 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos: perio
   const swabsPendentes = swabs.filter(s => !s.resultado_disponivel)
   const previsaoAlta = cuidados?.previsao_alta ?? null
   const altaVencida = previsaoAlta != null && previsaoAlta <= hojeISO()
+  // Véspera: aviso já no dia anterior, pra equipe se preparar (documentos,
+  // vaga, transporte) antes da data virar e a alta "vencer" de surpresa.
+  const altaAmanha = previsaoAlta != null && previsaoAlta === amanhaISO()
+  const alertaAlta = altaVencida || altaAmanha
   const examesCriticos = examesImagem.filter(e => e.critico)
 
   const handleDesmarcarCritico = async (id: string) => {
@@ -230,16 +234,17 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos: perio
             ) : <p className="text-sm text-slate-400">Sem ATB em curso.</p>}
           </div>
 
-          <div className={`rounded-lg p-3 ${altaVencida ? 'bg-amber-50 border border-amber-300' : 'bg-slate-50'}`}>
-            <p className={`text-xs font-bold uppercase tracking-wide mb-1 ${altaVencida ? 'text-amber-700' : 'text-slate-500'}`}>
+          <div className={`rounded-lg p-3 ${alertaAlta ? 'bg-amber-50 border border-amber-300' : 'bg-slate-50'}`}>
+            <p className={`text-xs font-bold uppercase tracking-wide mb-1 ${alertaAlta ? 'text-amber-700' : 'text-slate-500'}`}>
               📅 Previsão de alta
             </p>
             {previsaoAlta ? (
-              <p className={`text-sm ${altaVencida ? 'text-amber-900 font-semibold' : 'text-slate-700'}`}>
+              <p className={`text-sm ${alertaAlta ? 'text-amber-900 font-semibold' : 'text-slate-700'}`}>
                 {fmtData(previsaoAlta)}
                 {altaVencida && (
                   <> — ⚠️ {previsaoAlta === hojeISO() ? 'é hoje' : `venceu há ${diasDesde(previsaoAlta)} dia(s)`}</>
                 )}
+                {altaAmanha && <> — ⚠️ é amanhã</>}
               </p>
             ) : <p className="text-sm text-slate-400">Não definida pelo intensivista.</p>}
           </div>
