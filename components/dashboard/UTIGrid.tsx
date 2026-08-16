@@ -10,6 +10,7 @@ import { pad, fmtData, calcAge, normalizarNome } from '@/lib/utils'
 import { ehIntensivista, apenasMedicos, PROFISSOES } from '@/lib/cargos'
 import { PLANOS_PADRAO } from '@/lib/config'
 import SeletorUnidade from './SeletorUnidade'
+import GestaoMenu from './GestaoMenu'
 import { nomeDaAla, compararLeitos, type Unidade } from '@/lib/unidade'
 import type { Paciente, Unit, Profissao } from '@/types'
 
@@ -259,33 +260,7 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
             {unidade && unidade.outrasUnidades > 0 && unidades.length > 1 && (
               <SeletorUnidade unidades={unidades} atual={unidade.unitId} />
             )}
-            {souChefe && (
-              <>
-                <button
-                  onClick={() => router.push('/indicadores')}
-                  className="bg-white/20 hover:bg-white/30 border border-white/30
-                             px-3 py-1.5 rounded-lg text-white text-sm font-medium transition-colors"
-                >
-                  📊 Indicadores
-                </button>
-                <button
-                  onClick={() => router.push('/unidade')}
-                  title="Alas, leitos e cadastro de unidades"
-                  className="bg-white/20 hover:bg-white/30 border border-white/30
-                             px-3 py-1.5 rounded-lg text-white text-sm font-medium transition-colors"
-                >
-                  🏗️ Unidade
-                </button>
-                <button
-                  onClick={() => router.push('/auditoria')}
-                  title="Todos os pacientes e admissões, de todas as unidades"
-                  className="bg-white/20 hover:bg-white/30 border border-white/30
-                             px-3 py-1.5 rounded-lg text-white text-sm font-medium transition-colors"
-                >
-                  🗂️ Auditoria
-                </button>
-              </>
-            )}
+            {souChefe && <GestaoMenu />}
             <button
               onClick={() => router.push('/escalas')}
               className="relative bg-white/20 hover:bg-white/30 border border-white/30
