@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { fmtData, fmtDataHora } from '@/lib/utils'
+import { fmtData, fmtDataHora, labelTipoSaida } from '@/lib/utils'
 
 interface PacienteAuditoria {
   id: string
@@ -12,6 +12,7 @@ interface PacienteAuditoria {
   ativo: boolean
   data_internacao: string
   hora_internacao: string
+  ultimo_tipo_saida: string | null
 }
 
 interface DetalhePeriodo {
@@ -26,11 +27,6 @@ interface Props {
   userEmail: string
   pacientes: PacienteAuditoria[]
   erro?: string | null
-}
-
-/** Nome da saída em texto — mesmo vocabulário usado no resto do app. */
-function labelSaida(tipo: string): string {
-  return tipo === 'transferencia' ? '🔁 Transferência' : tipo === 'obito' ? '🕯️ Óbito' : '🏠 Alta'
 }
 
 export default function AuditoriaHome({ souChefe, userEmail, pacientes, erro }: Props) {
@@ -126,8 +122,12 @@ export default function AuditoriaHome({ souChefe, userEmail, pacientes, erro }: 
                     <td className="px-4 py-2 font-medium text-slate-800">{p.nome}</td>
                     <td className="px-4 py-2 text-slate-600">{p.unit_nome}</td>
                     <td className="px-4 py-2">
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${p.ativo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                        {p.ativo ? 'Internado' : 'Saiu'}
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                        p.ativo ? 'bg-emerald-50 text-emerald-700'
+                          : p.ultimo_tipo_saida === 'obito' ? 'bg-rose-50 text-rose-700'
+                          : 'bg-slate-100 text-slate-500'
+                      }`}>
+                        {p.ativo ? 'Internado' : labelTipoSaida(p.ultimo_tipo_saida)}
                       </span>
                     </td>
                     <td className="px-4 py-2 text-slate-500">
@@ -156,7 +156,7 @@ export default function AuditoriaHome({ souChefe, userEmail, pacientes, erro }: 
                                 <p className="font-semibold text-slate-500 mb-1">Saídas registradas</p>
                                 {detalhes[p.id].altas.map((a, i) => (
                                   <p key={i} className="text-slate-700">
-                                    {labelSaida(a.tipo_saida)} — {fmtDataHora(a.data_alta)}
+                                    {labelTipoSaida(a.tipo_saida)} — {fmtDataHora(a.data_alta)}
                                   </p>
                                 ))}
                               </div>

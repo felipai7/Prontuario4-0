@@ -1,16 +1,24 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { fmtData, calcAge, hojeISO } from '@/lib/utils'
 import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, TipoSaida, ToastData } from '@/types'
 
 // O tipo de saída é o que sustenta todo o bloco de mortalidade dos indicadores.
-// Transferência entra em "saídas" no denominador, conforme definição do Dr. Flaubert.
-const TIPOS_SAIDA: { id: TipoSaida; label: string; emoji: string }[] = [
-  { id: 'alta',          label: 'Alta hospitalar', emoji: '🏠' },
-  { id: 'obito',         label: 'Óbito',           emoji: '🕯️' },
-  { id: 'transferencia', label: 'Transferência',   emoji: '🚑' },
-]
+// Transferência hospitalar entra em "saídas" no denominador, conforme definição
+// do Dr. Flaubert; as duas transferências internas (UTI<->Hospital) contam como
+// alta — só a direção da 3ª opção muda conforme a unidade atual do paciente.
+function tiposSaida(tipoUnidade: 'uti' | 'enfermaria'): { id: TipoSaida; label: string; emoji: string }[] {
+  return [
+    { id: 'alta_casa',   label: 'Alta Hospitalar para Casa', emoji: '🏠' },
+    { id: 'alta_pedido', label: 'Alta a Pedido',             emoji: '📝' },
+    tipoUnidade === 'uti'
+      ? { id: 'alta_uti_hospital',  label: 'Alta da UTI para o Hospital', emoji: '🔁' }
+      : { id: 'alta_hospital_uti',  label: 'Alta do Hospital para a UTI', emoji: '🔁' },
+    { id: 'transferencia_hospitalar', label: 'Transferência Hospitalar', emoji: '🚑' },
+    { id: 'obito',                    label: 'Óbito',                   emoji: '🕯️' },
+  ]
+}
 
 interface Props {
   paciente: Paciente
@@ -29,6 +37,8 @@ interface Props {
    *  no Hospital por enquanto (ver decisão do plano de ajustes do Hospital).
    *  A saída direta (sem resumo) continua disponível normalmente. */
   permiteResumoIA: boolean
+  /** Decide a direção da opção de transferência interna (3ª opção de tiposSaida). */
+  tipoUnidade: 'uti' | 'enfermaria'
   onClose: () => void
   onAltaConcedida: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
@@ -36,7 +46,9 @@ interface Props {
 
 type Step = 'confirm' | 'discharging' | 'alta_ok' | 'generating' | 'review'
 
-export default function AltaModal({ paciente, exames, periodos, sinais, examesImagem, dvas, atbs, cuidados, neuro, ventilatorio, requerSaps3, permiteResumoIA, onClose, onAltaConcedida, showToast }: Props) {
+interface UnidadeDestino { id: string; nome: string }
+
+export default function AltaModal({ paciente, exames, periodos, sinais, examesImagem, dvas, atbs, cuidados, neuro, ventilatorio, requerSaps3, permiteResumoIA, tipoUnidade, onClose, onAltaConcedida, showToast }: Props) {
   const supabase             = createClient()
   const [step,               setStep]             = useState<Step>('confirm')
   const [resumo,             setResumo]           = useState<string | null>(null)
@@ -51,8 +63,59 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
 
   // Sem SAPS 3 não há saída: sem ele o paciente fica fora do SMR para sempre,
   // e a alta é a última chance de cobrar. Fora da UTI (unidade sem
-  // requerSaps3) essa cobrança não faz sentido — o escore nem existe lá.
-  const semSaps3 = requerSaps3 && paciente.saps3 == null
+  // requerSaps3) essa cobrança não faz sentido — o escore nem existe lá. As
+  // transferências internas nunca exigiram SAPS-3 (quem cobra, se a unidade
+  // destino exigir, é o Finalizar Admissão de lá).
+  const isTransferenciaInterna = tipoSaida === 'alta_uti_hospital' || tipoSaida === 'alta_hospital_uti'
+  const semSaps3 = requerSaps3 && paciente.saps3 == null && !isTransferenciaInterna
+
+  // Unidades destino pra transferência interna — mesma busca que existia em
+  // TransferirModal.tsx (staff do usuário fora da unidade atual), com o
+  // filtro a mais de só trazer unidades do tipo oposto (o alvo de "Alta da
+  // UTI para o Hospital" só pode ser um Hospital, e vice-versa).
+  const [unidadesDestino, setUnidadesDestino] = useState<UnidadeDestino[]>([])
+  const [unitDestinoId,   setUnitDestinoId]   = useState('')
+  const [loadingUnidades, setLoadingUnidades] = useState(false)
+
+  useEffect(() => {
+    if (!isTransferenciaInterna) return
+    let cancelado = false
+    const tipoAlvo = tipoSaida === 'alta_uti_hospital' ? 'enfermaria' : 'uti'
+    setLoadingUnidades(true)
+    ;(async () => {
+      const { data: auth } = await supabase.auth.getUser()
+      if (!auth.user) { setLoadingUnidades(false); return }
+      const { data } = await supabase
+        .from('staff')
+        .select('unit_id, units(id, name, tipo_unidade)')
+        .eq('user_id', auth.user.id).eq('active', true).neq('unit_id', paciente.unit_id)
+      if (cancelado) return
+      type Row = { unit_id: string; units: { id: string; name: string; tipo_unidade: string } | { id: string; name: string; tipo_unidade: string }[] | null }
+      const rows = (data ?? []) as Row[]
+      const lista = rows
+        .map(r => { const u = Array.isArray(r.units) ? r.units[0] : r.units; return u ? { id: u.id, nome: u.name, tipo: u.tipo_unidade } : null })
+        .filter((u): u is { id: string; nome: string; tipo: string } => u != null && u.tipo === tipoAlvo)
+        .map(u => ({ id: u.id, nome: u.nome }))
+      setUnidadesDestino(lista)
+      setUnitDestinoId(lista.length === 1 ? lista[0].id : '')
+      setLoadingUnidades(false)
+    })()
+    return () => { cancelado = true }
+  }, [tipoSaida])
+
+  const handleConfirmarTransferencia = async () => {
+    if (!unitDestinoId) return
+    setBusy(true)
+    const { error } = await supabase.rpc('transferir_paciente', {
+      p_paciente_id: paciente.id, p_unit_destino: unitDestinoId,
+    })
+    setBusy(false)
+    if (error) { showToast('Erro ao transferir: ' + error.message, 'error'); return }
+    const nome = unidadesDestino.find(u => u.id === unitDestinoId)?.nome ?? 'outra unidade'
+    showToast(`${paciente.nome} transferido(a) para ${nome} — aguardando alocação de leito definitivo.`)
+    onAltaConcedida()
+    onClose()
+  }
 
   /** Instante da saída em ISO, a partir dos campos locais. */
   const saidaISO = () => new Date(`${dataSaida}T${horaSaida}:00`).toISOString()
@@ -224,7 +287,7 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
               <div>
                 <p className="text-sm font-medium text-slate-700 mb-2">Tipo de saída *</p>
                 <div className="grid grid-cols-3 gap-2">
-                  {TIPOS_SAIDA.map(t => (
+                  {tiposSaida(tipoUnidade).map(t => (
                     <button key={t.id} type="button" onClick={() => setTipoSaida(t.id)}
                       className={`border rounded-xl px-2 py-3 text-xs font-semibold transition-colors ${
                         tipoSaida === t.id
@@ -238,27 +301,59 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {isTransferenciaInterna ? (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Data da saída *</label>
-                  <input type="date" value={dataSaida} onChange={e => setDataSaida(e.target.value)}
-                    max={hojeISO()}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400" />
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Unidade destino *</label>
+                  {loadingUnidades ? (
+                    <p className="text-sm text-slate-400">Carregando unidades...</p>
+                  ) : unidadesDestino.length === 0 ? (
+                    <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      Você não tem vínculo de staff em nenhuma unidade do tipo certo pra receber —
+                      peça pro chefe te adicionar em Escalas antes de transferir.
+                    </p>
+                  ) : (
+                    <select value={unitDestinoId} onChange={e => setUnitDestinoId(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+                      <option value="">Selecione...</option>
+                      {unidadesDestino.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}
+                    </select>
+                  )}
+                  <p className="text-xs text-slate-400 mt-1">
+                    {paciente.nome} continua o mesmo registro, com todo o histórico — cai primeiro na
+                    ala de trânsito da unidade destino; alguém de lá aloca o leito definitivo depois.
+                  </p>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Hora da saída *</label>
-                  <input type="time" value={horaSaida} onChange={e => setHoraSaida(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400" />
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Data da saída *</label>
+                    <input type="date" value={dataSaida} onChange={e => setDataSaida(e.target.value)}
+                      max={hojeISO()}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Hora da saída *</label>
+                    <input type="time" value={horaSaida} onChange={e => setHoraSaida(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400" />
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <button onClick={handleAltaDireta} disabled={!tipoSaida || semSaps3}
-                className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed
-                           text-white font-bold py-3 rounded-xl transition-colors">
-                ✅ Registrar Saída Agora
-              </button>
+              {isTransferenciaInterna ? (
+                <button onClick={handleConfirmarTransferencia} disabled={!unitDestinoId || busy}
+                  className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed
+                             text-white font-bold py-3 rounded-xl transition-colors">
+                  {busy ? 'Transferindo...' : '🔁 Confirmar transferência'}
+                </button>
+              ) : (
+                <button onClick={handleAltaDireta} disabled={!tipoSaida || semSaps3}
+                  className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed
+                             text-white font-bold py-3 rounded-xl transition-colors">
+                  ✅ Registrar Saída Agora
+                </button>
+              )}
 
-              {permiteResumoIA && (
+              {permiteResumoIA && !isTransferenciaInterna && (
                 <>
                   <div className="relative flex items-center">
                     <div className="flex-1 border-t border-slate-200" />

@@ -14,6 +14,7 @@ interface PacienteAuditoria {
   ativo: boolean
   data_internacao: string
   hora_internacao: string
+  ultimo_tipo_saida: string | null
 }
 
 /**

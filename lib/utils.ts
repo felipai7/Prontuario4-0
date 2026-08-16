@@ -345,6 +345,20 @@ export function fmtTurno(turno: string, inicio: string): string {
   return `${dia} ${rotulo}`
 }
 
+/** Rótulo do tipo de saída — mesmo vocabulário do AltaModal, usado tanto no
+ *  histórico de internações (PacienteModal) quanto na Auditoria geral. */
+export function labelTipoSaida(tipo: string | null | undefined): string {
+  switch (tipo) {
+    case 'alta_casa':                return '🏠 Alta Hospitalar'
+    case 'alta_pedido':               return '📝 Alta a Pedido'
+    case 'alta_uti_hospital':         return '🔁 Alta para o Hospital'
+    case 'alta_hospital_uti':         return '🔁 Alta para a UTI'
+    case 'transferencia_hospitalar':  return '🚑 Transferência'
+    case 'obito':                     return '🕯️ Óbito'
+    default:                          return 'Saída'
+  }
+}
+
 export function colorParcial(value: number): string {
   if (value > 200)  return 'text-red-600 font-bold'
   if (value > 0)    return 'text-orange-500 font-semibold'

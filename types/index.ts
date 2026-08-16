@@ -131,7 +131,13 @@ export interface PeriodoBalanco {
   updated_at: string
 }
 
-export type TipoSaida = 'alta' | 'obito' | 'transferencia'
+export type TipoSaida =
+  | 'alta_casa'
+  | 'alta_pedido'
+  | 'obito'
+  | 'transferencia_hospitalar'
+  | 'alta_uti_hospital'
+  | 'alta_hospital_uti'
 
 /** Um período de pacientes_unidades_historico — devolvido por
  *  buscar_historico_paciente/auditoria_detalhe_paciente. */

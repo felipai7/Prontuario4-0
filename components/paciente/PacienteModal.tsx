@@ -2,9 +2,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import AltaModal        from './AltaModal'
-import TransferirModal         from './TransferirModal'
 import FinalizarAdmissaoModal  from './FinalizarAdmissaoModal'
-import { fmtData, fmtDataHora, calcAge, pad, diasDesde, fmtNum, toTitleCaseNome, ultimoPorTurno, horasDesdeAdmissao, parseDataParaISO, hojeISO, sugerirProximoTurno, boundaryStart, soDigitos, balancoDaUnidade } from '@/lib/utils'
+import { fmtData, fmtDataHora, calcAge, pad, diasDesde, fmtNum, toTitleCaseNome, ultimoPorTurno, horasDesdeAdmissao, parseDataParaISO, hojeISO, sugerirProximoTurno, boundaryStart, soDigitos, balancoDaUnidade, labelTipoSaida } from '@/lib/utils'
 import { nomeDaAla, type Unidade } from '@/lib/unidade'
 import { modulosAtivos, type PacienteContext } from '@/lib/modules'
 import { montarEvolucaoDiaria } from '@/lib/evolucaoDiaria'
@@ -96,7 +95,6 @@ export default function PacienteModal({
   const [cargo, setCargo] = useState<Cargo | null>(null)
   const [loading,       setLoading]       = useState(true)
   const [showAlta,      setShowAlta]      = useState(false)
-  const [showTransferir, setShowTransferir] = useState(false)
   const [showFinalizar,  setShowFinalizar]  = useState(false)
   /** Histórico de internações — carregado sob demanda ao abrir a seção,
    *  não no loadData() principal: é informação de apoio, não crítica pro
@@ -330,7 +328,7 @@ export default function PacienteModal({
     setEditErrors({})
     setEditForm(makeEditForm(paciente))
     setShowAlta(false)
-    setShowTransferir(false); setShowFinalizar(false)
+    setShowFinalizar(false)
     setHistoricoOpen(false); setHistoricoPeriodos([]); setHistoricoAltas([])
     aiAbortRef.current?.abort()
     setAiOpen(false); setAiText(null); setAiLoading(false)
@@ -678,17 +676,11 @@ export default function PacienteModal({
                   className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${editing ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white hover:bg-white/20'}`}>
                   ✏️ Editar
                 </button>
-                {alas.find(a => a.id === pac.ala_id)?.rotativo ? (
+                {alas.find(a => a.id === pac.ala_id)?.rotativo && (
                   <button onClick={() => setShowFinalizar(true)} disabled={loading || !unidade}
                     title={loading ? 'Aguarde o carregamento dos dados do paciente' : 'Alocar leito definitivo e confirmar a admissão'}
                     className="bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
                     🛏️ Finalizar Admissão
-                  </button>
-                ) : (
-                  <button onClick={() => setShowTransferir(true)} disabled={loading}
-                    title={loading ? 'Aguarde o carregamento dos dados do paciente' : 'Transferir para outra unidade'}
-                    className="bg-white/15 hover:bg-white/25 border border-white/25 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
-                    🔁 Transferir
                   </button>
                 )}
                 <button onClick={() => setShowAlta(true)} disabled={loading}
@@ -1013,7 +1005,7 @@ export default function PacienteModal({
                       <p className="font-medium text-slate-500 mb-1">Saídas registradas</p>
                       {historicoAltas.map(a => (
                         <p key={a.id} className="text-slate-700">
-                          {a.tipo_saida === 'transferencia' ? '🔁 Transferência' : a.tipo_saida === 'obito' ? '🕯️ Óbito' : '🏠 Alta'}
+                          {labelTipoSaida(a.tipo_saida)}
                           {' — '}{fmtDataHora(a.data_alta)}
                         </p>
                       ))}
@@ -1051,17 +1043,9 @@ export default function PacienteModal({
           ventilatorio={ventAtual}
           requerSaps3={unidade?.requerSaps3 ?? true}
           permiteResumoIA={unidade?.tipoUnidade !== 'enfermaria'}
+          tipoUnidade={unidade?.tipoUnidade ?? 'uti'}
           onClose={() => setShowAlta(false)}
           onAltaConcedida={onAltaConcedida}
-          showToast={showToast}
-        />
-      )}
-
-      {showTransferir && (
-        <TransferirModal
-          paciente={pac}
-          onClose={() => setShowTransferir(false)}
-          onTransferido={onAltaConcedida}
           showToast={showToast}
         />
       )}
