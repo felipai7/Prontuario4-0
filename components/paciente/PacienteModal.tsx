@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import AltaModal        from './AltaModal'
 import TransferirModal         from './TransferirModal'
 import FinalizarAdmissaoModal  from './FinalizarAdmissaoModal'
-import { fmtData, fmtDataHora, calcAge, pad, diasDesde, fmtNum, toTitleCaseNome, ultimoPorTurno, horasDesdeAdmissao, parseDataParaISO, hojeISO, sugerirProximoTurno, boundaryStart, soDigitos } from '@/lib/utils'
+import { fmtData, fmtDataHora, calcAge, pad, diasDesde, fmtNum, toTitleCaseNome, ultimoPorTurno, horasDesdeAdmissao, parseDataParaISO, hojeISO, sugerirProximoTurno, boundaryStart, soDigitos, balancoDaUnidade } from '@/lib/utils'
 import { nomeDaAla, type Unidade } from '@/lib/unidade'
 import { modulosAtivos, type PacienteContext } from '@/lib/modules'
 import { montarEvolucaoDiaria } from '@/lib/evolucaoDiaria'
@@ -529,6 +529,7 @@ export default function PacienteModal({
     fisioEventos, fisioAvaliacoes, dispositivos, lpps, swabs, nutricaoAvaliacao, nutricaoDias, auditoria,
     irasEventos, irasSepse,
     cargo,
+    tipoUnidade: unidade?.tipoUnidade ?? 'uti',
     podeEditar: podeEditarModulo(cargo, moduloAtivo),
     onRefresh: loadData,
     showToast,
@@ -656,16 +657,23 @@ export default function PacienteModal({
                   quebrarem linha (mantendo cada um inteiro, sem espremer) resolve
                   sem reintroduzir o bug original do celular. */}
               <div className="flex items-center gap-2 flex-wrap w-full md:w-auto md:flex-shrink-0 md:justify-end">
-                <button onClick={handleAbrirEvolucao} disabled={loading}
-                  title={loading ? 'Aguarde o carregamento dos dados do paciente' : 'Evolução diária compilada dos resumos de cada aba (sem IA)'}
-                  className="bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
-                  📝 Evolução do Dia
-                </button>
-                <button onClick={handleAvaliarIA} disabled={aiLoading || loading}
-                  title={loading ? 'Aguarde o carregamento dos dados do paciente' : 'Avaliação clínica completa com IA'}
-                  className="bg-violet-500 hover:bg-violet-400 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
-                  🧠 Avaliar com IA
-                </button>
+                {/* Evolução do Dia, Avaliar com IA e o resumo de alta por IA
+                    (AltaModal) não são usados no Hospital por enquanto —
+                    ver decisão do plano de ajustes do Hospital. */}
+                {unidade?.tipoUnidade !== 'enfermaria' && (
+                  <>
+                    <button onClick={handleAbrirEvolucao} disabled={loading}
+                      title={loading ? 'Aguarde o carregamento dos dados do paciente' : 'Evolução diária compilada dos resumos de cada aba (sem IA)'}
+                      className="bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
+                      📝 Evolução do Dia
+                    </button>
+                    <button onClick={handleAvaliarIA} disabled={aiLoading || loading}
+                      title={loading ? 'Aguarde o carregamento dos dados do paciente' : 'Avaliação clínica completa com IA'}
+                      className="bg-violet-500 hover:bg-violet-400 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
+                      🧠 Avaliar com IA
+                    </button>
+                  </>
+                )}
                 <button onClick={() => setEditing(e => !e)} title="Editar dados do paciente"
                   className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${editing ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white hover:bg-white/20'}`}>
                   ✏️ Editar
@@ -1030,7 +1038,10 @@ export default function PacienteModal({
         <AltaModal
           paciente={pac}
           exames={exames}
-          periodos={periodos}
+          // Só o balanço desta unidade — se o paciente já esteve em outra
+          // (transferência), o snapshot de alta não deve herdar turnos de
+          // uma internação que já teve sua própria alta/transferência.
+          periodos={balancoDaUnidade(periodos, pac.unit_id)}
           sinais={sinais}
           examesImagem={examesImagem}
           dvas={dvas}
@@ -1039,6 +1050,7 @@ export default function PacienteModal({
           neuro={neuroAtual}
           ventilatorio={ventAtual}
           requerSaps3={unidade?.requerSaps3 ?? true}
+          permiteResumoIA={unidade?.tipoUnidade !== 'enfermaria'}
           onClose={() => setShowAlta(false)}
           onAltaConcedida={onAltaConcedida}
           showToast={showToast}

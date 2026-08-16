@@ -25,6 +25,10 @@ interface Props {
   ventilatorio: SuporteVentilatorio | null
   /** Se falso, a alta não exige SAPS-3 pontuado (unidade fora da UTI, ex.: Hospital). */
   requerSaps3: boolean
+  /** Se falso, esconde o caminho de resumo de alta gerado por IA — não usado
+   *  no Hospital por enquanto (ver decisão do plano de ajustes do Hospital).
+   *  A saída direta (sem resumo) continua disponível normalmente. */
+  permiteResumoIA: boolean
   onClose: () => void
   onAltaConcedida: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
@@ -32,7 +36,7 @@ interface Props {
 
 type Step = 'confirm' | 'discharging' | 'alta_ok' | 'generating' | 'review'
 
-export default function AltaModal({ paciente, exames, periodos, sinais, examesImagem, dvas, atbs, cuidados, neuro, ventilatorio, requerSaps3, onClose, onAltaConcedida, showToast }: Props) {
+export default function AltaModal({ paciente, exames, periodos, sinais, examesImagem, dvas, atbs, cuidados, neuro, ventilatorio, requerSaps3, permiteResumoIA, onClose, onAltaConcedida, showToast }: Props) {
   const supabase             = createClient()
   const [step,               setStep]             = useState<Step>('confirm')
   const [resumo,             setResumo]           = useState<string | null>(null)
@@ -254,17 +258,21 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
                 ✅ Registrar Saída Agora
               </button>
 
-              <div className="relative flex items-center">
-                <div className="flex-1 border-t border-slate-200" />
-                <span className="px-3 text-xs text-slate-400">ou</span>
-                <div className="flex-1 border-t border-slate-200" />
-              </div>
+              {permiteResumoIA && (
+                <>
+                  <div className="relative flex items-center">
+                    <div className="flex-1 border-t border-slate-200" />
+                    <span className="px-3 text-xs text-slate-400">ou</span>
+                    <div className="flex-1 border-t border-slate-200" />
+                  </div>
 
-              <button onClick={handleGenerateFirst} disabled={!tipoSaida || semSaps3}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed
-                           text-white font-semibold py-3 rounded-xl transition-colors text-sm">
-                🤖 Gerar Resumo com IA e Registrar Saída
-              </button>
+                  <button onClick={handleGenerateFirst} disabled={!tipoSaida || semSaps3}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed
+                               text-white font-semibold py-3 rounded-xl transition-colors text-sm">
+                    🤖 Gerar Resumo com IA e Registrar Saída
+                  </button>
+                </>
+              )}
             </div>
           )}
 
@@ -285,14 +293,16 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
                 <p className="text-emerald-700 text-sm mt-1">{paciente.nome} foi removido da UTI</p>
               </div>
 
-              <button onClick={handleGeneratePostAlta}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition-colors text-sm">
-                🤖 Gerar Relatório de Alta com IA
-              </button>
+              {permiteResumoIA && (
+                <button onClick={handleGeneratePostAlta}
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition-colors text-sm">
+                  🤖 Gerar Relatório de Alta com IA
+                </button>
+              )}
 
               <button onClick={onClose}
                 className="w-full border border-slate-300 text-slate-600 font-medium py-2.5 rounded-xl hover:bg-slate-50 text-sm transition-colors">
-                Fechar sem relatório
+                {permiteResumoIA ? 'Fechar sem relatório' : 'Fechar'}
               </button>
             </div>
           )}

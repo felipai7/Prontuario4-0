@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { parseDataParaISO } from '@/lib/utils'
+import { MODALIDADES, REGIOES_POR_MODALIDADE, nomeCanonico, type Modalidade } from '@/lib/examesImagem'
 import type { Paciente, ExameImagem, ToastData } from '@/types'
 
 // A ANÁLISE POR IA SAIU DAQUI EM 04/08/2026.
@@ -27,17 +28,35 @@ interface Props {
 export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, showToast }: Props) {
   const supabase = createClient()
 
-  const [formOpen,   setFormOpen]   = useState(false)
-  const [mTipo,      setMTipo]      = useState('')
-  const [mData,      setMData]      = useState('')
-  const [mTexto,     setMTexto]     = useState('')
-  const [mDataErr,   setMDataErr]   = useState('')
-  const [saving,     setSaving]     = useState(false)
-  const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [deleting,   setDeleting]   = useState<string | null>(null)
+  const [formOpen,         setFormOpen]         = useState(false)
+  // Modalidade + Região no lugar do texto livre de antes — 'outro' é a
+  // válvula de escape pro caso raro fora do catálogo (ver lib/examesImagem.ts).
+  const [mModalidade,      setMModalidade]      = useState<Modalidade | 'outro' | ''>('')
+  const [mModalidadeLivre, setMModalidadeLivre] = useState('')
+  const [mRegiao,          setMRegiao]          = useState('')
+  const [mRegiaoLivre,     setMRegiaoLivre]     = useState('')
+  const [mCritico,         setMCritico]         = useState(false)
+  const [mData,            setMData]            = useState('')
+  const [mTexto,           setMTexto]           = useState('')
+  const [mDataErr,         setMDataErr]         = useState('')
+  const [saving,           setSaving]           = useState(false)
+  const [expandedId,       setExpandedId]       = useState<string | null>(null)
+  const [deleting,         setDeleting]         = useState<string | null>(null)
+  const [togglingCritico,  setTogglingCritico]  = useState<string | null>(null)
 
   const resetForm = () => {
-    setMTipo(''); setMData(''); setMTexto(''); setMDataErr('')
+    setMModalidade(''); setMModalidadeLivre(''); setMRegiao(''); setMRegiaoLivre('')
+    setMCritico(false); setMData(''); setMTexto(''); setMDataErr('')
+  }
+
+  /** Nome canônico a partir da seleção atual, ou null se ainda incompleta —
+   *  serve tanto pra validar antes de salvar quanto pra pré-visualizar. */
+  const resolverTipoExame = (): string | null => {
+    if (mModalidade === 'outro') return mModalidadeLivre.trim() || null
+    if (!mModalidade) return null
+    if (mRegiao === 'outro') return mRegiaoLivre.trim() ? nomeCanonico(mModalidade, mRegiaoLivre) : null
+    if (!mRegiao) return null
+    return nomeCanonico(mModalidade, mRegiao)
   }
 
   const maskDate = (val: string): string => {
@@ -62,17 +81,19 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
 
 
   const handleSaveManual = async () => {
-    if (!mTipo.trim()) { showToast('Informe o tipo de exame', 'error'); return }
+    const tipoExame = resolverTipoExame()
+    if (!tipoExame) { showToast('Selecione a modalidade e a região do exame', 'error'); return }
     const dateErr = validateDate(mData)
     if (dateErr) { setMDataErr(dateErr); return }
     if (!mTexto.trim()) { showToast('Cole o texto do laudo', 'error'); return }
     setSaving(true)
     const { error } = await supabase.from('exames_imagem').insert({
       paciente_id: paciente.id,
-      tipo_exame:  mTipo.trim(),
+      tipo_exame:  tipoExame,
       data_exame:  mData.trim() || null,
       resumo_ia:   mTexto.trim(),
       achados:     null,
+      critico:     mCritico,
     })
     setSaving(false)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
@@ -87,6 +108,17 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
     setDeleting(null)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
     showToast('Laudo removido')
+    onRefresh()
+  }
+
+  // Marca/desmarca a qualquer momento, por qualquer um da equipe — inclusive
+  // num laudo já salvo há tempos. Fica visível no Painel/Resumo até alguém
+  // desmarcar aqui ou lá (mesmo campo, os dois toggles convergem).
+  const handleToggleCritico = async (ex: ExameImagem) => {
+    setTogglingCritico(ex.id)
+    const { error } = await supabase.from('exames_imagem').update({ critico: !ex.critico }).eq('id', ex.id)
+    setTogglingCritico(null)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
     onRefresh()
   }
 
@@ -118,10 +150,14 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
           <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs text-slate-500 font-medium block mb-1">Tipo de exame *</label>
-                  <input value={mTipo} onChange={e => setMTipo(e.target.value)}
-                    placeholder="ex: Radiografia de Tórax"
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+                  <label className="text-xs text-slate-500 font-medium block mb-1">Modalidade *</label>
+                  <select value={mModalidade}
+                    onChange={e => { setMModalidade(e.target.value as Modalidade | 'outro' | ''); setMRegiao(''); setMRegiaoLivre('') }}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    <option value="">Selecione...</option>
+                    {MODALIDADES.map(m => <option key={m} value={m}>{m}</option>)}
+                    <option value="outro">Outro (descrever)</option>
+                  </select>
                 </div>
                 <div>
                   <label className="text-xs text-slate-500 font-medium block mb-1">Data *</label>
@@ -133,12 +169,48 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
                   {mDataErr && <p className="text-xs text-red-500 mt-0.5">{mDataErr}</p>}
                 </div>
               </div>
+
+              {mModalidade === 'outro' ? (
+                <div>
+                  <label className="text-xs text-slate-500 font-medium block mb-1">Nome do exame *</label>
+                  <input value={mModalidadeLivre} onChange={e => setMModalidadeLivre(e.target.value)}
+                    placeholder="Ex: Cintilografia óssea"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+                </div>
+              ) : mModalidade ? (
+                <div>
+                  <label className="text-xs text-slate-500 font-medium block mb-1">Região *</label>
+                  <select value={mRegiao} onChange={e => setMRegiao(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    <option value="">Selecione...</option>
+                    {REGIOES_POR_MODALIDADE[mModalidade].map(r => <option key={r} value={r}>{r}</option>)}
+                    <option value="outro">Outro (descrever)</option>
+                  </select>
+                  {mRegiao === 'outro' && (
+                    <input value={mRegiaoLivre} onChange={e => setMRegiaoLivre(e.target.value)}
+                      placeholder="Descreva a região"
+                      className="mt-2 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+                  )}
+                </div>
+              ) : null}
+
+              {resolverTipoExame() && (
+                <p className="text-xs text-indigo-600">Vai salvar como: <strong>{resolverTipoExame()}</strong></p>
+              )}
+
               <div>
                 <label className="text-xs text-slate-500 font-medium block mb-1">Texto do laudo *</label>
                 <textarea value={mTexto} onChange={e => setMTexto(e.target.value)}
                   rows={6} placeholder="Cole aqui o texto completo do laudo..."
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white resize-y focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
               </div>
+
+              <label className="flex items-center gap-2 text-sm text-red-700 font-medium cursor-pointer select-none">
+                <input type="checkbox" checked={mCritico} onChange={e => setMCritico(e.target.checked)}
+                  className="w-4 h-4 accent-red-600"/>
+                ⚠️ Resultado crítico — aparece em destaque no Painel/Resumo
+              </label>
+
               <button onClick={handleSaveManual} disabled={saving}
                 className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold py-2.5 rounded-lg">
                 {saving ? '⏳ Salvando...' : '💾 Salvar Laudo'}
@@ -159,21 +231,34 @@ export default function ExamesImagemTab({ paciente, examesImagem, onRefresh, sho
           const hasAchados = Object.keys(achados).length > 0
 
           return (
-            <div key={ex.id} className="border border-slate-200 rounded-xl bg-white shadow-sm overflow-hidden">
-              <div className="flex items-start gap-3 p-3">
-                <div className="w-10 h-10 rounded-lg flex-shrink-0 bg-indigo-50 flex items-center justify-center border border-indigo-100 text-xl">
+            <div key={ex.id} className={`border rounded-xl bg-white shadow-sm overflow-hidden ${ex.critico ? 'border-red-300' : 'border-slate-200'}`}>
+              <div className={`flex items-start gap-3 p-3 ${ex.critico ? 'bg-red-50/60' : ''}`}>
+                <div className={`w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center border text-xl ${ex.critico ? 'bg-red-50 border-red-200' : 'bg-indigo-50 border-indigo-100'}`}>
                   🩻
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="font-semibold text-slate-800 text-sm">{ex.tipo_exame}</p>
+                      <p className="font-semibold text-slate-800 text-sm flex items-center gap-1.5 flex-wrap">
+                        {ex.tipo_exame}
+                        {ex.critico && (
+                          <span className="bg-red-600 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full whitespace-nowrap">🔴 CRÍTICO</span>
+                        )}
+                      </p>
                       {ex.data_exame && <p className="text-xs text-slate-400 mt-0.5">📅 {ex.data_exame}</p>}
                     </div>
-                    <button onClick={() => handleDelete(ex)} disabled={deleting === ex.id}
-                      className="text-xs text-red-400 hover:text-red-700 border border-red-100 hover:border-red-300 px-2 py-1 rounded-lg transition-colors flex-shrink-0">
-                      {deleting === ex.id ? '⏳' : '🗑️'}
-                    </button>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button onClick={() => handleToggleCritico(ex)} disabled={togglingCritico === ex.id}
+                        title={ex.critico ? 'Desmarcar como crítico' : 'Marcar como crítico'}
+                        className={`text-xs px-2 py-1 rounded-lg border transition-colors ${
+                          ex.critico ? 'text-red-600 border-red-200 hover:border-red-400' : 'text-slate-400 border-slate-200 hover:border-red-300 hover:text-red-500'}`}>
+                        {togglingCritico === ex.id ? '⏳' : ex.critico ? '🔴' : '⚪'}
+                      </button>
+                      <button onClick={() => handleDelete(ex)} disabled={deleting === ex.id}
+                        className="text-xs text-red-400 hover:text-red-700 border border-red-100 hover:border-red-300 px-2 py-1 rounded-lg transition-colors">
+                        {deleting === ex.id ? '⏳' : '🗑️'}
+                      </button>
+                    </div>
                   </div>
 
                   {ex.resumo_ia && (

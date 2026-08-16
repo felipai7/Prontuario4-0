@@ -92,9 +92,18 @@ export interface Exame {
 export interface PeriodoBalanco {
   id: string
   paciente_id: string
+  /**
+   * Unidade em que o registro foi lançado. Existe pra não misturar o balanço
+   * de uma internação na UTI com o do Hospital quando o paciente transita
+   * entre as duas — cada unidade só vê (e só edita) o próprio período.
+   * Nullable só por registros anteriores à migração que a criou.
+   */
+  unit_id: string | null
   inicio: string          // ISO timestamp
   fim: string             // ISO timestamp
-  turno: 'diurno' | 'noturno'
+  /** 'diario' = balanço do Hospital: 1 lançamento por dia, sem separar
+   *  diurno/noturno (ver BalancoDiarioTab). */
+  turno: 'diurno' | 'noturno' | 'diario'
   horas_periodo: number
   venoso: number
   oral_enteral: number
@@ -212,6 +221,9 @@ export interface ExameImagem {
   arquivo_nome: string | null
   resumo_ia: string | null
   achados: Record<string, string> | null
+  /** Achado grave marcado pela equipe — aparece em destaque no Painel do
+   *  Plantão / Resumo até alguém desmarcar. */
+  critico: boolean
   created_at: string
 }
 

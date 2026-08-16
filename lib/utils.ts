@@ -268,6 +268,21 @@ export function calcPerdasInsensiveis(pesoKg: number, horas: number): number {
   return Math.round(0.5 * pesoKg * horas * 10) / 10
 }
 
+/** Períodos de balanço lançados NA unidade dada — balanço não se mistura
+ *  entre unidades quando o paciente transita (ex.: UTI → Hospital). `unit_id`
+ *  nulo (registro anterior à migração que criou a coluna) conta como
+ *  "desta unidade": o backfill já cobriu todo o histórico existente com a
+ *  unidade em que o paciente estava no momento da migração. */
+export function balancoDaUnidade(periodos: PeriodoBalanco[], unitId: string): PeriodoBalanco[] {
+  return periodos.filter(p => p.unit_id === unitId || p.unit_id == null)
+}
+
+/** O inverso: períodos gravados em OUTRAS unidades — só para exibição em
+ *  modo leitura (ex.: "ver balanço da unidade anterior"). */
+export function balancoDeOutrasUnidades(periodos: PeriodoBalanco[], unitId: string): PeriodoBalanco[] {
+  return periodos.filter(p => p.unit_id != null && p.unit_id !== unitId)
+}
+
 export function calcBalanco(p: PeriodoBalanco): BalancoCalculado {
   const ganhos = p.venoso + p.oral_enteral + p.agua_endogena
   const perdas = p.diurese + p.dialise + p.febre + p.evacuacao +
@@ -326,7 +341,8 @@ export function calcNextPeriod(lastFimISO: string): {
 export function fmtTurno(turno: string, inicio: string): string {
   const dt  = new Date(inicio)
   const dia = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-  return `${dia} ${turno === 'diurno' ? '☀️ Diurno' : '🌙 Noturno'}`
+  const rotulo = turno === 'diario' ? '📅 Diário' : turno === 'diurno' ? '☀️ Diurno' : '🌙 Noturno'
+  return `${dia} ${rotulo}`
 }
 
 export function colorParcial(value: number): string {

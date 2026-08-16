@@ -11,6 +11,7 @@
 
 import PlantonistaTab  from '@/components/modules/plantonista/PlantonistaTab'
 import BalancoTab      from '@/components/modules/plantonista/BalancoTab'
+import BalancoDiarioTab from '@/components/modules/plantonista/BalancoDiarioTab'
 import SinaisVitaisTab from '@/components/modules/plantonista/SinaisVitaisTab'
 import HemodinamicaTab from '@/components/modules/plantonista/HemodinamicaTab'
 import NeurologicoTab  from '@/components/modules/plantonista/NeurologicoTab'
@@ -53,6 +54,9 @@ export interface PacienteContext {
   irasSepse: IrasSepseChoque | null
   /** Cargo do usuário logado. Null = sem cadastro em `staff` (cai no padrão). */
   cargo: Cargo | null
+  /** Tipo da unidade em exibição — decide rótulos e o que aparece nas abas
+   *  compartilhadas (ex.: Resumo esconde DVA e usa balanço diário no Hospital). */
+  tipoUnidade: 'uti' | 'enfermaria'
   /**
    * Se o usuário pode escrever no módulo ATIVO. Calculado pela casca a partir do
    * cargo e do dono do módulo — as abas não precisam conhecer a regra.
@@ -104,6 +108,7 @@ const painelPlantao: TabDef = {
       periodos={ctx.periodos} atbs={ctx.atbs} cuidados={ctx.cuidados}
       intercorrencias={ctx.intercorrencias} pendencias={ctx.pendencias}
       registrosIntensivista={ctx.registrosIntensivista} swabs={ctx.swabs}
+      examesImagem={ctx.examesImagem} tipoUnidade={ctx.tipoUnidade}
       onRefresh={ctx.onRefresh} showToast={ctx.showToast} />
   ),
 }
@@ -112,6 +117,14 @@ const balanco: TabDef = {
   id: 'balanco',
   label: '💧 Balanço Hídrico',
   render: ctx => <BalancoTab paciente={ctx.paciente} periodos={ctx.periodos} onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
+}
+
+// Variante do Hospital: 1 lançamento por dia, sem os cálculos automáticos
+// que a UTI faz por turno (ver comentário no topo de BalancoDiarioTab.tsx).
+const balancoDiario: TabDef = {
+  id: 'balanco',
+  label: '💧 Balanço Hídrico',
+  render: ctx => <BalancoDiarioTab paciente={ctx.paciente} periodos={ctx.periodos} onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
 }
 
 const sinais: TabDef = {
@@ -252,19 +265,26 @@ export const MODULOS: readonly ModuloDef[] = [
 // Internos porque o módulo de Enfermagem inteiro fica oculto na enfermaria
 // — reaproveita o TabDef como já existe, sem separar dispositivos do resto
 // (decisão do plano).
+//
+// "Painel do Plantão" vira "Resumo" no Hospital e aparece nos DOIS módulos
+// (Médico e Internos) — spread sobre o TabDef original só pra trocar o
+// rótulo, mesmo `render`/`id`. Hemodinâmica sai por completo (não é usada
+// no Hospital); Balanço usa a variante diária (`balancoDiario`).
+const resumo: TabDef = { ...painelPlantao, label: '📋 Resumo' }
+
 const MODULOS_ENFERMARIA: readonly ModuloDef[] = [
   {
     id: 'medico',
     label: '📋 Médico',
     profissaoDona: 'medico',
     exigeChefe: true,
-    tabs: [cuidadosHorizontais, iras, examesLab, examesImagem],
+    tabs: [resumo, cuidadosHorizontais, iras, examesLab, examesImagem],
   },
   {
     id: 'internos',
     label: '🩺 Internos',
     profissaoDona: 'medico',
-    tabs: [painelPlantao, balanco, examesLab, sinais, hemodinamica, neurologico, ventilatorio, examesImagem, enfermagem],
+    tabs: [resumo, balancoDiario, examesLab, sinais, neurologico, ventilatorio, examesImagem, enfermagem],
   },
 ]
 

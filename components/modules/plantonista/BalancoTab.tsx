@@ -4,9 +4,12 @@ import { createClient } from '@/lib/supabase/client'
 import {
   calcAguaEndogena, calcPerdasInsensiveis, calcBalanco,
   calcAcumuladoTotal, calcAcumuladoMovel, calcDiurese24h, calcFirstPeriod, calcNextPeriod,
-  fmtTurno, colorParcial, getTurno, fmtNum, boundaryStart, fmtDataHora, hojeISO
+  fmtTurno, colorParcial, getTurno, fmtNum, boundaryStart, fmtDataHora, hojeISO,
+  balancoDaUnidade, balancoDeOutrasUnidades,
 } from '@/lib/utils'
 import TabelaRolavel from '@/components/ui/TabelaRolavel'
+import BalancoAnteriorLeitura from './BalancoAnteriorLeitura'
+import { evalMath, temPontoInvalido, ExprField } from './balancoCampos'
 import type { Paciente, PeriodoBalanco, ToastData } from '@/types'
 
 interface Props {
@@ -14,28 +17,6 @@ interface Props {
   periodos: PeriodoBalanco[]
   onRefresh: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
-}
-
-// ── Arithmetic expression evaluator ──────────────────────────────────────────
-// Vírgula é o separador decimal aqui (padrão BR) — normaliza pra ponto antes de
-// avaliar como expressão JS. Ponto digitado pelo usuário é bloqueado antes de
-// chegar aqui (ver temPontoInvalido): alguns liam "1.200" como mil e duzentos
-// (separador de milhar, uso comum no Brasil) e o eval devolvia 1.2, um erro de
-// 1000x silencioso num valor de balanço hídrico.
-function evalMath(expr: string): number {
-  const clean = (expr ?? '').trim().replace(/,/g, '.')
-  if (!clean || clean === '0') return 0
-  if (!/^[\d\s+\-*/().]+$/.test(clean)) return parseFloat(clean) || 0
-  try {
-    const result = new Function('return (' + clean + ')')()
-    if (typeof result === 'number' && isFinite(result)) return Math.max(0, Math.round(result * 10) / 10)
-  } catch {}
-  return parseFloat(clean) || 0
-}
-
-/** Ponto é ambíguo (decimal ou milhar) — só vírgula é aceita como decimal. */
-function temPontoInvalido(expr: string): boolean {
-  return expr.includes('.')
 }
 
 // ── Row definitions (without subtotal rows) ───────────────────────────────────
@@ -120,8 +101,15 @@ const LABELS: Record<string, string> = {
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export default function BalancoTab({ paciente, periodos, onRefresh, showToast }: Props) {
+export default function BalancoTab({ paciente, periodos: periodosTodos, onRefresh, showToast }: Props) {
   const supabase = createClient()
+
+  // Balanço não se mistura entre unidades: se o paciente já esteve no
+  // Hospital antes de vir pra UTI (ou vice-versa), o que foi lançado lá
+  // fica visível só em modo leitura (ver BalancoAnteriorLeitura), sem
+  // entrar no acumulado nem na sugestão de próximo turno desta unidade.
+  const periodos = balancoDaUnidade(periodosTodos, paciente.unit_id)
+  const periodosOutrasUnidades = balancoDeOutrasUnidades(periodosTodos, paciente.unit_id)
 
   const [formMode,       setFormMode]       = useState<'add' | 'edit' | null>(null)
   const [editingPeriodo, setEditingPeriodo] = useState<PeriodoBalanco | null>(null)
@@ -223,6 +211,7 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
     setSaving(true)
     const { error } = await supabase.from('periodos_balanco').insert({
       paciente_id: paciente.id,
+      unit_id: paciente.unit_id,
       inicio: periodSpec.inicio.toISOString(), fim: periodSpec.fim.toISOString(),
       turno: periodSpec.turno, horas_periodo: periodSpec.horas,
       venoso: evalMath(form.venoso), oral_enteral: evalMath(form.oral_enteral),
@@ -624,6 +613,8 @@ export default function BalancoTab({ paciente, periodos, onRefresh, showToast }:
           </table>
         </TabelaRolavel>
       )}
+
+      <BalancoAnteriorLeitura periodos={periodosOutrasUnidades} />
     </div>
   )
 }
@@ -638,26 +629,6 @@ function SummaryCard({ label, value, sub }: { label: string; value: number | nul
         {value == null ? '—' : `${value > 0 ? '+' : ''}${value.toFixed(0)}`}
       </p>
       <p className="text-xs text-slate-400 mt-0.5">{sub}</p>
-    </div>
-  )
-}
-
-function ExprField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  const preview  = evalMath(value)
-  const invalido = temPontoInvalido(value)
-  const hasExpr  = !invalido && value.trim() !== '' && value.trim() !== '0' && value !== String(preview) && /[+\-*/()]/.test(value)
-  return (
-    <div className={`bg-white border rounded-lg px-3 py-2 ${invalido ? 'border-red-400 ring-1 ring-red-200' : 'border-slate-200'}`}>
-      <p className="text-xs text-slate-500 mb-1">{label}</p>
-      {/* text-base (16px), não text-sm: abaixo de 16px o Safari do iPhone dá
-          zoom automático ao tocar no campo. O zoom desloca a tela no meio do
-          toque — é fácil o dedo acabar digitando no campo vizinho depois do
-          salto, o que bagunça o turno inteiro (não só este campo) e só
-          acontece em celular. */}
-      <input type="text" inputMode="decimal" value={value} onChange={e => onChange(e.target.value)} placeholder="0"
-        className="w-full text-base font-semibold focus:outline-none bg-transparent"/>
-      {invalido && <p className="text-xs text-red-500 mt-0.5">Use vírgula, não ponto</p>}
-      {hasExpr && <p className="text-xs text-indigo-500 mt-0.5">= {preview.toFixed(0)} mL</p>}
     </div>
   )
 }

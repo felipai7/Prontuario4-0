@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { fmtData, diasDesde, hojeISO } from '@/lib/utils'
+import { fmtData, diasDesde, hojeISO, balancoDaUnidade } from '@/lib/utils'
 import type {
   Paciente, NutricaoAvaliacao, NutricaoDia, PeriodoBalanco, SuporteVentilatorio,
   CuidadosHorizontais, AuditoriaIntensivista, ToastData,
@@ -103,11 +103,15 @@ function Check({ label, v, set, disabled, dica }: {
 }
 
 export default function NutricaoTab({
-  paciente, avaliacao, dias, periodosBalanco, ventHistorico, cuidados, auditoria,
+  paciente, avaliacao, dias, periodosBalanco: periodosBalancoTodos, ventHistorico, cuidados, auditoria,
   podeEditar, onRefresh, showToast,
 }: Props) {
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
+
+  // Só o balanço desta unidade — evita contar evacuação/constipação de uma
+  // internação anterior em outra unidade (transferência UTI↔Hospital).
+  const periodosBalanco = balancoDaUnidade(periodosBalancoTodos, paciente.unit_id)
 
   // ── Painel "o que já sabemos" ───────────────────────────────────────────
   // A nutrição hoje levanta esses quatro dados por fora (perguntando, olhando

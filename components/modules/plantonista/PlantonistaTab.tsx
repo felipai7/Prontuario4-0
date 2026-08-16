@@ -1,9 +1,9 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { calcBalanco, calcAcumuladoMovel, calcDiurese24h, diaAtualATB, diasDesde, fmtNum, hojeISO } from '@/lib/utils'
+import { calcBalanco, calcAcumuladoMovel, calcDiurese24h, diaAtualATB, diasDesde, fmtNum, hojeISO, balancoDaUnidade } from '@/lib/utils'
 import { fmtData } from '@/lib/utils'
-import type { Paciente, SinalVital, DVA, PeriodoBalanco, ATB, CuidadosHorizontais, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, SwabVigilancia, ToastData } from '@/types'
+import type { Paciente, SinalVital, DVA, PeriodoBalanco, ATB, CuidadosHorizontais, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, SwabVigilancia, ExameImagem, ToastData } from '@/types'
 
 interface Props {
   paciente: Paciente
@@ -16,6 +16,10 @@ interface Props {
   pendencias: PendenciaIntensivista[]
   registrosIntensivista: RegistroIntensivista[]
   swabs: SwabVigilancia[]
+  examesImagem: ExameImagem[]
+  /** UTI mostra DVA/saldo/acumulado; Hospital ("Resumo") esconde DVA e mostra
+   *  só a diurese 24h do balanço diário — ver decisões do plano de Hospital. */
+  tipoUnidade: 'uti' | 'enfermaria'
   onRefresh: () => void
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
 }
@@ -34,8 +38,13 @@ function agoraLocal(): string {
   return d.toISOString().slice(0, 16)
 }
 
-export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs, cuidados, intercorrencias, pendencias, registrosIntensivista, swabs, onRefresh, showToast }: Props) {
+export default function PlantonistaTab({ paciente, sinais, dvas, periodos: periodosTodos, atbs, cuidados, intercorrencias, pendencias, registrosIntensivista, swabs, examesImagem, tipoUnidade, onRefresh, showToast }: Props) {
   const supabase = createClient()
+
+  // Só o balanço lançado NESTA unidade — se o paciente já esteve em outra
+  // (transferência UTI↔Hospital), o balanço de lá fica visível só em modo
+  // leitura na aba Balanço, e não entra no card-resumo daqui.
+  const periodos = balancoDaUnidade(periodosTodos, paciente.unit_id)
 
   // Intercorrências são carregadas e assinadas pela casca (PacienteModal) — este
   // módulo só precisa do e-mail do autor logado para registrar novas entradas.
@@ -123,13 +132,22 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs,
   const swabsPendentes = swabs.filter(s => !s.resultado_disponivel)
   const previsaoAlta = cuidados?.previsao_alta ?? null
   const altaVencida = previsaoAlta != null && previsaoAlta <= hojeISO()
+  const examesCriticos = examesImagem.filter(e => e.critico)
+
+  const handleDesmarcarCritico = async (id: string) => {
+    const { error } = await supabase.from('exames_imagem').update({ critico: false }).eq('id', id)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    onRefresh()
+  }
 
   return (
     <div className="space-y-6">
 
       {/* Painel-resumo para passagem de plantão */}
       <section className="border border-slate-200 rounded-xl p-4">
-        <h3 className="font-semibold text-slate-700 mb-3">📟 Painel do Plantão</h3>
+        <h3 className="font-semibold text-slate-700 mb-3">
+          {tipoUnidade === 'enfermaria' ? '📋 Resumo' : '📟 Painel do Plantão'}
+        </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
 
           <div className="bg-slate-50 rounded-lg p-3">
@@ -146,16 +164,29 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs,
             ) : <p className="text-sm text-slate-400">Sem aferições registradas.</p>}
           </div>
 
-          <div className="bg-slate-50 rounded-lg p-3">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">💉 Drogas vasoativas</p>
-            {dvasAtivas.length ? (
-              <p className="text-sm text-slate-700">{dvasAtivas.map(d => `${d.droga} ${d.fluxo_ml_h} mL/h`).join(' · ')}</p>
-            ) : <p className="text-sm text-emerald-600">Sem vasopressores/inotrópicos em uso.</p>}
-          </div>
+          {/* DVA não existe no Hospital — Hemodinâmica saiu de lá por completo. */}
+          {tipoUnidade === 'uti' && (
+            <div className="bg-slate-50 rounded-lg p-3">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">💉 Drogas vasoativas</p>
+              {dvasAtivas.length ? (
+                <p className="text-sm text-slate-700">{dvasAtivas.map(d => `${d.droga} ${d.fluxo_ml_h} mL/h`).join(' · ')}</p>
+              ) : <p className="text-sm text-emerald-600">Sem vasopressores/inotrópicos em uso.</p>}
+            </div>
+          )}
 
           <div className="bg-slate-50 rounded-lg p-3">
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">💧 Balanço hídrico</p>
-            {ultimoPeriodo && bhUltimo ? (
+            {tipoUnidade === 'enfermaria' ? (
+              // Hospital: só a diurese 24h — sem saldo do dia nem acumulado
+              // (ver BalancoDiarioTab: ganho nem sempre é quantificado lá,
+              // um saldo calculado sairia falsamente negativo).
+              periodos.length > 0 ? (
+                <p className="text-sm text-slate-700">
+                  Diurese 24h: {duTotal.toFixed(0)} mL
+                  {duHoras > 0 && <> → {fmtNum(duTotal / (paciente.peso_kg ?? 70) / duHoras, 2)} mL/Kg/h{!paciente.peso_kg && ' (peso 70 Kg)'}</>}
+                </p>
+              ) : <p className="text-sm text-slate-400">Sem balanço registrado.</p>
+            ) : ultimoPeriodo && bhUltimo ? (
               <p className="text-sm text-slate-700">
                 Último turno: {bhUltimo.parcial > 0 ? '+' : ''}{bhUltimo.parcial.toFixed(0)} mL
                 {/* mL/Kg/h, e não mL/h: é a forma em que se lê oligúria (<0,5) e
@@ -193,6 +224,23 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos, atbs,
               </p>
             ) : <p className="text-sm text-slate-400">Não definida pelo intensivista.</p>}
           </div>
+
+          {examesCriticos.length > 0 && (
+            <div className="bg-red-50 border border-red-300 rounded-lg p-3 md:col-span-2">
+              <p className="text-xs font-bold text-red-700 uppercase tracking-wide mb-1">🔴 Exames com resultado crítico</p>
+              <ul className="text-sm text-red-900 space-y-1">
+                {examesCriticos.map(e => (
+                  <li key={e.id} className="flex items-center justify-between gap-2">
+                    <span>• {e.tipo_exame}{e.data_exame && <span className="text-red-600"> — {e.data_exame}</span>}</span>
+                    <button onClick={() => handleDesmarcarCritico(e.id)}
+                      className="text-xs text-red-500 hover:text-red-700 underline flex-shrink-0">
+                      desmarcar
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {pendencias.some(p => !p.resolvida) && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 md:col-span-2">

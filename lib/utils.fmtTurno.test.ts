@@ -28,4 +28,8 @@ describe('fmtTurno', () => {
   it('mantém dois dígitos em dia e mês', () => {
     expect(fmtTurno('diurno', '2026-01-05T07:00:00')).toBe('05/01 ☀️ Diurno')
   })
+
+  it('diario (balanço do Hospital) usa rótulo próprio, sem diurno/noturno', () => {
+    expect(fmtTurno('diario', '2026-08-23T00:00:00')).toBe('23/08 📅 Diário')
+  })
 })
