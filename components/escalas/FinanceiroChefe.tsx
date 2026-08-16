@@ -35,6 +35,9 @@ export default function FinanceiroChefe({ unitId, staffList, shiftTypesList, sho
 
   const staffMap = useMemo(() => Object.fromEntries(staffList.map(s => [s.id, s.full_name])), [staffList])
   const shiftTypeMap = useMemo(() => Object.fromEntries(shiftTypesList.map(t => [t.id, t.name])), [shiftTypesList])
+  // Desempate diurno/noturno dentro do mesmo dia pelo horário de início do
+  // tipo de turno — mesmo ajuste de ComparativoView.tsx.
+  const shiftTypeStartMap = useMemo(() => Object.fromEntries(shiftTypesList.map(t => [t.id, t.start_time])), [shiftTypesList])
 
   const load = async () => {
     if (!unitId) { setPagamentos([]); return }
@@ -51,22 +54,16 @@ export default function FinanceiroChefe({ unitId, staffList, shiftTypesList, sho
       .lt('shift.date', mesFim)
     setLoading(false)
     if (error) { showToast('Erro ao carregar pagamentos: ' + error.message, 'error'); return }
-    const lista = ((data as unknown as PagamentoComPlantao[]) ?? []).sort((a, b) => a.shift.date.localeCompare(b.shift.date))
+    const lista = ((data as unknown as PagamentoComPlantao[]) ?? []).sort((a, b) => {
+      if (a.shift.date !== b.shift.date) return a.shift.date.localeCompare(b.shift.date)
+      const sa = a.shift.shift_type_id ? shiftTypeStartMap[a.shift.shift_type_id] ?? '' : ''
+      const sb = b.shift.shift_type_id ? shiftTypeStartMap[b.shift.shift_type_id] ?? '' : ''
+      return sa.localeCompare(sb)
+    })
     setPagamentos(lista)
   }
 
   useEffect(() => { load() }, [unitId, ref])
-
-  const handleMarcarPago = async (p: PagamentoComPlantao) => {
-    setMarcandoId(p.shift_id)
-    const proximoStatus = p.payment_status === 'paid' ? 'pending' : 'paid'
-    const { error } = await supabase.from('shift_payments').update({
-      payment_status: proximoStatus, paid_at: proximoStatus === 'paid' ? new Date().toISOString() : null,
-    }).eq('shift_id', p.shift_id)
-    setMarcandoId(null)
-    if (error) { showToast('Erro: ' + error.message, 'error'); return }
-    load()
-  }
 
   // Agrupamento por plantonista: alimenta o resumo na tela e o relatório
   // impresso. Um pagamento sem staff_id (plantão sem ninguém atribuído,
@@ -89,6 +86,22 @@ export default function FinanceiroChefe({ unitId, staffList, shiftTypesList, sho
     }
     return [...grupos.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
   }, [pagamentos, staffMap])
+
+  // Pagamento é marcado por plantonista, não plantão a plantão: um clique
+  // atualiza TODOS os plantões daquele profissional no mês de uma vez — reflete
+  // como o chefe paga de verdade (um valor por pessoa no fim do mês, não por
+  // turno individual). Já totalmente pago desmarca tudo pra pendente de novo.
+  const handleMarcarGrupoPago = async (g: GrupoPlantonista) => {
+    setMarcandoId(g.staffId)
+    const proximoStatus = g.totalPendente === 0 ? 'pending' : 'paid'
+    const shiftIds = g.pagamentos.map(p => p.shift_id)
+    const { error } = await supabase.from('shift_payments').update({
+      payment_status: proximoStatus, paid_at: proximoStatus === 'paid' ? new Date().toISOString() : null,
+    }).in('shift_id', shiftIds)
+    setMarcandoId(null)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    load()
+  }
 
   const handleGerarRelatorio = () => {
     const win = window.open('', '_blank', 'width=850,height=700')
@@ -286,9 +299,9 @@ export default function FinanceiroChefe({ unitId, staffList, shiftTypesList, sho
         <p className="text-sm text-slate-400">Nenhum plantão publicado com pagamento neste mês.</p>
       ) : (
         <>
-          {/* Total por plantonista — o que o chefe mais vem procurar aqui;
-              a lista cronológica abaixo continua pra marcar pagamento
-              plantão a plantão. */}
+          {/* Pagamento é marcado por plantonista aqui — um botão só por linha,
+              cobrindo todos os plantões dele no mês. A lista cronológica
+              abaixo é só conferência, sem ação própria. */}
           <div className="border border-slate-200 rounded-lg overflow-hidden">
             <table className="w-full text-sm">
               <thead>
@@ -298,6 +311,7 @@ export default function FinanceiroChefe({ unitId, staffList, shiftTypesList, sho
                   <th className="text-right px-3 py-1.5 font-semibold">Total</th>
                   <th className="text-right px-3 py-1.5 font-semibold">Pago</th>
                   <th className="text-right px-3 py-1.5 font-semibold">Pendente</th>
+                  <th className="text-right px-3 py-1.5 font-semibold">Pagamento</th>
                 </tr>
               </thead>
               <tbody>
@@ -308,6 +322,14 @@ export default function FinanceiroChefe({ unitId, staffList, shiftTypesList, sho
                     <td className="px-3 py-1.5 text-right font-semibold text-slate-800">{fmtValor(g.total)}</td>
                     <td className="px-3 py-1.5 text-right text-emerald-700">{fmtValor(g.totalPago)}</td>
                     <td className="px-3 py-1.5 text-right text-amber-700">{fmtValor(g.totalPendente)}</td>
+                    <td className="px-3 py-1.5 text-right">
+                      <button onClick={() => handleMarcarGrupoPago(g)} disabled={marcandoId === g.staffId || g.staffId === '—'}
+                        className={`text-xs font-bold px-2 py-1 rounded-full transition-colors disabled:opacity-50 ${
+                          g.totalPendente === 0 ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                        }`}>
+                        {g.totalPendente === 0 ? 'Pago' : 'Marcar como pago'}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -321,12 +343,11 @@ export default function FinanceiroChefe({ unitId, staffList, shiftTypesList, sho
                 <span className="text-slate-700 flex-1 min-w-0 truncate">{p.shift.staff_id ? staffMap[p.shift.staff_id] ?? '?' : '—'}</span>
                 <span className="text-slate-500 flex-shrink-0">{p.shift.shift_type_id ? shiftTypeMap[p.shift.shift_type_id] ?? '?' : '?'}</span>
                 <span className="font-medium text-slate-800 flex-shrink-0">{fmtValor(p.payment_value)}</span>
-                <button onClick={() => handleMarcarPago(p)} disabled={marcandoId === p.shift_id}
-                  className={`text-xs font-bold px-2 py-1 rounded-full flex-shrink-0 transition-colors ${
-                    p.payment_status === 'paid' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
-                  }`}>
-                  {p.payment_status === 'paid' ? 'Pago' : 'Marcar como pago'}
-                </button>
+                <span className={`text-xs font-bold px-2 py-1 rounded-full flex-shrink-0 ${
+                  p.payment_status === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                }`}>
+                  {p.payment_status === 'paid' ? 'Pago' : 'Pendente'}
+                </span>
               </li>
             ))}
           </ul>

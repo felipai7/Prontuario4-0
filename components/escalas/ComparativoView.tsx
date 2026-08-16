@@ -28,6 +28,14 @@ export default function ComparativoView({ unitId, staffList, shiftTypesList, sho
 
   const staffMap = useMemo(() => Object.fromEntries(staffList.map(s => [s.id, s.full_name])), [staffList])
   const shiftTypeMap = useMemo(() => Object.fromEntries(shiftTypesList.map(t => [t.id, t.name])), [shiftTypesList])
+  // Ordena diurno antes de noturno dentro do mesmo dia pelo horário de início
+  // do tipo de turno — o `order('date')` do Supabase sozinho não desempata
+  // entre turnos do mesmo dia, então "Noturno" podia aparecer antes de
+  // "Diurno" dependendo da ordem de inserção dos plantões.
+  const shiftTypeStartMap = useMemo(() => Object.fromEntries(shiftTypesList.map(t => [t.id, t.start_time])), [shiftTypesList])
+
+  // Recolhido por padrão — mesmo idioma de FinanceiroPlantonista.tsx.
+  const [aberto, setAberto] = useState(false)
 
   const load = async () => {
     if (!unitId) return
@@ -39,10 +47,16 @@ export default function ComparativoView({ unitId, staffList, shiftTypesList, sho
       .eq('unit_id', unitId).gte('date', mesInicio).lt('date', mesFim).order('date')
     setLoading(false)
     if (error) { showToast('Erro ao carregar comparativo: ' + error.message, 'error'); return }
-    setShifts((data as Shift[]) ?? [])
+    const lista = ((data as Shift[]) ?? []).sort((a, b) => {
+      if (a.date !== b.date) return a.date.localeCompare(b.date)
+      const sa = a.shift_type_id ? shiftTypeStartMap[a.shift_type_id] ?? '' : ''
+      const sb = b.shift_type_id ? shiftTypeStartMap[b.shift_type_id] ?? '' : ''
+      return sa.localeCompare(sb)
+    })
+    setShifts(lista)
   }
 
-  useEffect(() => { load() }, [unitId, ref])
+  useEffect(() => { if (aberto) load() }, [unitId, ref, aberto])
 
   const trocados = shifts.filter(s => s.original_staff_id !== s.staff_id)
 
@@ -51,15 +65,23 @@ export default function ComparativoView({ unitId, staffList, shiftTypesList, sho
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h3 className="font-semibold text-slate-700">📊 Comparativo Planejado × Executado</h3>
         <div className="flex items-center gap-2">
-          <button onClick={() => setRef(new Date(ref.getFullYear(), ref.getMonth() - 1, 1))}
-            className="text-slate-500 hover:text-indigo-600 border border-slate-200 rounded-lg px-2 py-1 text-sm">←</button>
-          <span className="text-sm font-medium text-slate-700 capitalize min-w-[9rem] text-center">{fmtMesAno(ref)}</span>
-          <button onClick={() => setRef(new Date(ref.getFullYear(), ref.getMonth() + 1, 1))}
-            className="text-slate-500 hover:text-indigo-600 border border-slate-200 rounded-lg px-2 py-1 text-sm">→</button>
+          {aberto && (
+            <>
+              <button onClick={() => setRef(new Date(ref.getFullYear(), ref.getMonth() - 1, 1))}
+                className="text-slate-500 hover:text-indigo-600 border border-slate-200 rounded-lg px-2 py-1 text-sm">←</button>
+              <span className="text-sm font-medium text-slate-700 capitalize min-w-[9rem] text-center">{fmtMesAno(ref)}</span>
+              <button onClick={() => setRef(new Date(ref.getFullYear(), ref.getMonth() + 1, 1))}
+                className="text-slate-500 hover:text-indigo-600 border border-slate-200 rounded-lg px-2 py-1 text-sm">→</button>
+            </>
+          )}
+          <button onClick={() => setAberto(a => !a)}
+            className="text-xs font-medium text-indigo-600 border border-indigo-200 hover:bg-indigo-50 rounded-lg px-2.5 py-1.5">
+            {aberto ? '▲ Ocultar' : '▼ Ver comparativo'}
+          </button>
         </div>
       </div>
 
-      {loading ? (
+      {aberto && (loading ? (
         <p className="text-sm text-slate-400">Carregando...</p>
       ) : shifts.length === 0 ? (
         <p className="text-sm text-slate-400">Nenhum plantão publicado neste mês.</p>
@@ -85,7 +107,7 @@ export default function ComparativoView({ unitId, staffList, shiftTypesList, sho
             })}
           </ul>
         </>
-      )}
+      ))}
     </section>
   )
 }
