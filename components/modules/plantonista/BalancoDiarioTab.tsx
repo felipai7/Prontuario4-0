@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
-  calcDiurese24h, fmtTurno, fmtNum, hojeISO,
+  calcDiurese24h, fmtTurno, fmtNum, hojeISO, boundaryStart,
   balancoDaUnidade, balancoDeOutrasUnidades,
 } from '@/lib/utils'
 import TabelaRolavel from '@/components/ui/TabelaRolavel'
@@ -69,9 +69,12 @@ const LABELS: Record<string, string> = {
   dreno:'Dreno', vomitos:'Vômitos', sne_sng:'SNG/SNE', ostomia:'Ostomia', outros:'Outros',
 }
 
-/** Dia como período de 24h: meia-noite local até a meia-noite seguinte. */
+// Dia como período de 24h: das 07:00 de hoje às 07:00 de amanhã — mesmo
+// horário de corte da UTI (equivalente a um turno diurno + um noturno
+// seguidos), não meia-noite a meia-noite. Reaproveita boundaryStart, que já
+// calcula esse mesmo horário de início pro turno diurno da UTI.
 function diaParaPeriodo(dataStr: string): { inicio: Date; fim: Date } {
-  const inicio = new Date(`${dataStr}T00:00:00`)
+  const inicio = boundaryStart(dataStr, 'diurno')
   return { inicio, fim: new Date(inicio.getTime() + 24 * 3_600_000) }
 }
 
@@ -205,7 +208,7 @@ export default function BalancoDiarioTab({ paciente, periodos: periodosTodos, on
   const formSpec = formMode === 'edit' && editingPeriodo
     ? { label: fmtTurno(editingPeriodo.turno, editingPeriodo.inicio), sub: 'Editando registro existente' }
     : formDate
-      ? { label: fmtTurno('diario', diaParaPeriodo(formDate).inicio.toISOString()), sub: '24h — meia-noite a meia-noite' }
+      ? { label: fmtTurno('diario', diaParaPeriodo(formDate).inicio.toISOString()), sub: '24h — 07:00 de hoje às 07:00 de amanhã' }
       : null
 
   return (
