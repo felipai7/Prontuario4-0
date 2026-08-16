@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { calcBalanco, calcAcumuladoMovel, calcDiurese24h, diaAtualATB, diasDesde, fmtNum, hojeISO, balancoDaUnidade } from '@/lib/utils'
+import { calcBalanco, calcAcumuladoMovel, calcDiurese24h, diaAtualATB, diasDesde, fmtNum, fmtTurno, hojeISO, balancoDaUnidade } from '@/lib/utils'
 import { fmtData } from '@/lib/utils'
 import type { Paciente, SinalVital, DVA, PeriodoBalanco, ATB, CuidadosHorizontais, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, SwabVigilancia, ExameImagem, ToastData } from '@/types'
 
@@ -124,6 +124,9 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos: perio
   const bhUltimo = ultimoPeriodo ? calcBalanco(ultimoPeriodo) : null
   const bhMovel  = calcAcumuladoMovel(periodos)
   const { horas: duHoras, total: duTotal } = calcDiurese24h(periodos)
+  // Só usado no Hospital — lá o balanço em si perde relevância (ver
+  // BalancoDiarioTab), mas diurese e última evacuação continuam úteis.
+  const ultimaEvacuacao = [...periodos].reverse().find(p => p.evacuacao > 0) ?? null
   const ultimoRegistroIntensivista = registrosIntensivista.length
     ? [...registrosIntensivista].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())[0]
     : null
@@ -174,33 +177,49 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos: perio
             </div>
           )}
 
-          <div className="bg-slate-50 rounded-lg p-3">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">💧 Balanço hídrico</p>
-            {tipoUnidade === 'enfermaria' ? (
-              // Hospital: só a diurese 24h — sem saldo do dia nem acumulado
-              // (ver BalancoDiarioTab: ganho nem sempre é quantificado lá,
-              // um saldo calculado sairia falsamente negativo).
-              periodos.length > 0 ? (
+          {tipoUnidade === 'enfermaria' ? (
+            // Hospital: o balanço em si perde relevância (ver BalancoDiarioTab
+            // — ganho nem sempre é quantificado lá), então o resumo troca o
+            // card único de balanço por diurese registrada + última evacuação.
+            <>
+              <div className="bg-slate-50 rounded-lg p-3">
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">💧 Diurese registrada</p>
+                {periodos.length > 0 ? (
+                  <p className="text-sm text-slate-700">
+                    {duTotal.toFixed(0)} mL
+                    {duHoras > 0 && <> → {fmtNum(duTotal / (paciente.peso_kg ?? 70) / duHoras, 2)} mL/Kg/h{!paciente.peso_kg && ' (peso 70 Kg)'}</>}
+                  </p>
+                ) : <p className="text-sm text-slate-400">Sem diurese registrada.</p>}
+              </div>
+
+              <div className="bg-slate-50 rounded-lg p-3">
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">🚽 Última evacuação</p>
+                {ultimaEvacuacao ? (
+                  <p className="text-sm text-slate-700">
+                    {ultimaEvacuacao.evacuacao.toFixed(0)} mL — {fmtTurno(ultimaEvacuacao.turno, ultimaEvacuacao.inicio)}
+                  </p>
+                ) : <p className="text-sm text-slate-400">Ausente desde admissão.</p>}
+              </div>
+            </>
+          ) : (
+            <div className="bg-slate-50 rounded-lg p-3">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">💧 Balanço hídrico</p>
+              {ultimoPeriodo && bhUltimo ? (
                 <p className="text-sm text-slate-700">
-                  Diurese 24h: {duTotal.toFixed(0)} mL
-                  {duHoras > 0 && <> → {fmtNum(duTotal / (paciente.peso_kg ?? 70) / duHoras, 2)} mL/Kg/h{!paciente.peso_kg && ' (peso 70 Kg)'}</>}
+                  Último turno: {bhUltimo.parcial > 0 ? '+' : ''}{bhUltimo.parcial.toFixed(0)} mL
+                  {/* mL/Kg/h, e não mL/h: é a forma em que se lê oligúria (<0,5) e
+                      anúria (<0,1). Mesma conta e mesmas 2 casas do cartão de
+                      Débito Urinário da aba Balanço, inclusive o fallback de 70 Kg
+                      — que é sinalizado, porque um limiar clínico calculado sobre
+                      peso presumido não pode passar por medido. Diurese em 24h (não
+                      do último turno) via calcDiurese24h, a mesma função do
+                      cabeçalho do Balanço Hídrico — os dois têm que bater. */}
+                  (diurese 24h {duTotal.toFixed(0)} mL{duHoras > 0 && <> → {fmtNum(duTotal / (paciente.peso_kg ?? 70) / duHoras, 2)} mL/Kg/h{!paciente.peso_kg && ' (peso 70 Kg)'}</>}{duHoras > 0 && duHoras < 24 && ` — dados de ${duHoras.toFixed(0)}h`})
+                  · Acum. móvel: {bhMovel > 0 ? '+' : ''}{bhMovel.toFixed(0)} mL
                 </p>
-              ) : <p className="text-sm text-slate-400">Sem balanço registrado.</p>
-            ) : ultimoPeriodo && bhUltimo ? (
-              <p className="text-sm text-slate-700">
-                Último turno: {bhUltimo.parcial > 0 ? '+' : ''}{bhUltimo.parcial.toFixed(0)} mL
-                {/* mL/Kg/h, e não mL/h: é a forma em que se lê oligúria (<0,5) e
-                    anúria (<0,1). Mesma conta e mesmas 2 casas do cartão de
-                    Débito Urinário da aba Balanço, inclusive o fallback de 70 Kg
-                    — que é sinalizado, porque um limiar clínico calculado sobre
-                    peso presumido não pode passar por medido. Diurese em 24h (não
-                    do último turno) via calcDiurese24h, a mesma função do
-                    cabeçalho do Balanço Hídrico — os dois têm que bater. */}
-                (diurese 24h {duTotal.toFixed(0)} mL{duHoras > 0 && <> → {fmtNum(duTotal / (paciente.peso_kg ?? 70) / duHoras, 2)} mL/Kg/h{!paciente.peso_kg && ' (peso 70 Kg)'}</>}{duHoras > 0 && duHoras < 24 && ` — dados de ${duHoras.toFixed(0)}h`})
-                · Acum. móvel: {bhMovel > 0 ? '+' : ''}{bhMovel.toFixed(0)} mL
-              </p>
-            ) : <p className="text-sm text-slate-400">Sem balanço registrado.</p>}
-          </div>
+              ) : <p className="text-sm text-slate-400">Sem balanço registrado.</p>}
+            </div>
+          )}
 
           <div className="bg-slate-50 rounded-lg p-3">
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">💊 Antibioticoterapia</p>

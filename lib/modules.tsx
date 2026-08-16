@@ -268,8 +268,9 @@ export const MODULOS: readonly ModuloDef[] = [
 //
 // "Painel do Plantão" vira "Resumo" no Hospital e aparece nos DOIS módulos
 // (Médico e Internos) — spread sobre o TabDef original só pra trocar o
-// rótulo, mesmo `render`/`id`. Hemodinâmica sai por completo (não é usada
-// no Hospital); Balanço usa a variante diária (`balancoDiario`).
+// rótulo, mesmo `render`/`id`. Hemodinâmica, Neurológico e Ventilatório saem
+// por completo (não são usados no Hospital); Balanço usa a variante diária
+// (`balancoDiario`).
 const resumo: TabDef = { ...painelPlantao, label: '📋 Resumo' }
 
 const MODULOS_ENFERMARIA: readonly ModuloDef[] = [
@@ -284,7 +285,7 @@ const MODULOS_ENFERMARIA: readonly ModuloDef[] = [
     id: 'internos',
     label: '🩺 Internos',
     profissaoDona: 'medico',
-    tabs: [resumo, balancoDiario, examesLab, sinais, neurologico, ventilatorio, examesImagem, enfermagem],
+    tabs: [resumo, balancoDiario, examesLab, sinais, examesImagem, enfermagem],
   },
 ]
 
