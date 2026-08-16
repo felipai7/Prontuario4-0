@@ -79,19 +79,24 @@ export default async function IndicadoresPage(
   // de duas, e — o que motivou a mudança — servidor e cliente renderizam a mesma
   // coisa, sem o React descartar o HTML por divergência na hidratação.
   const pMes = `${ano}-${String(mes).padStart(2, '0')}-01`
+  // Sem unidade vinculada, nenhuma das 7 RPCs abaixo tem o que responder —
+  // mesma guarda já usada em leitos_dia_mes, agora estendida às outras 6.
+  // Sem isso, cada uma contaria pacientes de TODAS as unidades em que a
+  // pessoa é staff (RLS libera por vínculo, não pela unidade selecionada).
+  const semRpc = Promise.resolve({ data: null, error: null })
   const [contRes, qualRes, fisioRes, enfRes, nutRes, irasRes, leitosRes] = await Promise.all([
-    supabase.rpc('contagens_mes',            { p_mes: pMes }),
-    supabase.rpc('qualidade_mes',            { p_mes: pMes }),
-    supabase.rpc('contagens_fisio_mes',      { p_mes: pMes }),
-    supabase.rpc('contagens_enfermagem_mes', { p_mes: pMes }),
-    supabase.rpc('contagens_nutricao_mes',   { p_mes: pMes }),
-    supabase.rpc('contagens_iras_mes',       { p_mes: pMes }),
+    unidade ? supabase.rpc('contagens_mes',            { p_mes: pMes, p_unit_id: unidade.unitId }) : semRpc,
+    unidade ? supabase.rpc('qualidade_mes',            { p_mes: pMes, p_unit_id: unidade.unitId }) : semRpc,
+    unidade ? supabase.rpc('contagens_fisio_mes',      { p_mes: pMes, p_unit_id: unidade.unitId }) : semRpc,
+    unidade ? supabase.rpc('contagens_enfermagem_mes', { p_mes: pMes, p_unit_id: unidade.unitId }) : semRpc,
+    unidade ? supabase.rpc('contagens_nutricao_mes',   { p_mes: pMes, p_unit_id: unidade.unitId }) : semRpc,
+    unidade ? supabase.rpc('contagens_iras_mes',       { p_mes: pMes, p_unit_id: unidade.unitId }) : semRpc,
     // Leitos-dia vêm do banco porque cada leito tem vigência: uma UTI que passa
     // de 19 para 25 leitos em março não pode ter janeiro recalculado com 25.
     // A conta em TypeScript (calcularLeitosDia) fica só como rede de segurança.
     unidade
       ? supabase.rpc('leitos_dia_mes', { p_unit_id: unidade.unitId, p_mes: pMes })
-      : Promise.resolve({ data: null, error: null }),
+      : semRpc,
   ])
 
   const mesCorrente = ano === hoje.ano && mes === hoje.mes
@@ -100,6 +105,7 @@ export default async function IndicadoresPage(
     <IndicadoresHome
       souChefe
       userEmail={user.email ?? ''}
+      unidadeNome={unidade?.nome ?? null}
       ano={ano}
       mes={mes}
       anoAtual={hoje.ano}

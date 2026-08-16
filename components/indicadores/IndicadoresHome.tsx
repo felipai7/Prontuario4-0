@@ -18,6 +18,9 @@ import type { ContagensMes, ContagensFisioMes, ContagensEnfermagemMes, Contagens
 interface Props {
   souChefe: boolean
   userEmail: string
+  /** Nome da unidade cujos números estão em tela — os indicadores são
+   *  escopados a ela (ver contagens_mes/qualidade_mes com p_unit_id). */
+  unidadeNome?: string | null
   /** Mês em exibição: `mes` é 1-12 (como na URL), não 0-11. */
   ano: number
   mes: number
@@ -51,7 +54,7 @@ function casasDenominador(ind: Indicador): number {
 }
 
 export default function IndicadoresHome({
-  souChefe, userEmail, ano, mes, anoAtual, mesCorrente,
+  souChefe, userEmail, unidadeNome, ano, mes, anoAtual, mesCorrente,
   contagens, qualidade, fisio, enfermagem, nutricao, iras, leitosDia, leitosAtivos, erro,
 }: Props) {
   const router = useRouter()
@@ -116,7 +119,7 @@ export default function IndicadoresHome({
       <header className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-lg font-bold">📊 Indicadores da UTI</h1>
+            <h1 className="text-lg font-bold">📊 Indicadores{unidadeNome ? ` — ${unidadeNome}` : ''}</h1>
             <p className="text-indigo-200 text-xs">{userEmail}</p>
           </div>
           <button onClick={() => router.push('/dashboard')}
