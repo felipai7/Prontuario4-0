@@ -58,22 +58,26 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos: perio
   // em `pacientes`, e não numa tabela filha. Reseta ao trocar de paciente
   // (setas de leito reaproveitam o mesmo componente), mas não some se um
   // realtime update do MESMO paciente chegar enquanto alguém está digitando.
-  const [hpp,         setHpp]         = useState(paciente.historico_patologico_pregresso ?? '')
-  const [medicacoes,  setMedicacoes]  = useState(paciente.medicacoes_uso_continuo ?? '')
-  const [savingHist,  setSavingHist]  = useState(false)
+  const [hpp,            setHpp]            = useState(paciente.historico_patologico_pregresso ?? '')
+  const [medicacoes,     setMedicacoes]     = useState(paciente.medicacoes_uso_continuo ?? '')
+  const [resumoAdmissao, setResumoAdmissao] = useState(paciente.resumo_admissao ?? '')
+  const [savingHist,     setSavingHist]     = useState(false)
   useEffect(() => {
     setHpp(paciente.historico_patologico_pregresso ?? '')
     setMedicacoes(paciente.medicacoes_uso_continuo ?? '')
+    setResumoAdmissao(paciente.resumo_admissao ?? '')
   }, [paciente.id])
 
   const histDirty = hpp !== (paciente.historico_patologico_pregresso ?? '')
     || medicacoes !== (paciente.medicacoes_uso_continuo ?? '')
+    || resumoAdmissao !== (paciente.resumo_admissao ?? '')
 
   const handleSalvarHistorico = async () => {
     setSavingHist(true)
     const { error } = await supabase.from('pacientes').update({
       historico_patologico_pregresso: hpp.trim() || null,
       medicacoes_uso_continuo: medicacoes.trim() || null,
+      resumo_admissao: resumoAdmissao.trim() || null,
     }).eq('id', paciente.id)
     setSavingHist(false)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
@@ -310,6 +314,11 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos: perio
             <label className={labelCls}>Medicações de Uso Contínuo</label>
             <textarea value={medicacoes} onChange={e => setMedicacoes(e.target.value)} rows={4}
               placeholder="Ex: Losartana 50mg VO 1x/dia, Metformina 850mg VO 2x/dia..." className={`${inputCls} resize-none`} />
+          </div>
+          <div className="md:col-span-2">
+            <label className={labelCls}>Resumo de Admissão</label>
+            <textarea value={resumoAdmissao} onChange={e => setResumoAdmissao(e.target.value)} rows={4}
+              placeholder="Ex: Paciente admitido por..., evoluindo com..." className={`${inputCls} resize-none`} />
           </div>
         </div>
         {histDirty && (

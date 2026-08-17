@@ -18,6 +18,7 @@ export interface Paciente {
   saps3_calculado_em: string | null
   historico_patologico_pregresso: string | null
   medicacoes_uso_continuo: string | null
+  resumo_admissao: string | null
   paliativo: boolean
   oncologico: boolean
   /** Alta anterior deste mesmo paciente, quando esta internação é uma reinternação. */
