@@ -250,7 +250,7 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos: perio
                 )}
                 {altaAmanha && <> — ⚠️ é amanhã</>}
               </p>
-            ) : <p className="text-sm text-slate-400">Não definida pelo intensivista.</p>}
+            ) : <p className="text-sm text-slate-400">Não definida.</p>}
           </div>
 
           {examesCriticos.length > 0 && (
