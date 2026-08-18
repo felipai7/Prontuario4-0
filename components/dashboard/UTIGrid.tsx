@@ -11,6 +11,7 @@ import { ehIntensivista, apenasMedicos, PROFISSOES } from '@/lib/cargos'
 import { PLANOS_PADRAO } from '@/lib/config'
 import SeletorUnidade from './SeletorUnidade'
 import GestaoMenu from './GestaoMenu'
+import PassometroButton from './PassometroButton'
 import { nomeDaAla, compararLeitos, type Unidade } from '@/lib/unidade'
 import type { Paciente, Unit, Profissao } from '@/types'
 
@@ -261,6 +262,7 @@ export default function UTIGrid({ initialPacientes, userEmail, unidade, unidades
               <SeletorUnidade unidades={unidades} atual={unidade.unitId} />
             )}
             {souChefe && <GestaoMenu />}
+            {unidade && <PassometroButton unidade={unidade} showToast={showToast} />}
             <button
               onClick={() => router.push('/escalas')}
               className="relative bg-white/20 hover:bg-white/30 border border-white/30
