@@ -79,7 +79,7 @@ export default function PassometroButton({ unidade, showToast }: Props) {
             <select
               value={alaId}
               onChange={e => setAlaId(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white
+              className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white text-slate-800
                          focus:outline-none focus:ring-2 focus:ring-indigo-400"
             >
               <option value="">Unidade inteira (todas as alas)</option>

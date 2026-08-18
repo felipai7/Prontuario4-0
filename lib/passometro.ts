@@ -278,7 +278,7 @@ export function gerarPlanilhaPassometro(unidade: Unidade, secoes: SecaoPassometr
         ws.mergeCells(linhaGrupo.number, col, linhaLabel.number, col)
         linhaGrupo.getCell(col).value = COLUNAS[col - 1].label
       }
-      col = fim
+      col = fim + 1
     }
     for (const r of [linhaGrupo, linhaLabel]) {
       r.font = { bold: true, size: 9, color: { argb: 'FF475569' } }
