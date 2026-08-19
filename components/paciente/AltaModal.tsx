@@ -83,19 +83,18 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
     const tipoAlvo = tipoSaida === 'alta_uti_hospital' ? 'enfermaria' : 'uti'
     setLoadingUnidades(true)
     ;(async () => {
-      const { data: auth } = await supabase.auth.getUser()
-      if (!auth.user) { setLoadingUnidades(false); return }
+      // Lista TODAS as unidades ativas do tipo oposto, não só as que a própria
+      // pessoa tem vínculo de staff — transferir daqui pra lá não exige ser
+      // staff de lá também (é a unidade de ORIGEM que autoriza a ação, e essa
+      // já é checada por posso_ver_paciente dentro da RPC). units.select tem
+      // policy aberta pra qualquer autenticado (precisa pro seletor de unidade).
       const { data } = await supabase
-        .from('staff')
-        .select('unit_id, units(id, name, tipo_unidade)')
-        .eq('user_id', auth.user.id).eq('active', true).neq('unit_id', paciente.unit_id)
+        .from('units')
+        .select('id, name')
+        .eq('active', true).eq('tipo_unidade', tipoAlvo).neq('id', paciente.unit_id)
+        .order('name')
       if (cancelado) return
-      type Row = { unit_id: string; units: { id: string; name: string; tipo_unidade: string } | { id: string; name: string; tipo_unidade: string }[] | null }
-      const rows = (data ?? []) as Row[]
-      const lista = rows
-        .map(r => { const u = Array.isArray(r.units) ? r.units[0] : r.units; return u ? { id: u.id, nome: u.name, tipo: u.tipo_unidade } : null })
-        .filter((u): u is { id: string; nome: string; tipo: string } => u != null && u.tipo === tipoAlvo)
-        .map(u => ({ id: u.id, nome: u.nome }))
+      const lista = (data ?? []).map(u => ({ id: u.id, nome: u.name }))
       setUnidadesDestino(lista)
       setUnitDestinoId(lista.length === 1 ? lista[0].id : '')
       setLoadingUnidades(false)
