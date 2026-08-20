@@ -44,6 +44,9 @@ export interface LinhaPassometro {
   hd: string
   peso: string
   diurese: string
+  /** SVD/Cistostomia se houver o dispositivo ativo; "Espontânea" quando
+   *  nenhum dos dois está marcado. */
+  viaDiurese: string
   acesso: string
   hgt: string
   temp: string
@@ -53,6 +56,9 @@ export interface LinhaPassometro {
   paTendencia: string
   fcTendencia: string
   evac: string
+  /** >= 3 dias sem evacuar (ou nunca desde a admissão, se já faz 3+ dias) —
+   *  destaca a célula em vermelho no Excel. */
+  evacConstipado: boolean
   antimicrobiano: string
   dva: string
   corticoide: string
@@ -127,6 +133,40 @@ function classificarFC(s: SinalVital | undefined): string {
   return '→ normal'
 }
 
+const DIAS_CONSTIPACAO = 3
+
+/**
+ * Quantas vezes e em que dia o paciente evacuou pela última vez — soma por
+ * DIA (um período diurno + um noturno do mesmo dia contam juntos), marca
+ * diarreica se algum período daquele dia foi flagado, e sinaliza
+ * constipação (>= 3 dias sem evacuar, contando da admissão se nunca
+ * evacuou) pro destaque visual na planilha.
+ */
+function ultimaEvacuacao(periodos: PeriodoBalanco[], dataInternacao: string): { texto: string; constipado: boolean } {
+  const porDia = new Map<string, { qtd: number; diarreica: boolean; data: Date }>()
+  for (const p of periodos) {
+    const data = new Date(p.inicio)
+    const chave = data.toDateString()
+    const atual = porDia.get(chave) ?? { qtd: 0, diarreica: false, data }
+    atual.qtd += p.evacuacao
+    if (p.diarreica_medico || p.diarreica_nutricao) atual.diarreica = true
+    porDia.set(chave, atual)
+  }
+  const diasComEvac = [...porDia.values()].filter(d => d.qtd > 0).sort((a, b) => b.data.getTime() - a.data.getTime())
+  const diasDesde = (data: Date) => Math.floor((Date.now() - data.getTime()) / 86400000)
+
+  if (diasComEvac.length === 0) {
+    const desde = diasDesde(new Date(dataInternacao + 'T00:00:00'))
+    return { texto: 'Não desde admissão', constipado: desde >= DIAS_CONSTIPACAO }
+  }
+  const ultimo = diasComEvac[0]
+  // Formata pela data LOCAL do Date (não toISOString, que é UTC e pode
+  // virar o dia perto da meia-noite num fuso atrás de UTC como o nosso).
+  const dataLocal = `${String(ultimo.data.getDate()).padStart(2, '0')}/${String(ultimo.data.getMonth() + 1).padStart(2, '0')}`
+  const texto = `${ultimo.qtd}x ${dataLocal}${ultimo.diarreica ? ' - diarreica' : ''}`
+  return { texto, constipado: diasDesde(ultimo.data) >= DIAS_CONSTIPACAO }
+}
+
 /** Formata "Enoxaparina 40mg 12/12h (terapêutico)" só com o que existir —
  *  profilático fica sem sufixo, igual ao "Enoxa 40" dela pra profilaxia. */
 function formatarPosologia(droga: string, doseValor: number | null, doseUnidade: string | null,
@@ -150,7 +190,7 @@ export async function buscarDadosPassometro(
     supabase.from('atbs').select('*').in('paciente_id', ids).eq('ativo', true),
     supabase.from('dvas').select('*').in('paciente_id', ids).eq('ativo', true),
     supabase.from('cuidados_horizontais').select('*').in('paciente_id', ids),
-    supabase.from('dispositivos').select('*').in('paciente_id', ids).is('data_remocao', null).in('tipo', ['AVP', 'CVC', 'PAI', 'CDL']),
+    supabase.from('dispositivos').select('*').in('paciente_id', ids).is('data_remocao', null).in('tipo', ['AVP', 'CVC', 'PAI', 'CDL', 'SVD', 'CISTO']),
     supabase.from('periodos_balanco').select('*').in('paciente_id', ids).order('inicio', { ascending: false }),
     supabase.from('sinais_vitais').select('*').in('paciente_id', ids).order('horario', { ascending: false }),
     supabase.from('exames').select('*').in('paciente_id', ids),
@@ -192,7 +232,11 @@ export async function buscarDadosPassometro(
     const diurese    = calcDiurese24h(periodos)
     const taxaDiurese = diurese.horas > 0 && paciente.peso_kg
       ? `${(diurese.total / paciente.peso_kg / diurese.horas).toFixed(2).replace('.', ',')}mL/Kg/h` : ''
-    const evacDiarreica = periodos.some(p => p.diarreica_medico || p.diarreica_nutricao)
+    const { texto: evacTexto, constipado: evacConstipado } = ultimaEvacuacao(periodos, paciente.data_internacao)
+    const temSVD   = dispositivos.some(d => d.tipo === 'SVD')
+    const temCisto = dispositivos.some(d => d.tipo === 'CISTO')
+    const viaDiurese = temSVD ? 'SVD' : temCisto ? 'Cistostomia' : 'Espontânea'
+    const acessoVascular = dispositivos.filter(d => d.tipo === 'AVP' || d.tipo === 'CVC' || d.tipo === 'PAI' || d.tipo === 'CDL')
 
     const labs: Record<string, string> = {}
     for (const a of ANALITOS_LABS) labs[a.key] = valorLabsMaisRecente(examesOrd, [a.id])
@@ -208,12 +252,14 @@ export async function buscarDadosPassometro(
       hd: paciente.hipoteses ?? '',
       peso: paciente.peso_kg != null ? `${paciente.peso_kg}Kg` : '',
       diurese: diurese.horas > 0 ? `${diurese.total}mL(${diurese.horas}h)${taxaDiurese ? ' ' + taxaDiurese : ''}` : '',
-      acesso: dispositivos.map(d => d.observacao ? `${d.tipo} (${d.observacao})` : d.tipo).join('; '),
+      viaDiurese,
+      acesso: acessoVascular.map(d => d.observacao ? `${d.tipo} (${d.observacao})` : d.tipo).join('; '),
       hgt: hgtHoje.join('/'),
       temp: [tempDiurno?.temperatura, tempNoturno?.temperatura].filter(v => v != null).join(' / '),
       paTendencia: classificarPA(ultimoComPA),
       fcTendencia: classificarFC(ultimoComFc),
-      evac: evacDiarreica ? 'Diarreica' : '',
+      evac: evacTexto,
+      evacConstipado,
       antimicrobiano: (atbsPorPac.get(paciente.id) ?? [])
         .map(a => `${a.droga} (D${diaAtualATB(a)}${a.dias_previstos != null ? `/${a.dias_previstos}` : ''})`).join(' · '),
       dva: (dvasPorPac.get(paciente.id) ?? []).map(d => `${d.droga} ${d.fluxo_ml_h} mL/h`).join(' · '),
@@ -237,8 +283,9 @@ export async function buscarDadosPassometro(
 function linhaVazia(alaId: string, leito: string): LinhaPassometro {
   return {
     alaId, vazio: true, leito, nomeCurto: '', idade: '', admissao: '', hd: '', peso: '', diurese: '',
-    acesso: '', hgt: '', temp: '', paTendencia: '', fcTendencia: '', evac: '', antimicrobiano: '',
-    dva: '', corticoide: '', ibp: '', anticoag: '', labs: {}, pendencias: '', previsaoAlta: '',
+    viaDiurese: '', acesso: '', hgt: '', temp: '', paTendencia: '', fcTendencia: '', evac: '',
+    evacConstipado: false, antimicrobiano: '', dva: '', corticoide: '', ibp: '', anticoag: '',
+    labs: {}, pendencias: '', previsaoAlta: '',
   }
 }
 
@@ -268,22 +315,41 @@ export function agruparPorAla(alas: Ala[], linhasPacientes: LinhaPassometro[]): 
 // DVA/corticoide, IBP/anticoagulante, anti-HAS/controle de FC) NÃO mesclam:
 // `texto` cai na 1ª linha física, `texto2` na 2ª — cada item na própria
 // linha, sem espremer os dois num \n só.
-interface Coluna { label: string; width: number; texto: (l: LinhaPassometro) => string; texto2?: (l: LinhaPassometro) => string }
+interface Coluna {
+  label: string
+  width: number
+  texto: (l: LinhaPassometro) => string
+  texto2?: (l: LinhaPassometro) => string
+  /** Sobrepõe a fonte padrão da célula — pra destacar algo condicionalmente
+   *  (Evac. em constipação) ou dar mais espaço a um campo central (Nome).
+   *  `null` = mantém a fonte padrão daquela linha. */
+  fonte?: (l: LinhaPassometro) => Partial<ExcelJS.Font> | null
+  /** Colunas com o mesmo `grupoCabecalho` mesclam o CABEÇALHO num título só
+   *  (as células de dado continuam separadas) — usado nos 3 blocos de
+   *  exames, que sozinhos cortavam o nome de cada marcador. */
+  grupoCabecalho?: string
+}
 
 const labs = (l: LinhaPassometro, ...keys: string[]) => keys.map(k => l.labs[k] || '').join('/')
 
 const COLUNAS: Coluna[] = [
   { label: 'Leito', width: 5, texto: l => l.leito },
-  { label: 'Nome/Idade\nAdmissão', width: 15, texto: l => `${l.nomeCurto} · ${l.idade}\n${l.admissao}` },
+  {
+    label: 'Nome/Idade\nAdmissão', width: 15, texto: l => `${l.nomeCurto}\n${l.idade}\n${l.admissao}`,
+    fonte: () => ({ size: 9 }),
+  },
   { label: 'Diagnóstico', width: 13, texto: l => l.hd },
-  { label: 'Peso\nDiurese\nVia', width: 12, texto: l => `${l.peso}\n${l.diurese}\n` },
+  { label: 'Peso\nDiurese\nVia', width: 12, texto: l => `${l.peso}\n${l.diurese}\n${l.viaDiurese}` },
   // 2 linhas físicas: de cima fica em branco (acesso venoso + hidratação são
   // preenchidos à mão), de baixo já vem o roteiro de insulina pré-impresso —
   // igual à planilha em branco que o Felipe mandou como modelo.
   { label: 'Acesso/Hidrat./Insulina', width: 15, texto: () => '', texto2: () => 'NPH:      REG:      SOS:' },
   { label: 'Dieta\nHGT', width: 9, texto: l => `\n${l.hgt}` },
   { label: 'Temp.', width: 8, texto: l => l.temp },
-  { label: 'Evac.', width: 6, texto: l => l.evac },
+  {
+    label: 'Evac.', width: 10, texto: l => l.evac,
+    fonte: l => l.evacConstipado ? { bold: true, color: { argb: 'FFDC2626' } } : null,
+  },
   { label: 'Antimicrob.', width: 13, texto: l => l.antimicrobiano },
   // Em branco de propósito nas duas linhas — psicotrópico/analgesia e o nome
   // do anti-hipertensivo vêm de texto livre (Medicações de Uso Contínuo),
@@ -294,10 +360,13 @@ const COLUNAS: Coluna[] = [
   { label: 'Anti-HAS/FC', width: 11, texto: l => `PA ${l.paTendencia}`, texto2: l => `FC ${l.fcTendencia}` },
   // Nome do exame repetido em cada linha do valor (não só no cabeçalho) —
   // pedido do Felipe: rolando a planilha pra baixo, o cabeçalho já ficou
-  // longe e a coluna sozinha não deixava claro o que era cada número.
-  { label: 'Leuco\nHb/Ht\nPlaq\nPCR\nLactato', width: 13, texto: l => `Leuco: ${labs(l, 'leuco')}\nHb/Ht: ${labs(l, 'hb', 'ht')}\nPlaq: ${labs(l, 'plaq')}\nPCR: ${labs(l, 'pcr')}\nLactato: ${labs(l, 'lactato')}` },
-  { label: 'Ur\nCreat\nNa\nK\nMg', width: 11, texto: l => `Ur: ${labs(l, 'ureia')}\nCreat: ${labs(l, 'creat')}\nNa: ${labs(l, 'na')}\nK: ${labs(l, 'k')}\nMg: ${labs(l, 'mg')}` },
-  { label: 'pH\nHCO3\npCO2\npO2\nCai', width: 11, texto: l => `pH: ${labs(l, 'ph')}\nHCO3: ${labs(l, 'bic')}\npCO2: ${labs(l, 'pco2')}\npO2: ${labs(l, 'po2')}\nCai: ${labs(l, 'ca')}` },
+  // longe e a coluna sozinha não deixava claro o que era cada número. As 3
+  // colunas dividem um único título de cabeçalho ("Últimos Exames
+  // Laboratoriais", via `grupoCabecalho`) — os nomes individuais bastam nas
+  // linhas de dado, o cabeçalho separado só cortava o texto.
+  { label: '', width: 13, grupoCabecalho: 'Últimos Exames Laboratoriais', texto: l => `Leuco: ${labs(l, 'leuco')}\nHb/Ht: ${labs(l, 'hb', 'ht')}\nPlaq: ${labs(l, 'plaq')}\nPCR: ${labs(l, 'pcr')}\nLactato: ${labs(l, 'lactato')}` },
+  { label: '', width: 11, grupoCabecalho: 'Últimos Exames Laboratoriais', texto: l => `Ur: ${labs(l, 'ureia')}\nCreat: ${labs(l, 'creat')}\nNa: ${labs(l, 'na')}\nK: ${labs(l, 'k')}\nMg: ${labs(l, 'mg')}` },
+  { label: '', width: 11, grupoCabecalho: 'Últimos Exames Laboratoriais', texto: l => `pH: ${labs(l, 'ph')}\nHCO3: ${labs(l, 'bic')}\npCO2: ${labs(l, 'pco2')}\npO2: ${labs(l, 'po2')}\nCai: ${labs(l, 'ca')}` },
   { label: 'Programações / Pendências / Condutas / Lembretes', width: 22, texto: l => l.pendencias },
   { label: 'Previsão de Alta', width: 8, texto: l => l.previsaoAlta },
 ]
@@ -345,6 +414,18 @@ export function gerarPlanilhaPassometro(unidade: Unidade, secoes: SecaoPassometr
     linhaLabel.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COR_LABEL } }; c.border = BORDA_FINA })
     linhaLabel.height = 42
 
+    // Colunas consecutivas com o mesmo `grupoCabecalho` mesclam o cabeçalho
+    // num título só (as células de dado abaixo continuam separadas).
+    for (let col = 1; col <= COLUNAS.length;) {
+      const grupo = COLUNAS[col - 1].grupoCabecalho
+      if (!grupo) { col++; continue }
+      let fim = col
+      while (fim < COLUNAS.length && COLUNAS[fim].grupoCabecalho === grupo) fim++
+      ws.mergeCells(linhaLabel.number, col, linhaLabel.number, fim)
+      linhaLabel.getCell(col).value = grupo
+      col = fim + 1
+    }
+
     for (const linha of linhas) {
       // 2 linhas físicas por paciente: colunas sem `texto2` mesclam as duas
       // (1 valor, possivelmente multi-linha via \n); as com `texto2` ficam
@@ -364,6 +445,11 @@ export function gerarPlanilhaPassometro(unidade: Unidade, secoes: SecaoPassometr
         if (!c.texto2) ws.mergeCells(rowA.number, col, rowB.number, col)
         rowA.getCell(col).border = BORDA_FINA
         rowB.getCell(col).border = BORDA_FINA
+        const fonte = c.fonte?.(linha)
+        if (fonte) {
+          rowA.getCell(col).font = { ...rowA.font, ...fonte }
+          rowB.getCell(col).font = { ...rowB.font, ...fonte }
+        }
       })
     }
     ws.addRow([])

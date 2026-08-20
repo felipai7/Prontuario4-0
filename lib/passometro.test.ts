@@ -5,9 +5,9 @@ import type { Unidade } from '@/lib/unidade'
 function linhaFake(overrides: Partial<LinhaPassometro> = {}): LinhaPassometro {
   return {
     alaId: 'ala-1', vazio: false, leito: '2', nomeCurto: 'Fulana Tal', idade: '76 anos', admissao: '16/08',
-    hd: 'PNM??', peso: '65Kg', diurese: '400mL(24h) 0,26mL/Kg/h', acesso: 'AVP',
+    hd: 'PNM??', peso: '65Kg', diurese: '400mL(24h) 0,26mL/Kg/h', viaDiurese: 'Espontânea', acesso: 'AVP',
     hgt: '85/100', temp: '36,1 / 36,4', paTendencia: '→ normal', fcTendencia: '↑ taquicárdico',
-    evac: '', antimicrobiano: 'Mero D2', dva: '', corticoide: '',
+    evac: '2x 19/08', evacConstipado: false, antimicrobiano: 'Mero D2', dva: '', corticoide: '',
     ibp: 'IBP VO', anticoag: 'Enoxaparina 40mg',
     labs: { leuco: '4710', hb: '8,9', ht: '28', plaq: '290', pcr: '157', lactato: '1,68', ureia: '37', creat: '0,5', na: '138', k: '2,95', mg: '2,0', ph: '7,46', bic: '33', pco2: '49', po2: '50', ca: '1,15' },
     pendencias: 'Tirar HGT de horário', previsaoAlta: '',
@@ -48,6 +48,35 @@ describe('gerarPlanilhaPassometro', () => {
     const psicoB = ws.getCell(rowB, 10)
     expect(psicoA.isMerged).toBe(false)
     expect(psicoB.isMerged).toBe(false)
+  })
+
+  it('mescla o cabeçalho dos 3 blocos de exames num título só, sem mesclar as células de dado', () => {
+    const secoes: SecaoPassometro[] = [{ ala: unidadeFake.alas[0], linhas: [linhaFake()] }]
+    const wb = gerarPlanilhaPassometro(unidadeFake, secoes)
+    const ws = wb.getWorksheet('Passômetro')!
+
+    // Colunas 14-16 = os 3 blocos de exames.
+    const cabecalho1 = ws.getCell(4, 14)
+    const cabecalho2 = ws.getCell(4, 15)
+    expect(cabecalho1.isMerged).toBe(true)
+    expect(cabecalho2.isMerged).toBe(true)
+    expect(cabecalho1.master.address).toBe(cabecalho2.master.address)
+    expect(cabecalho1.master.value).toBe('Últimos Exames Laboratoriais')
+
+    // Nas linhas de dado (5-6), cada bloco continua com seu próprio valor —
+    // mesclado só com o par (rowA/rowB), não com os outros blocos.
+    const dado1 = ws.getCell(5, 14)
+    const dado2 = ws.getCell(5, 15)
+    expect(dado1.master.address).not.toBe(dado2.master.address)
+  })
+
+  it('destaca a célula de Evac. quando o paciente está constipado', () => {
+    const secoes: SecaoPassometro[] = [{ ala: unidadeFake.alas[0], linhas: [linhaFake({ evac: 'Não desde admissão', evacConstipado: true })] }]
+    const wb = gerarPlanilhaPassometro(unidadeFake, secoes)
+    const ws = wb.getWorksheet('Passômetro')!
+    const evacCell = ws.getCell(5, 8)
+    expect(evacCell.font?.bold).toBe(true)
+    expect(evacCell.font?.color).toEqual({ argb: 'FFDC2626' })
   })
 })
 

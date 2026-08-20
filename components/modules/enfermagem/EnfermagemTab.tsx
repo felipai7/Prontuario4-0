@@ -22,6 +22,7 @@ const TIPOS: { id: TipoDispositivo; label: string; emoji: string }[] = [
   { id: 'AVP',   label: 'Acesso venoso periférico',           emoji: '💉' },
   { id: 'CVC',   label: 'Cateter venoso central',            emoji: '💉' },
   { id: 'SVD',   label: 'Sonda vesical de demora',            emoji: '🩺' },
+  { id: 'CISTO', label: 'Cistostomia',                        emoji: '🩺' },
   { id: 'PAI',   label: 'Cateter de pressão arterial invasiva', emoji: '🩸' },
   { id: 'CDL',   label: 'Cateter de diálise',                 emoji: '🧪' },
   { id: 'DRENO', label: 'Dreno',                              emoji: '🧫' },
@@ -41,12 +42,12 @@ const PERMITE_MULTIPLOS = new Set<TipoDispositivo>(['CVC', 'DRENO', 'AVP', 'OUTR
 // que dá sentido ao registro, por isso obrigatória.
 const OBS_OBRIGATORIA = new Set<TipoDispositivo>(['DRENO', 'OUTRO'])
 const OBS_LABEL: Record<TipoDispositivo, string> = {
-  AVP: 'Sítio de inserção', CVC: 'Sítio de inserção', SVD: 'Observação', PAI: 'Sítio de inserção',
+  AVP: 'Sítio de inserção', CVC: 'Sítio de inserção', SVD: 'Observação', CISTO: 'Observação', PAI: 'Sítio de inserção',
   CDL: 'Sítio de inserção', DRENO: 'Qual dreno e onde está inserido',
   TOT: 'Observação (nº, fixação)', TQT: 'Observação', OUTRO: 'Descrição',
 }
 const OBS_PLACEHOLDER: Record<TipoDispositivo, string> = {
-  AVP: 'Ex: dorso da mão direita', CVC: 'Ex: jugular direita', SVD: '', PAI: 'Ex: radial esquerda',
+  AVP: 'Ex: dorso da mão direita', CVC: 'Ex: jugular direita', SVD: '', CISTO: '', PAI: 'Ex: radial esquerda',
   CDL: 'Ex: femoral direita', DRENO: 'Ex: Penrose em flanco direito',
   TOT: 'Ex: nº 7,5, fixado em 22cm', TQT: '', OUTRO: 'Descreva o dispositivo',
 }
