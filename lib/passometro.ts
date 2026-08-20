@@ -82,12 +82,12 @@ function ordenarExamesRecentes(exames: Exame[]): Exame[] {
     new Date(b.data_exame ?? b.created_at).getTime() - new Date(a.data_exame ?? a.created_at).getTime())
 }
 
+// Só o valor, sem unidade (mmol, mg/dL...) — a coluna já deixa claro o que é
+// cada marcador (rótulo impresso), a unidade só ocupava espaço à toa.
 function valorLabsMaisRecente(examesOrdenados: Exame[], ids: string[]): string {
   for (const exame of examesOrdenados) {
     for (const r of exame.resultados ?? []) {
-      if (r.analito_id && ids.includes(r.analito_id)) {
-        return r.unidade ? `${r.valor} ${r.unidade}` : r.valor
-      }
+      if (r.analito_id && ids.includes(r.analito_id)) return r.valor
     }
   }
   return ''
@@ -173,12 +173,16 @@ export async function buscarDadosPassometro(
     const pendencias     = pendPorPac.get(paciente.id) ?? []
     const orientacao     = (regPorPac.get(paciente.id) ?? [])[0]?.orientacoes_condutas ?? ''
 
-    // Diurno/noturno separados (não só a mais recente geral) porque o Felipe
-    // registra as duas aferições do dia lado a lado no papel.
+    // Temp.: diurno/noturno separados (2 aferições por turno, não só a mais
+    // recente geral). HGT é diferente — ela anota TODAS as aferições
+    // disponíveis no dia, não uma por turno (pode ser 2, pode ser mais).
     const tempDiurno  = sinaisRecente.find(s => s.turno === 'diurno' && s.temperatura != null)
     const tempNoturno = sinaisRecente.find(s => s.turno === 'noturno' && s.temperatura != null)
-    const hgtDiurno    = sinaisRecente.find(s => s.turno === 'diurno' && s.hgt != null)
-    const hgtNoturno   = sinaisRecente.find(s => s.turno === 'noturno' && s.hgt != null)
+    const hoje = new Date().toDateString()
+    const hgtHoje = sinaisRecente
+      .filter(s => s.hgt != null && new Date(s.horario).toDateString() === hoje)
+      .sort((a, b) => new Date(a.horario).getTime() - new Date(b.horario).getTime())
+      .map(s => s.hgt)
     const ultimoComPA = sinaisRecente.find(s => s.pas != null || s.pam != null)
     const ultimoComFc = sinaisRecente.find(s => s.fc != null)
     const diurese    = calcDiurese24h(periodos)
@@ -200,7 +204,7 @@ export async function buscarDadosPassometro(
       peso: paciente.peso_kg != null ? `${paciente.peso_kg}Kg` : '',
       diurese: diurese.horas > 0 ? `${diurese.total}mL(${diurese.horas}h)${taxaDiurese ? ' ' + taxaDiurese : ''}` : '',
       acesso: dispositivos.map(d => d.observacao ? `${d.tipo} (${d.observacao})` : d.tipo).join('; '),
-      hgt: [hgtDiurno?.hgt, hgtNoturno?.hgt].filter(v => v != null).join(' / '),
+      hgt: hgtHoje.join('/'),
       temp: [tempDiurno?.temperatura, tempNoturno?.temperatura].filter(v => v != null).join(' / '),
       paTendencia: classificarPA(ultimoComPA),
       fcTendencia: classificarFC(ultimoComFc),
@@ -240,35 +244,38 @@ export function agruparPorAla(
     }))
 }
 
-// Cada coluna empilha 2-3 sub-campos em linhas dentro da MESMA célula (\n +
-// wrapText) — igual ao modelo em papel do Felipe, que também cabe várias
-// informações numa coluna estreita. É o que permite uma ala de ~10 leitos
-// caber numa A4: poucas colunas largas, não uma coluna por campo.
-interface Coluna { label: string; width: number; texto: (l: LinhaPassometro) => string }
+// Cada paciente ocupa 2 linhas físicas da planilha — igual ao papel do
+// Felipe. A maioria das colunas mescla as duas (1 valor só, possivelmente em
+// várias linhas de texto dentro da célula mesclada); as 4 colunas que
+// sempre têm 2 itens distintos por paciente (psicotrópico/analgesia,
+// DVA/corticoide, IBP/anticoagulante, anti-HAS/controle de FC) NÃO mesclam:
+// `texto` cai na 1ª linha física, `texto2` na 2ª — cada item na própria
+// linha, sem espremer os dois num \n só.
+interface Coluna { label: string; width: number; texto: (l: LinhaPassometro) => string; texto2?: (l: LinhaPassometro) => string }
 
 const labs = (l: LinhaPassometro, ...keys: string[]) => keys.map(k => l.labs[k] || '').join('/')
 
 const COLUNAS: Coluna[] = [
-  { label: 'Leito', width: 6, texto: l => l.leito },
-  { label: 'Nome / Idade\nAdmissão', width: 18, texto: l => `${l.nomeCurto} · ${l.idade}\n${l.admissao}` },
-  { label: 'Diagnóstico', width: 16, texto: l => l.hd },
-  { label: 'Peso\nDiurese 24h\nVia da diurese', width: 14, texto: l => `${l.peso}\n${l.diurese}\n` },
-  { label: 'Tipo de acesso\nHidratação\nInsulina NPH/REG/SOS', width: 16, texto: l => `${l.acesso}\n\n` },
-  { label: 'Dieta\nHGT', width: 10, texto: l => `\n${l.hgt}` },
-  { label: 'Temp.', width: 10, texto: l => l.temp },
-  { label: 'Evac.', width: 8, texto: l => l.evac },
-  { label: 'Antimicrobiano', width: 16, texto: l => l.antimicrobiano },
-  // Deixado em branco de propósito — nomes de psicotrópico/analgesia e
-  // anti-hipertensivo vêm de texto livre (Medicações de Uso Contínuo), que o
-  // Felipe pediu pra NÃO importar aqui: "deixe em branco, não importe das MUC".
-  { label: 'Psicotrópicos\nAnalgesia', width: 12, texto: () => '' },
-  { label: 'DVA\nCorticoide', width: 14, texto: l => `${l.dva}\n${l.corticoide}` },
-  { label: 'IBP\nAnticoagulante', width: 16, texto: l => `${l.ibp}\n${l.anticoag}` },
-  { label: 'Anti-Hipertensivos\nControle de FC', width: 14, texto: l => `\nPA ${l.paTendencia}\nFC ${l.fcTendencia}` },
-  { label: 'Leuco\nHb/Ht\nPlaq\nPCR\nLactato', width: 12, texto: l => `${labs(l, 'leuco')}\n${labs(l, 'hb', 'ht')}\n${labs(l, 'plaq')}\n${labs(l, 'pcr')}\n${labs(l, 'lactato')}` },
-  { label: 'Ur\nCreat\nNa\nK\nMg', width: 10, texto: l => `${labs(l, 'ureia')}\n${labs(l, 'creat')}\n${labs(l, 'na')}\n${labs(l, 'k')}\n${labs(l, 'mg')}` },
-  { label: 'pH\nHCO3\npCO2\npO2\nCai', width: 10, texto: l => `${labs(l, 'ph')}\n${labs(l, 'bic')}\n${labs(l, 'pco2')}\n${labs(l, 'po2')}\n${labs(l, 'ca')}` },
-  { label: 'Programações / Pendências / Condutas / Lembretes', width: 30, texto: l => l.pendencias },
+  { label: 'Leito', width: 5, texto: l => l.leito },
+  { label: 'Nome/Idade\nAdmissão', width: 15, texto: l => `${l.nomeCurto} · ${l.idade}\n${l.admissao}` },
+  { label: 'Diagnóstico', width: 13, texto: l => l.hd },
+  { label: 'Peso\nDiurese\nVia', width: 12, texto: l => `${l.peso}\n${l.diurese}\n` },
+  { label: 'Acesso\nHidrat.\nInsulina N/R/S', width: 13, texto: l => `${l.acesso}\n\n` },
+  { label: 'Dieta\nHGT', width: 9, texto: l => `\n${l.hgt}` },
+  { label: 'Temp.', width: 8, texto: l => l.temp },
+  { label: 'Evac.', width: 6, texto: l => l.evac },
+  { label: 'Antimicrob.', width: 13, texto: l => l.antimicrobiano },
+  // Em branco de propósito nas duas linhas — psicotrópico/analgesia e o nome
+  // do anti-hipertensivo vêm de texto livre (Medicações de Uso Contínuo),
+  // que o Felipe pediu pra NÃO importar: "deixe em branco, não importe das MUC".
+  { label: 'Psicotróp./Analgesia', width: 10, texto: () => '', texto2: () => '' },
+  { label: 'DVA/Corticoide', width: 11, texto: l => l.dva, texto2: l => l.corticoide },
+  { label: 'IBP/Anticoag.', width: 12, texto: l => l.ibp, texto2: l => l.anticoag },
+  { label: 'Anti-HAS/FC', width: 11, texto: l => `PA ${l.paTendencia}`, texto2: l => `FC ${l.fcTendencia}` },
+  { label: 'Leuco\nHb/Ht\nPlaq\nPCR\nLactato', width: 9, texto: l => `${labs(l, 'leuco')}\n${labs(l, 'hb', 'ht')}\n${labs(l, 'plaq')}\n${labs(l, 'pcr')}\n${labs(l, 'lactato')}` },
+  { label: 'Ur\nCreat\nNa\nK\nMg', width: 8, texto: l => `${labs(l, 'ureia')}\n${labs(l, 'creat')}\n${labs(l, 'na')}\n${labs(l, 'k')}\n${labs(l, 'mg')}` },
+  { label: 'pH\nHCO3\npCO2\npO2\nCai', width: 8, texto: l => `${labs(l, 'ph')}\n${labs(l, 'bic')}\n${labs(l, 'pco2')}\n${labs(l, 'po2')}\n${labs(l, 'ca')}` },
+  { label: 'Programações / Pendências / Condutas / Lembretes', width: 22, texto: l => l.pendencias },
 ]
 
 const COR_GRUPO = 'FFEEF2FF'
@@ -290,30 +297,41 @@ export function gerarPlanilhaPassometro(unidade: Unidade, secoes: SecaoPassometr
   ws.columns = COLUNAS.map(c => ({ width: c.width }))
 
   const titulo = ws.addRow([`🗒️ Passômetro — ${unidade.nome}`])
-  titulo.getCell(1).font = { bold: true, size: 13 }
+  titulo.getCell(1).font = { bold: true, size: 12 }
   ws.mergeCells(titulo.number, 1, titulo.number, COLUNAS.length)
   const subtitulo = ws.addRow([`Gerado em ${new Date().toLocaleString('pt-BR')}`])
-  subtitulo.getCell(1).font = { italic: true, size: 8, color: { argb: 'FF64748B' } }
+  subtitulo.getCell(1).font = { italic: true, size: 7, color: { argb: 'FF64748B' } }
   ws.mergeCells(subtitulo.number, 1, subtitulo.number, COLUNAS.length)
 
   for (const { ala, linhas } of secoes) {
     const cabecalhoAla = ws.addRow([`${ala.nome} (${linhas.length} paciente${linhas.length === 1 ? '' : 's'})`])
-    cabecalhoAla.font = { bold: true, size: 11 }
+    cabecalhoAla.font = { bold: true, size: 10 }
     cabecalhoAla.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COR_GRUPO } } })
     ws.mergeCells(cabecalhoAla.number, 1, cabecalhoAla.number, COLUNAS.length)
 
     const linhaLabel = ws.addRow(COLUNAS.map(c => c.label))
-    linhaLabel.font = { bold: true, size: 8, color: { argb: 'FF475569' } }
+    linhaLabel.font = { bold: true, size: 7, color: { argb: 'FF475569' } }
     linhaLabel.alignment = { wrapText: true, vertical: 'middle', horizontal: 'center' }
     linhaLabel.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COR_LABEL } }; c.border = BORDA_FINA })
-    linhaLabel.height = 42
+    linhaLabel.height = 34
 
     for (const linha of linhas) {
-      const row = ws.addRow(COLUNAS.map(c => c.texto(linha)))
-      row.font = { size: 8 }
-      row.alignment = { wrapText: true, vertical: 'top' }
-      row.eachCell(c => { c.border = BORDA_FINA })
-      row.height = 58
+      // 2 linhas físicas por paciente: colunas sem `texto2` mesclam as duas
+      // (1 valor, possivelmente multi-linha via \n); as com `texto2` ficam
+      // sem mesclar — 1 item em cada linha física.
+      const rowA = ws.addRow(COLUNAS.map(c => c.texto(linha)))
+      const rowB = ws.addRow(COLUNAS.map(c => c.texto2?.(linha) ?? ''))
+      for (const r of [rowA, rowB]) {
+        r.font = { size: 7 }
+        r.alignment = { wrapText: true, vertical: 'top' }
+        r.height = 22
+      }
+      COLUNAS.forEach((c, i) => {
+        const col = i + 1
+        if (!c.texto2) ws.mergeCells(rowA.number, col, rowB.number, col)
+        rowA.getCell(col).border = BORDA_FINA
+        rowB.getCell(col).border = BORDA_FINA
+      })
     }
     ws.addRow([])
   }
