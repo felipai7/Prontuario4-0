@@ -33,7 +33,10 @@ const ANALITOS_LABS: { key: string; label: string; id: string }[] = [
 const CA_IONICO_IDS = ['calcio.ionico.serum', 'calcio.ionico.art', 'calcio.ionico.ven']
 
 export interface LinhaPassometro {
-  paciente: Paciente
+  alaId: string
+  /** Leito sem paciente ativo — mostra só o código do leito, o resto em
+   *  branco (pedido do Felipe: "gere as linhas dos leitos vazios também"). */
+  vazio: boolean
   leito: string
   nomeCurto: string
   idade: string
@@ -134,7 +137,7 @@ function formatarPosologia(droga: string, doseValor: number | null, doseUnidade:
 
 export async function buscarDadosPassometro(
   supabase: SupabaseClient, unitId: string, alaId?: string,
-): Promise<{ paciente: Paciente; linha: LinhaPassometro }[]> {
+): Promise<LinhaPassometro[]> {
   let query = supabase.from('pacientes').select('*').eq('unit_id', unitId).eq('ativo', true)
   if (alaId) query = query.eq('ala_id', alaId)
   const { data: pacientesData } = await query
@@ -195,7 +198,8 @@ export async function buscarDadosPassometro(
     labs.ca = valorLabsMaisRecente(examesOrd, CA_IONICO_IDS)
 
     const linha: LinhaPassometro = {
-      paciente,
+      alaId: paciente.ala_id,
+      vazio: false,
       leito: paciente.numero_leito,
       nomeCurto: primeiroUltimoNome(paciente.nome),
       idade: calcAge(paciente.data_nascimento),
@@ -224,23 +228,34 @@ export async function buscarDadosPassometro(
       labs,
       pendencias: [...pendencias.map(p => p.texto), orientacao].filter(Boolean).join(' · '),
     }
-    return { paciente, linha }
+    return linha
   })
 }
 
-export function agruparPorAla(
-  unidade: Unidade, itens: { paciente: Paciente; linha: LinhaPassometro }[],
-): SecaoPassometro[] {
-  const porAla = new Map<string, LinhaPassometro[]>()
-  for (const { paciente, linha } of itens) {
-    const grupo = porAla.get(paciente.ala_id)
-    if (grupo) grupo.push(linha); else porAla.set(paciente.ala_id, [linha])
+function linhaVazia(alaId: string, leito: string): LinhaPassometro {
+  return {
+    alaId, vazio: true, leito, nomeCurto: '', idade: '', admissao: '', hd: '', peso: '', diurese: '',
+    acesso: '', hgt: '', temp: '', paTendencia: '', fcTendencia: '', evac: '', antimicrobiano: '',
+    dva: '', corticoide: '', ibp: '', anticoag: '', labs: {}, pendencias: '',
   }
-  return unidade.alas
-    .filter(ala => porAla.has(ala.id))
+}
+
+/**
+ * Uma seção por ala, com uma linha por LEITO — ocupado ou vazio — na ordem
+ * vigente da planta (`ala.leitos`). Ala rotativo (leito de trânsito) só
+ * entra se tiver alguém nela agora: vazia, ela já some do resto do app
+ * (dashboard/indicadores) e o passômetro segue a mesma regra.
+ */
+export function agruparPorAla(alas: Ala[], linhasPacientes: LinhaPassometro[]): SecaoPassometro[] {
+  const porLeito = new Map<string, LinhaPassometro>()
+  for (const l of linhasPacientes) porLeito.set(`${l.alaId}|${l.leito}`, l)
+  return alas
+    .filter(ala => !ala.rotativo || ala.leitos.some(cod => porLeito.has(`${ala.id}|${cod}`)))
     .map(ala => ({
       ala,
-      linhas: (porAla.get(ala.id) ?? []).sort((a, b) => compararLeitos(a.leito, b.leito)),
+      linhas: ala.leitos
+        .map(cod => porLeito.get(`${ala.id}|${cod}`) ?? linhaVazia(ala.id, cod))
+        .sort((a, b) => compararLeitos(a.leito, b.leito)),
     }))
 }
 
@@ -290,7 +305,7 @@ export function gerarPlanilhaPassometro(unidade: Unidade, secoes: SecaoPassometr
   const ws = wb.addWorksheet('Passômetro', {
     views: [{ showGridLines: false }],
     pageSetup: {
-      orientation: 'landscape', fitToWidth: 1, fitToHeight: 1,
+      orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 1,
       margins: { left: 0.25, right: 0.25, top: 0.4, bottom: 0.3, header: 0, footer: 0 },
     },
   })
@@ -304,7 +319,8 @@ export function gerarPlanilhaPassometro(unidade: Unidade, secoes: SecaoPassometr
   ws.mergeCells(subtitulo.number, 1, subtitulo.number, COLUNAS.length)
 
   for (const { ala, linhas } of secoes) {
-    const cabecalhoAla = ws.addRow([`${ala.nome} (${linhas.length} paciente${linhas.length === 1 ? '' : 's'})`])
+    const ocupados = linhas.filter(l => !l.vazio).length
+    const cabecalhoAla = ws.addRow([`${ala.nome} (${ocupados}/${linhas.length} leitos ocupados)`])
     cabecalhoAla.font = { bold: true, size: 10 }
     cabecalhoAla.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COR_GRUPO } } })
     ws.mergeCells(cabecalhoAla.number, 1, cabecalhoAla.number, COLUNAS.length)
@@ -322,9 +338,10 @@ export function gerarPlanilhaPassometro(unidade: Unidade, secoes: SecaoPassometr
       const rowA = ws.addRow(COLUNAS.map(c => c.texto(linha)))
       const rowB = ws.addRow(COLUNAS.map(c => c.texto2?.(linha) ?? ''))
       for (const r of [rowA, rowB]) {
-        r.font = { size: 7 }
+        r.font = { size: 7, color: linha.vazio ? { argb: 'FFCBD5E1' } : undefined }
         r.alignment = { wrapText: true, vertical: 'top' }
-        r.height = 22
+        r.height = linha.vazio ? 12 : 22
+        if (linha.vazio) r.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } } })
       }
       COLUNAS.forEach((c, i) => {
         const col = i + 1

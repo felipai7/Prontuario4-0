@@ -35,12 +35,13 @@ export default function PassometroButton({ unidade, showToast }: Props) {
   const handleGerar = async () => {
     setGerando(true)
     try {
-      const itens = await buscarDadosPassometro(supabase, unidade.unitId, alaId || undefined)
-      if (itens.length === 0) {
-        showToast('Nenhum paciente internado para gerar o passômetro.', 'error')
+      const linhas = await buscarDadosPassometro(supabase, unidade.unitId, alaId || undefined)
+      const alas = alaId ? unidade.alas.filter(a => a.id === alaId) : unidade.alas
+      const secoes = agruparPorAla(alas, linhas)
+      if (secoes.every(s => s.linhas.length === 0)) {
+        showToast('Nenhum leito cadastrado nessa ala.', 'error')
         return
       }
-      const secoes = agruparPorAla(unidade, itens)
       const wb = gerarPlanilhaPassometro(unidade, secoes)
       const buffer = await wb.xlsx.writeBuffer()
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
