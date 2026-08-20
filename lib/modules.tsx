@@ -19,6 +19,7 @@ import VentilatorioTab from '@/components/modules/plantonista/VentilatorioTab'
 import IntensivistaTab from '@/components/modules/intensivista/IntensivistaTab'
 import FisioterapiaTab from '@/components/modules/fisioterapia/FisioterapiaTab'
 import EnfermagemTab from '@/components/modules/enfermagem/EnfermagemTab'
+import PendenciasTab from '@/components/modules/shared/PendenciasTab'
 import IrasTab from '@/components/modules/intensivista/IrasTab'
 import NutricaoTab from '@/components/modules/nutricao/NutricaoTab'
 import ExamesTab       from '@/components/modules/shared/ExamesTab'
@@ -202,6 +203,19 @@ const enfermagem: TabDef = {
     onRefresh={ctx.onRefresh} showToast={ctx.showToast} />,
 }
 
+// Escrita fica em cuidadosHorizontais (módulo Médico Intensivista, chefe) —
+// aqui é só leitura, replicada nos módulos de quem não passa por lá no dia a
+// dia (enfermagem, fisioterapia, nutrição) mas precisa saber o que ficou
+// pendente. Sem dona explícito não haveria problema (a aba não tem nenhum
+// controle de escrita), mas registrar o dono real evita confusão se algum
+// dia um botão de resolver pendência entrar aqui.
+const pendenciasOrientacoes: TabDef = {
+  id: 'pendencias',
+  label: '📝 Pendências e Orientações',
+  dona: { profissaoDona: 'medico', exigeChefe: true },
+  render: ctx => <PendenciasTab pendencias={ctx.pendencias} registrosIntensivista={ctx.registrosIntensivista} />,
+}
+
 const nutricao: TabDef = {
   id: 'nutricao',
   label: '🥗 Nutrição',
@@ -236,7 +250,7 @@ export const MODULOS: readonly ModuloDef[] = [
     id: 'fisioterapia',
     label: '🫁 Fisioterapia',
     profissaoDona: 'fisioterapeuta',
-    tabs: [fisioterapia, ventilatorio, examesImagem],
+    tabs: [pendenciasOrientacoes, fisioterapia, ventilatorio, examesImagem],
   },
   {
     id: 'enfermagem',
@@ -245,7 +259,7 @@ export const MODULOS: readonly ModuloDef[] = [
     // Balanço e Sinais Vitais entram porque já são preenchidos pela enfermagem
     // na prática; o dono deles continua sendo o módulo médico, então aqui
     // aparecem em leitura até decidirmos mover o registro.
-    tabs: [enfermagem, balanco, sinais],
+    tabs: [pendenciasOrientacoes, enfermagem, balanco, sinais],
   },
   {
     id: 'nutricao',
@@ -253,7 +267,7 @@ export const MODULOS: readonly ModuloDef[] = [
     profissaoDona: 'nutricionista',
     // Balanço entra porque a diarreia é marcada lá: a nutrição precisa ver as
     // evacuações do dia para avaliar tolerância. O dono continua sendo o médico.
-    tabs: [nutricao, balanco],
+    tabs: [pendenciasOrientacoes, nutricao, balanco],
   },
 ]
 
