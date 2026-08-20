@@ -10,7 +10,7 @@ function linhaFake(overrides: Partial<LinhaPassometro> = {}): LinhaPassometro {
     evac: '', antimicrobiano: 'Mero D2', dva: '', corticoide: '',
     ibp: 'IBP VO', anticoag: 'Enoxaparina 40mg',
     labs: { leuco: '4710', hb: '8,9', ht: '28', plaq: '290', pcr: '157', lactato: '1,68', ureia: '37', creat: '0,5', na: '138', k: '2,95', mg: '2,0', ph: '7,46', bic: '33', pco2: '49', po2: '50', ca: '1,15' },
-    pendencias: 'Tirar HGT de horário',
+    pendencias: 'Tirar HGT de horário', previsaoAlta: '',
     ...overrides,
   }
 }

@@ -63,6 +63,7 @@ export interface LinhaPassometro {
   anticoag: string
   labs: Record<string, string>
   pendencias: string
+  previsaoAlta: string
 }
 
 export interface SecaoPassometro {
@@ -104,9 +105,9 @@ function primeiroUltimoNome(nomeCompleto: string): string {
   return partes.length <= 1 ? nomeCompleto : `${partes[0]} ${partes[partes.length - 1]}`
 }
 
-/** "2026-08-16" -> "16/08" — ano e hora de internação não importam pro
- *  passômetro do dia, só atrapalham a leitura rápida. */
-function admissaoCurta(dataISO: string): string {
+/** "2026-08-16" -> "16/08" — ano e hora não importam pro passômetro do dia,
+ *  só atrapalham a leitura rápida (vale pra admissão e previsão de alta). */
+function dataCurta(dataISO: string): string {
   const [, mes, dia] = dataISO.split('-')
   return `${dia}/${mes}`
 }
@@ -203,7 +204,7 @@ export async function buscarDadosPassometro(
       leito: paciente.numero_leito,
       nomeCurto: primeiroUltimoNome(paciente.nome),
       idade: calcAge(paciente.data_nascimento),
-      admissao: admissaoCurta(paciente.data_internacao),
+      admissao: dataCurta(paciente.data_internacao),
       hd: paciente.hipoteses ?? '',
       peso: paciente.peso_kg != null ? `${paciente.peso_kg}Kg` : '',
       diurese: diurese.horas > 0 ? `${diurese.total}mL(${diurese.horas}h)${taxaDiurese ? ' ' + taxaDiurese : ''}` : '',
@@ -227,6 +228,7 @@ export async function buscarDadosPassometro(
         : '',
       labs,
       pendencias: [...pendencias.map(p => p.texto), orientacao].filter(Boolean).join(' · '),
+      previsaoAlta: cuidados?.previsao_alta ? dataCurta(cuidados.previsao_alta) : '',
     }
     return linha
   })
@@ -236,7 +238,7 @@ function linhaVazia(alaId: string, leito: string): LinhaPassometro {
   return {
     alaId, vazio: true, leito, nomeCurto: '', idade: '', admissao: '', hd: '', peso: '', diurese: '',
     acesso: '', hgt: '', temp: '', paTendencia: '', fcTendencia: '', evac: '', antimicrobiano: '',
-    dva: '', corticoide: '', ibp: '', anticoag: '', labs: {}, pendencias: '',
+    dva: '', corticoide: '', ibp: '', anticoag: '', labs: {}, pendencias: '', previsaoAlta: '',
   }
 }
 
@@ -275,7 +277,10 @@ const COLUNAS: Coluna[] = [
   { label: 'Nome/Idade\nAdmissão', width: 15, texto: l => `${l.nomeCurto} · ${l.idade}\n${l.admissao}` },
   { label: 'Diagnóstico', width: 13, texto: l => l.hd },
   { label: 'Peso\nDiurese\nVia', width: 12, texto: l => `${l.peso}\n${l.diurese}\n` },
-  { label: 'Acesso\nHidrat.\nInsulina N/R/S', width: 13, texto: l => `${l.acesso}\n\n` },
+  // 2 linhas físicas: de cima fica em branco (acesso venoso + hidratação são
+  // preenchidos à mão), de baixo já vem o roteiro de insulina pré-impresso —
+  // igual à planilha em branco que o Felipe mandou como modelo.
+  { label: 'Acesso/Hidrat./Insulina', width: 15, texto: () => '', texto2: () => 'NPH:      REG:      SOS:' },
   { label: 'Dieta\nHGT', width: 9, texto: l => `\n${l.hgt}` },
   { label: 'Temp.', width: 8, texto: l => l.temp },
   { label: 'Evac.', width: 6, texto: l => l.evac },
@@ -287,10 +292,14 @@ const COLUNAS: Coluna[] = [
   { label: 'DVA/Corticoide', width: 11, texto: l => l.dva, texto2: l => l.corticoide },
   { label: 'IBP/Anticoag.', width: 12, texto: l => l.ibp, texto2: l => l.anticoag },
   { label: 'Anti-HAS/FC', width: 11, texto: l => `PA ${l.paTendencia}`, texto2: l => `FC ${l.fcTendencia}` },
-  { label: 'Leuco\nHb/Ht\nPlaq\nPCR\nLactato', width: 9, texto: l => `${labs(l, 'leuco')}\n${labs(l, 'hb', 'ht')}\n${labs(l, 'plaq')}\n${labs(l, 'pcr')}\n${labs(l, 'lactato')}` },
-  { label: 'Ur\nCreat\nNa\nK\nMg', width: 8, texto: l => `${labs(l, 'ureia')}\n${labs(l, 'creat')}\n${labs(l, 'na')}\n${labs(l, 'k')}\n${labs(l, 'mg')}` },
-  { label: 'pH\nHCO3\npCO2\npO2\nCai', width: 8, texto: l => `${labs(l, 'ph')}\n${labs(l, 'bic')}\n${labs(l, 'pco2')}\n${labs(l, 'po2')}\n${labs(l, 'ca')}` },
+  // Nome do exame repetido em cada linha do valor (não só no cabeçalho) —
+  // pedido do Felipe: rolando a planilha pra baixo, o cabeçalho já ficou
+  // longe e a coluna sozinha não deixava claro o que era cada número.
+  { label: 'Leuco\nHb/Ht\nPlaq\nPCR\nLactato', width: 13, texto: l => `Leuco: ${labs(l, 'leuco')}\nHb/Ht: ${labs(l, 'hb', 'ht')}\nPlaq: ${labs(l, 'plaq')}\nPCR: ${labs(l, 'pcr')}\nLactato: ${labs(l, 'lactato')}` },
+  { label: 'Ur\nCreat\nNa\nK\nMg', width: 11, texto: l => `Ur: ${labs(l, 'ureia')}\nCreat: ${labs(l, 'creat')}\nNa: ${labs(l, 'na')}\nK: ${labs(l, 'k')}\nMg: ${labs(l, 'mg')}` },
+  { label: 'pH\nHCO3\npCO2\npO2\nCai', width: 11, texto: l => `pH: ${labs(l, 'ph')}\nHCO3: ${labs(l, 'bic')}\npCO2: ${labs(l, 'pco2')}\npO2: ${labs(l, 'po2')}\nCai: ${labs(l, 'ca')}` },
   { label: 'Programações / Pendências / Condutas / Lembretes', width: 22, texto: l => l.pendencias },
+  { label: 'Previsão de Alta', width: 8, texto: l => l.previsaoAlta },
 ]
 
 const COR_GRUPO = 'FFEEF2FF'
@@ -305,42 +314,49 @@ export function gerarPlanilhaPassometro(unidade: Unidade, secoes: SecaoPassometr
   const ws = wb.addWorksheet('Passômetro', {
     views: [{ showGridLines: false }],
     pageSetup: {
-      orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 1,
+      // Largura sempre cabe numa página (nunca corta paciente ao meio na
+      // horizontal); altura livre (fitToHeight 0 com fitToPage true = "só
+      // ajusta a largura") — deixa a fonte no tamanho legível pedido e, se
+      // uma ala tiver muitos leitos, transborda pra 2ª página em vez de
+      // espremer tudo pra caber numa altura fixa.
+      orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0,
       margins: { left: 0.25, right: 0.25, top: 0.4, bottom: 0.3, header: 0, footer: 0 },
     },
   })
   ws.columns = COLUNAS.map(c => ({ width: c.width }))
 
   const titulo = ws.addRow([`🗒️ Passômetro — ${unidade.nome}`])
-  titulo.getCell(1).font = { bold: true, size: 12 }
+  titulo.getCell(1).font = { bold: true, size: 13 }
   ws.mergeCells(titulo.number, 1, titulo.number, COLUNAS.length)
   const subtitulo = ws.addRow([`Gerado em ${new Date().toLocaleString('pt-BR')}`])
-  subtitulo.getCell(1).font = { italic: true, size: 7, color: { argb: 'FF64748B' } }
+  subtitulo.getCell(1).font = { italic: true, size: 8, color: { argb: 'FF64748B' } }
   ws.mergeCells(subtitulo.number, 1, subtitulo.number, COLUNAS.length)
 
   for (const { ala, linhas } of secoes) {
     const ocupados = linhas.filter(l => !l.vazio).length
     const cabecalhoAla = ws.addRow([`${ala.nome} (${ocupados}/${linhas.length} leitos ocupados)`])
-    cabecalhoAla.font = { bold: true, size: 10 }
+    cabecalhoAla.font = { bold: true, size: 11 }
     cabecalhoAla.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COR_GRUPO } } })
     ws.mergeCells(cabecalhoAla.number, 1, cabecalhoAla.number, COLUNAS.length)
 
     const linhaLabel = ws.addRow(COLUNAS.map(c => c.label))
-    linhaLabel.font = { bold: true, size: 7, color: { argb: 'FF475569' } }
+    linhaLabel.font = { bold: true, size: 8, color: { argb: 'FF475569' } }
     linhaLabel.alignment = { wrapText: true, vertical: 'middle', horizontal: 'center' }
     linhaLabel.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COR_LABEL } }; c.border = BORDA_FINA })
-    linhaLabel.height = 34
+    linhaLabel.height = 42
 
     for (const linha of linhas) {
       // 2 linhas físicas por paciente: colunas sem `texto2` mesclam as duas
       // (1 valor, possivelmente multi-linha via \n); as com `texto2` ficam
-      // sem mesclar — 1 item em cada linha física.
+      // sem mesclar — 1 item em cada linha física. Leito vazio usa a MESMA
+      // altura de um ocupado — é onde o Felipe anota à mão uma admissão
+      // nova antes de passar pro app, precisa de espaço de verdade.
       const rowA = ws.addRow(COLUNAS.map(c => c.texto(linha)))
       const rowB = ws.addRow(COLUNAS.map(c => c.texto2?.(linha) ?? ''))
       for (const r of [rowA, rowB]) {
-        r.font = { size: 7, color: linha.vazio ? { argb: 'FFCBD5E1' } : undefined }
+        r.font = { size: 8, color: linha.vazio ? { argb: 'FFCBD5E1' } : undefined }
         r.alignment = { wrapText: true, vertical: 'top' }
-        r.height = linha.vazio ? 12 : 22
+        r.height = 27
         if (linha.vazio) r.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } } })
       }
       COLUNAS.forEach((c, i) => {
