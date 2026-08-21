@@ -10,27 +10,29 @@ import type {
 
 // Os 15 marcadores do passômetro batem 1:1 com o catálogo de analitos usado
 // na extração de exames (lib/exames/extracao/catalogo/analitos.json) — o
-// mesmo id que a IA reconhece no laudo é o que buscamos aqui.
-const ANALITOS_LABS: { key: string; label: string; id: string }[] = [
-  { key: 'hb', label: 'Hb', id: 'hemoglobina.serum' },
-  { key: 'ht', label: 'Ht', id: 'hematocrito.serum' },
-  { key: 'leuco', label: 'Leuco', id: 'leucocitos.serum' },
-  { key: 'plaq', label: 'Plaq', id: 'plaquetas.serum' },
-  { key: 'pcr', label: 'PCR', id: 'pcr.serum' },
-  { key: 'lactato', label: 'Lactato', id: 'lactato.serum' },
-  { key: 'ureia', label: 'Ureia', id: 'ureia.serum' },
-  { key: 'creat', label: 'Creat', id: 'creatinina.serum' },
-  { key: 'na', label: 'Na', id: 'sodio.serum' },
-  { key: 'k', label: 'K', id: 'potassio.serum' },
-  { key: 'mg', label: 'Mg', id: 'magnesio.serum' },
-  { key: 'ph', label: 'pH', id: 'ph.serum' },
-  { key: 'bic', label: 'Bic', id: 'hco3.serum' },
-  { key: 'pco2', label: 'pCO2', id: 'pco2.serum' },
-  { key: 'po2', label: 'pO2', id: 'po2.serum' },
+// mesmo id que a IA reconhece no laudo é o que buscamos aqui. Na, K e Ca
+// iônico têm ids separados por origem (soro/arterial/venoso) no catálogo —
+// pro passômetro (visão rápida) qualquer um serve, então cada um lista os 3;
+// se a última dosagem só veio de gasometria (sem bioquímica no mesmo dia),
+// ainda assim entra.
+const ANALITOS_LABS: { key: string; label: string; ids: string[] }[] = [
+  { key: 'hb', label: 'Hb', ids: ['hemoglobina.serum'] },
+  { key: 'ht', label: 'Ht', ids: ['hematocrito.serum'] },
+  { key: 'leuco', label: 'Leuco', ids: ['leucocitos.serum'] },
+  { key: 'plaq', label: 'Plaq', ids: ['plaquetas.serum'] },
+  { key: 'pcr', label: 'PCR', ids: ['pcr.serum'] },
+  { key: 'lactato', label: 'Lactato', ids: ['lactato.serum'] },
+  { key: 'ureia', label: 'Ureia', ids: ['ureia.serum'] },
+  { key: 'creat', label: 'Creat', ids: ['creatinina.serum'] },
+  { key: 'na', label: 'Na', ids: ['sodio.serum', 'sodio.art', 'sodio.ven'] },
+  { key: 'k', label: 'K', ids: ['potassio.serum', 'potassio.art', 'potassio.ven'] },
+  { key: 'mg', label: 'Mg', ids: ['magnesio.serum'] },
+  { key: 'ph', label: 'pH', ids: ['ph.serum'] },
+  { key: 'bic', label: 'Bic', ids: ['hco3.serum'] },
+  { key: 'pco2', label: 'pCO2', ids: ['pco2.serum'] },
+  { key: 'po2', label: 'pO2', ids: ['po2.serum'] },
+  { key: 'ca', label: 'Ca', ids: ['calcio.ionico.serum', 'calcio.ionico.art', 'calcio.ionico.ven'] },
 ]
-// Gasometria arterial/venosa/sem especificar têm ids distintos no catálogo —
-// pro passômetro (visão rápida) qualquer um serve, pega o mais recente dos 3.
-const CA_IONICO_IDS = ['calcio.ionico.serum', 'calcio.ionico.art', 'calcio.ionico.ven']
 
 export interface LinhaPassometro {
   alaId: string
@@ -239,8 +241,7 @@ export async function buscarDadosPassometro(
     const acessoVascular = dispositivos.filter(d => d.tipo === 'AVP' || d.tipo === 'CVC' || d.tipo === 'PAI' || d.tipo === 'CDL')
 
     const labs: Record<string, string> = {}
-    for (const a of ANALITOS_LABS) labs[a.key] = valorLabsMaisRecente(examesOrd, [a.id])
-    labs.ca = valorLabsMaisRecente(examesOrd, CA_IONICO_IDS)
+    for (const a of ANALITOS_LABS) labs[a.key] = valorLabsMaisRecente(examesOrd, a.ids)
 
     const linha: LinhaPassometro = {
       alaId: paciente.ala_id,
@@ -340,10 +341,11 @@ const COLUNAS: Coluna[] = [
   },
   { label: 'Diagnóstico', width: 13, texto: l => l.hd },
   { label: 'Peso\nDiurese\nVia', width: 12, texto: l => `${l.peso}\n${l.diurese}\n${l.viaDiurese}` },
-  // 2 linhas físicas: de cima fica em branco (acesso venoso + hidratação são
-  // preenchidos à mão), de baixo já vem o roteiro de insulina pré-impresso —
-  // igual à planilha em branco que o Felipe mandou como modelo.
-  { label: 'Acesso/Hidrat./Insulina', width: 15, texto: () => '', texto2: () => 'NPH:      REG:      SOS:' },
+  // 2 linhas físicas: de cima o tipo de acesso vem automático (dispositivos
+  // ativos — AVP/CVC/PAI/CDL), hidratação fica pra completar à mão na mesma
+  // linha; de baixo já vem o roteiro de insulina pré-impresso, igual à
+  // planilha em branco que o Felipe mandou como modelo.
+  { label: 'Acesso/Hidrat./Insulina', width: 15, texto: l => l.acesso, texto2: () => 'NPH:      REG:      SOS:' },
   { label: 'Dieta\nHGT', width: 9, texto: l => `\n${l.hgt}` },
   { label: 'Temp.', width: 8, texto: l => l.temp },
   {
@@ -429,16 +431,16 @@ export function gerarPlanilhaPassometro(unidade: Unidade, secoes: SecaoPassometr
     for (const linha of linhas) {
       // 2 linhas físicas por paciente: colunas sem `texto2` mesclam as duas
       // (1 valor, possivelmente multi-linha via \n); as com `texto2` ficam
-      // sem mesclar — 1 item em cada linha física. Leito vazio usa a MESMA
-      // altura de um ocupado — é onde o Felipe anota à mão uma admissão
-      // nova antes de passar pro app, precisa de espaço de verdade.
+      // sem mesclar — 1 item em cada linha física. Leito vazio fica em
+      // branco (sem preenchimento cinza) — é onde o Felipe anota à mão uma
+      // admissão nova antes de passar pro app, e o cinza atrapalhava escrever
+      // na planilha impressa.
       const rowA = ws.addRow(COLUNAS.map(c => c.texto(linha)))
       const rowB = ws.addRow(COLUNAS.map(c => c.texto2?.(linha) ?? ''))
       for (const r of [rowA, rowB]) {
-        r.font = { size: 8, color: linha.vazio ? { argb: 'FFCBD5E1' } : undefined }
+        r.font = { size: 8 }
         r.alignment = { wrapText: true, vertical: 'top' }
         r.height = 27
-        if (linha.vazio) r.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } } })
       }
       COLUNAS.forEach((c, i) => {
         const col = i + 1
@@ -456,4 +458,79 @@ export function gerarPlanilhaPassometro(unidade: Unidade, secoes: SecaoPassometr
   }
 
   return wb
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+function corCss(fonte: Partial<ExcelJS.Font>): string {
+  const argb = (fonte.color as { argb?: string } | undefined)?.argb
+  return `${fonte.bold ? 'font-weight:bold;' : ''}${argb ? `color:#${argb.slice(2)};` : ''}`
+}
+
+/**
+ * Mesma estrutura do Excel (reaproveita COLUNAS), como página HTML pronta
+ * pra imprimir na hora — sem baixar o .xlsx, abrir no Excel, autorizar
+ * edição e só então mandar imprimir. Quem chama abre isso numa aba/janela
+ * nova e dispara `window.print()` (ver PassometroButton.tsx).
+ */
+export function gerarHtmlPassometro(unidade: Unidade, secoes: SecaoPassometro[]): string {
+  const totalWidth = COLUNAS.reduce((s, c) => s + c.width, 0)
+  const colgroup = COLUNAS.map(c => `<col style="width:${(c.width / totalWidth * 100).toFixed(2)}%">`).join('')
+
+  const headerCells: string[] = []
+  for (let col = 0; col < COLUNAS.length;) {
+    const grupo = COLUNAS[col].grupoCabecalho
+    if (!grupo) { headerCells.push(`<th>${escapeHtml(COLUNAS[col].label).replace(/\n/g, '<br>')}</th>`); col++; continue }
+    let fim = col
+    while (fim < COLUNAS.length && COLUNAS[fim].grupoCabecalho === grupo) fim++
+    headerCells.push(`<th colspan="${fim - col}">${escapeHtml(grupo)}</th>`)
+    col = fim
+  }
+  const linhaCabecalho = `<tr>${headerCells.join('')}</tr>`
+
+  const secoesHtml = secoes.map(({ ala, linhas }) => {
+    const ocupados = linhas.filter(l => !l.vazio).length
+    const linhasHtml = linhas.map(linha => {
+      const celsA: string[] = []
+      const celsB: string[] = []
+      COLUNAS.forEach(c => {
+        const estilo = corCss(c.fonte?.(linha) ?? {})
+        const attr = estilo ? ` style="${estilo}"` : ''
+        if (c.texto2) {
+          celsA.push(`<td${attr}>${escapeHtml(c.texto(linha)).replace(/\n/g, '<br>')}</td>`)
+          celsB.push(`<td${attr}>${escapeHtml(c.texto2(linha)).replace(/\n/g, '<br>')}</td>`)
+        } else {
+          celsA.push(`<td rowspan="2"${attr}>${escapeHtml(c.texto(linha)).replace(/\n/g, '<br>')}</td>`)
+        }
+      })
+      return `<tr>${celsA.join('')}</tr><tr>${celsB.join('')}</tr>`
+    }).join('')
+    return `<tr><td class="ala" colspan="${COLUNAS.length}">${escapeHtml(ala.nome)} (${ocupados}/${linhas.length} leitos ocupados)</td></tr>${linhaCabecalho}${linhasHtml}`
+  }).join('')
+
+  return `<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<title>Passômetro — ${escapeHtml(unidade.nome)}</title>
+<style>
+  @page { size: A4 landscape; margin: 8mm; }
+  * { box-sizing: border-box; }
+  /* Fundo branco fixo — é uma página pra imprimir em papel, não deve seguir
+     o tema escuro do sistema/navegador (senão o texto escuro some no fundo
+     escuro na pré-visualização, antes mesmo de chegar no diálogo de impressão). */
+  html, body { background: #ffffff; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 8pt; margin: 0; color: #0f172a; }
+  h1 { font-size: 13pt; margin: 0 0 2px; }
+  .subtitulo { font-size: 8pt; color: #64748b; font-style: italic; margin: 0 0 6px; }
+  table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+  td, th { border: 1px solid #94a3b8; padding: 2px 3px; vertical-align: top; word-wrap: break-word; }
+  th { background: #f1f5f9; font-size: 7.5pt; text-align: center; font-weight: bold; }
+  td.ala { background: #eef2ff; font-weight: bold; font-size: 11pt; padding: 4px; }
+</style>
+</head><body>
+  <h1>🗒️ Passômetro — ${escapeHtml(unidade.nome)}</h1>
+  <p class="subtitulo">Gerado em ${new Date().toLocaleString('pt-BR')}</p>
+  <table><colgroup>${colgroup}</colgroup>${secoesHtml}</table>
+</body></html>`
 }

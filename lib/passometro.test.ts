@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { gerarPlanilhaPassometro, agruparPorAla, type LinhaPassometro, type SecaoPassometro } from '@/lib/passometro'
+import { gerarPlanilhaPassometro, gerarHtmlPassometro, agruparPorAla, type LinhaPassometro, type SecaoPassometro } from '@/lib/passometro'
 import type { Unidade } from '@/lib/unidade'
 
 function linhaFake(overrides: Partial<LinhaPassometro> = {}): LinhaPassometro {
@@ -77,6 +77,25 @@ describe('gerarPlanilhaPassometro', () => {
     const evacCell = ws.getCell(5, 8)
     expect(evacCell.font?.bold).toBe(true)
     expect(evacCell.font?.color).toEqual({ argb: 'FFDC2626' })
+  })
+})
+
+describe('gerarHtmlPassometro', () => {
+  it('gera HTML válido, sem lançar erro, com rowspan nas colunas mescladas e colspan no cabeçalho de exames', () => {
+    const secoes: SecaoPassometro[] = [{ ala: unidadeFake.alas[0], linhas: [linhaFake()] }]
+    let html = ''
+    expect(() => { html = gerarHtmlPassometro(unidadeFake, secoes) }).not.toThrow()
+
+    expect(html).toContain('<!doctype html>')
+    expect(html).toContain('rowspan="2"') // colunas sem texto2 (ex.: Leito)
+    expect(html).toContain('colspan="3"') // os 3 blocos de exames sob "Últimos Exames Laboratoriais"
+    expect(html).toContain('Últimos Exames Laboratoriais')
+  })
+
+  it('destaca a célula de Evac. em vermelho quando constipado', () => {
+    const secoes: SecaoPassometro[] = [{ ala: unidadeFake.alas[0], linhas: [linhaFake({ evac: 'Não desde admissão', evacConstipado: true })] }]
+    const html = gerarHtmlPassometro(unidadeFake, secoes)
+    expect(html).toContain('color:#DC2626')
   })
 })
 

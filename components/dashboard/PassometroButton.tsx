@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { buscarDadosPassometro, agruparPorAla, gerarPlanilhaPassometro } from '@/lib/passometro'
+import { buscarDadosPassometro, agruparPorAla, gerarPlanilhaPassometro, gerarHtmlPassometro, type SecaoPassometro } from '@/lib/passometro'
 import type { Unidade } from '@/lib/unidade'
 import type { ToastData } from '@/types'
 
@@ -32,12 +32,47 @@ export default function PassometroButton({ unidade, showToast }: Props) {
     return () => document.removeEventListener('mousedown', fecharFora)
   }, [aberto])
 
-  const handleGerar = async () => {
+  const buscarSecoes = async (): Promise<SecaoPassometro[]> => {
+    const linhas = await buscarDadosPassometro(supabase, unidade.unitId, alaId || undefined)
+    const alas = alaId ? unidade.alas.filter(a => a.id === alaId) : unidade.alas
+    return agruparPorAla(alas, linhas)
+  }
+
+  // Abre a janela ANTES do fetch assíncrono — depois de um await, o
+  // navegador não reconhece mais o clique como o gesto que autorizou o
+  // popup e bloqueia window.open silenciosamente.
+  const handleImprimir = async () => {
+    const janela = window.open('', '_blank')
+    if (!janela) {
+      showToast('Não foi possível abrir a janela de impressão — verifique o bloqueador de pop-ups do navegador.', 'error')
+      return
+    }
     setGerando(true)
     try {
-      const linhas = await buscarDadosPassometro(supabase, unidade.unitId, alaId || undefined)
-      const alas = alaId ? unidade.alas.filter(a => a.id === alaId) : unidade.alas
-      const secoes = agruparPorAla(alas, linhas)
+      const secoes = await buscarSecoes()
+      if (secoes.every(s => s.linhas.length === 0)) {
+        janela.close()
+        showToast('Nenhum leito cadastrado nessa ala.', 'error')
+        return
+      }
+      janela.document.write(gerarHtmlPassometro(unidade, secoes))
+      janela.document.close()
+      janela.onafterprint = () => janela.close()
+      janela.focus()
+      janela.print()
+      setAberto(false)
+    } catch (err) {
+      janela.close()
+      showToast('Erro ao gerar passômetro: ' + (err instanceof Error ? err.message : String(err)), 'error')
+    } finally {
+      setGerando(false)
+    }
+  }
+
+  const handleBaixarXlsx = async () => {
+    setGerando(true)
+    try {
+      const secoes = await buscarSecoes()
       if (secoes.every(s => s.linhas.length === 0)) {
         showToast('Nenhum leito cadastrado nessa ala.', 'error')
         return
@@ -91,12 +126,21 @@ export default function PassometroButton({ unidade, showToast }: Props) {
           </div>
           <button
             type="button"
-            onClick={handleGerar}
+            onClick={handleImprimir}
             disabled={gerando}
             className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50
                        text-white text-sm font-bold px-3 py-2 rounded-lg transition-colors"
           >
-            {gerando ? 'Gerando...' : '📥 Gerar planilha'}
+            {gerando ? 'Gerando...' : '🖨️ Imprimir'}
+          </button>
+          <button
+            type="button"
+            onClick={handleBaixarXlsx}
+            disabled={gerando}
+            className="w-full bg-white hover:bg-slate-50 disabled:opacity-50 border border-slate-300
+                       text-slate-700 text-sm font-medium px-3 py-2 rounded-lg transition-colors"
+          >
+            📥 Baixar planilha (.xlsx)
           </button>
         </div>
       )}

@@ -36,6 +36,14 @@ export function podeEditarModulo(
   return modulo.exigeChefe ? c.nivel === 'chefe' : true
 }
 
+/** Alta (e a transferência interna UTI<->Hospital, que passa pelo mesmo
+ *  modal): só médico ou enfermeiro decidem a saída clínica do paciente —
+ *  fisioterapia e nutrição não. */
+export function podeDarAlta(cargo: Cargo | null | undefined): boolean {
+  const c = cargo ?? CARGO_PADRAO
+  return c.profissao === 'medico' || c.profissao === 'enfermeiro'
+}
+
 const LABEL_CARGO: Record<Profissao, Record<Cargo['nivel'], string>> = {
   medico:         { chefe: '🎖️ Médico Intensivista',   plantonista: '🩺 Médico Plantonista' },
   enfermeiro:     { chefe: '🎖️ Enfermeiro Chefe',      plantonista: '💉 Enfermeiro' },

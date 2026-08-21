@@ -7,7 +7,7 @@ import { fmtData, fmtDataHora, calcAge, pad, diasDesde, fmtNum, toTitleCaseNome,
 import { nomeDaAla, type Unidade } from '@/lib/unidade'
 import { modulosAtivos, type PacienteContext } from '@/lib/modules'
 import { montarEvolucaoDiaria } from '@/lib/evolucaoDiaria'
-import { podeEditarModulo } from '@/lib/cargos'
+import { podeEditarModulo, podeDarAlta } from '@/lib/cargos'
 import type { Paciente, Exame, PeriodoBalanco, SinalVital, ExameImagem, DVA, PeriodoHemodinamica, ATB, CuidadosHorizontais, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, FisioEvento, FisioAvaliacaoDiaria, Dispositivo, LppEvento, NutricaoAvaliacao, NutricaoDia, AuditoriaIntensivista, IrasEvento, IrasSepseChoque, SwabVigilancia, ToastData, Cargo, PeriodoUnidade, ResumoAlta } from '@/types'
 
 interface Props {
@@ -683,11 +683,13 @@ export default function PacienteModal({
                     🛏️ Finalizar Admissão
                   </button>
                 )}
-                <button onClick={() => setShowAlta(true)} disabled={loading}
-                  title={loading ? 'Aguarde o carregamento dos dados do paciente' : undefined}
-                  className="bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
-                  Alta
-                </button>
+                {podeDarAlta(cargo) && (
+                  <button onClick={() => setShowAlta(true)} disabled={loading}
+                    title={loading ? 'Aguarde o carregamento dos dados do paciente' : undefined}
+                    className="bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
+                    Alta
+                  </button>
+                )}
                 <button onClick={onClose}
                   className="text-white/70 hover:text-white w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/20 text-lg">
                   ✕
