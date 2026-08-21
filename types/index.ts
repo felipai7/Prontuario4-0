@@ -606,7 +606,7 @@ export interface ContagensFisioMes {
 
 // ── Enfermagem ───────────────────────────────────────────────────────────────
 
-export type TipoDispositivo = 'CVC' | 'SVD' | 'PAI' | 'CDL' | 'DRENO' | 'TOT' | 'TQT' | 'AVP' | 'CISTO' | 'OUTRO'
+export type TipoDispositivo = 'CVC' | 'SVD' | 'PAI' | 'CDL' | 'DRENO' | 'TOT' | 'TQT' | 'AVP' | 'CISTO' | 'GTT' | 'PICC' | 'OUTRO'
 
 export interface Dispositivo {
   id: string

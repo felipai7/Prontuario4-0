@@ -3,6 +3,7 @@ import ExcelJS from 'exceljs'
 import type { Ala, Unidade } from '@/lib/unidade'
 import { compararLeitos } from '@/lib/unidade'
 import { calcAge, diaAtualATB, calcDiurese24h, balancoDaUnidade } from '@/lib/utils'
+import { parseExameTimestamp } from '@/lib/exames/agrupamento'
 import type {
   Paciente, ATB, DVA, CuidadosHorizontais, Dispositivo, PeriodoBalanco,
   SinalVital, Exame, PendenciaIntensivista, RegistroIntensivista,
@@ -88,10 +89,17 @@ function porPacienteId<T extends { paciente_id: string }>(linhas: T[]): Map<stri
   return mapa
 }
 
-/** Exame mais recente primeiro — por data de coleta; sem data, usa o upload. */
-function ordenarExamesRecentes(exames: Exame[]): Exame[] {
-  return [...exames].sort((a, b) =>
-    new Date(b.data_exame ?? b.created_at).getTime() - new Date(a.data_exame ?? a.created_at).getTime())
+/**
+ * Exame mais recente primeiro — por data de coleta; sem data, usa o upload.
+ * `data_exame` é texto livre "DD/MM/AAAA" (ou com HH:MM) — `new Date()` direto
+ * nele interpretava como MM/DD (formato americano), embaralhando dia e mês ou
+ * retornando Invalid Date em qualquer dia > 12, e fazia o "mais recente"
+ * escolhido aqui — inclusive nas colunas de exames do passômetro — não ser o
+ * de fato mais recente. `parseExameTimestamp` é o mesmo parser já usado (e já
+ * correto) na aba de Exames Laboratoriais.
+ */
+export function ordenarExamesRecentes(exames: Exame[]): Exame[] {
+  return [...exames].sort((a, b) => parseExameTimestamp(b) - parseExameTimestamp(a))
 }
 
 // Só o valor, sem unidade (mmol, mg/dL...) — a coluna já deixa claro o que é
@@ -194,7 +202,7 @@ export async function buscarDadosPassometro(
     supabase.from('atbs').select('*').in('paciente_id', ids).eq('ativo', true),
     supabase.from('dvas').select('*').in('paciente_id', ids).eq('ativo', true),
     supabase.from('cuidados_horizontais').select('*').in('paciente_id', ids),
-    supabase.from('dispositivos').select('*').in('paciente_id', ids).is('data_remocao', null).in('tipo', ['AVP', 'CVC', 'PAI', 'CDL', 'SVD', 'CISTO']),
+    supabase.from('dispositivos').select('*').in('paciente_id', ids).is('data_remocao', null).in('tipo', ['AVP', 'PICC', 'CVC', 'PAI', 'CDL', 'SVD', 'CISTO']),
     supabase.from('periodos_balanco').select('*').in('paciente_id', ids).order('inicio', { ascending: false }),
     supabase.from('sinais_vitais').select('*').in('paciente_id', ids).order('horario', { ascending: false }),
     supabase.from('exames').select('*').in('paciente_id', ids),
@@ -240,7 +248,7 @@ export async function buscarDadosPassometro(
     const temSVD   = dispositivos.some(d => d.tipo === 'SVD')
     const temCisto = dispositivos.some(d => d.tipo === 'CISTO')
     const viaDiurese = temSVD ? 'SVD' : temCisto ? 'Cistostomia' : 'Espontânea'
-    const acessoVascular = dispositivos.filter(d => d.tipo === 'AVP' || d.tipo === 'CVC' || d.tipo === 'PAI' || d.tipo === 'CDL')
+    const acessoVascular = dispositivos.filter(d => d.tipo === 'AVP' || d.tipo === 'PICC' || d.tipo === 'CVC' || d.tipo === 'PAI' || d.tipo === 'CDL')
 
     const labs: Record<string, string> = {}
     for (const a of ANALITOS_LABS) labs[a.key] = valorLabsMaisRecente(examesOrd, a.ids)

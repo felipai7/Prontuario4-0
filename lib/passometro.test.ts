@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { gerarPlanilhaPassometro, gerarHtmlPassometro, agruparPorAla, type LinhaPassometro, type SecaoPassometro } from '@/lib/passometro'
+import { gerarPlanilhaPassometro, gerarHtmlPassometro, agruparPorAla, ordenarExamesRecentes, type LinhaPassometro, type SecaoPassometro } from '@/lib/passometro'
 import type { Unidade } from '@/lib/unidade'
+import type { Exame } from '@/types'
 
 function linhaFake(overrides: Partial<LinhaPassometro> = {}): LinhaPassometro {
   return {
@@ -133,5 +134,42 @@ describe('agruparPorAla', () => {
     const alas = [...unidadeFake.alas, { id: 'ala-rot', nome: 'Rotativo', leitos: ['R1'], rotativo: true }]
     const secoes = agruparPorAla(alas, [linhaFake({ leito: '1' })])
     expect(secoes.map(s => s.ala.id)).toEqual(['ala-1'])
+  })
+})
+
+function exameFake(overrides: Partial<Exame> = {}): Exame {
+  return {
+    id: 'ex-1', paciente_id: 'p1', tipo_exame: 'Bioquímica', resultados: null,
+    observacoes: null, raw_text: null, nome_arquivo: null,
+    data_exame: null, created_at: '2026-08-01T00:00:00Z',
+    ...overrides,
+  }
+}
+
+/**
+ * `data_exame` é "DD/MM/AAAA" — `new Date()` direto nele confunde dia com mês
+ * (formato americano) e devolve Invalid Date sempre que o dia é > 12,
+ * fazendo o "mais recente" escolhido não ser o de fato mais recente (era o
+ * bug por trás dos valores desatualizados no passômetro).
+ */
+describe('ordenarExamesRecentes', () => {
+  it('coloca o exame mais recente primeiro mesmo com dia > 12 (que quebraria new Date direto)', () => {
+    const antigo = exameFake({ id: 'antigo', data_exame: '05/08/2026' })
+    const recente = exameFake({ id: 'recente', data_exame: '20/08/2026' })
+    expect(ordenarExamesRecentes([antigo, recente]).map(e => e.id)).toEqual(['recente', 'antigo'])
+  })
+
+  it('não inverte dia e mês em datas ambíguas (05/08 é 5 de agosto, não 8 de maio)', () => {
+    const cincoDeAgosto = exameFake({ id: 'ago', data_exame: '05/08/2026' })
+    const primeiroDeMaio = exameFake({ id: 'mai', data_exame: '01/05/2026' })
+    // Maio vem antes de agosto — se o parser trocasse dia/mês, "05/08" viraria
+    // 8 de maio e ficaria DEPOIS de "01/05" (1º de maio) na ordenação.
+    expect(ordenarExamesRecentes([primeiroDeMaio, cincoDeAgosto]).map(e => e.id)).toEqual(['ago', 'mai'])
+  })
+
+  it('sem data_exame, cai para created_at', () => {
+    const semData = exameFake({ id: 'sem-data', data_exame: null, created_at: '2026-08-10T00:00:00Z' })
+    const comData = exameFake({ id: 'com-data', data_exame: '01/08/2026' })
+    expect(ordenarExamesRecentes([comData, semData]).map(e => e.id)).toEqual(['sem-data', 'com-data'])
   })
 })

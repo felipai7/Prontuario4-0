@@ -18,37 +18,41 @@ interface Props {
   showToast: (msg: string, tipo?: ToastData['tipo']) => void
 }
 
+// Ícones revisados pra cada um ter uma associação clínica própria — antes
+// AVP/CVC dividiam 💉 e SVD/CISTO dividiam 🩺, sem nada distinguir um do outro.
 const TIPOS: { id: TipoDispositivo; label: string; emoji: string }[] = [
   { id: 'AVP',   label: 'Acesso venoso periférico',           emoji: '💉' },
-  { id: 'CVC',   label: 'Cateter venoso central',            emoji: '💉' },
-  { id: 'SVD',   label: 'Sonda vesical de demora',            emoji: '🩺' },
-  { id: 'CISTO', label: 'Cistostomia',                        emoji: '🩺' },
-  { id: 'PAI',   label: 'Cateter de pressão arterial invasiva', emoji: '🩸' },
-  { id: 'CDL',   label: 'Cateter de diálise',                 emoji: '🧪' },
-  { id: 'DRENO', label: 'Dreno',                              emoji: '🧫' },
-  { id: 'TOT',   label: 'Tubo orotraqueal',                   emoji: '🫁' },
-  { id: 'TQT',   label: 'Traqueostomia',                      emoji: '🫀' },
+  { id: 'PICC',  label: 'Cateter central de inserção periférica', emoji: '💪' },
+  { id: 'CVC',   label: 'Cateter venoso central',             emoji: '🫀' },
+  { id: 'SVD',   label: 'Sonda vesical de demora',            emoji: '🚽' },
+  { id: 'CISTO', label: 'Cistostomia',                        emoji: '💧' },
+  { id: 'PAI',   label: 'Cateter de pressão arterial invasiva', emoji: '📈' },
+  { id: 'CDL',   label: 'Cateter de diálise',                 emoji: '🩸' },
+  { id: 'DRENO', label: 'Dreno',                              emoji: '🪣' },
+  { id: 'GTT',   label: 'Gastrostomia',                       emoji: '🍽️' },
+  { id: 'TOT',   label: 'Tubo orotraqueal',                   emoji: '🌬️' },
+  { id: 'TQT',   label: 'Traqueostomia',                      emoji: '🫁' },
   { id: 'OUTRO', label: 'Outro dispositivo',                  emoji: '🔧' },
 ]
 
-// CVC/DRENO/OUTRO podem ter mais de um simultâneo (múltiplos sítios/drenos ao
-// mesmo tempo é rotina). SVD/PAI/CDL/TOT/TQT ficam travados a 1 por vez —
-// clinicamente não há cenário de duas vias aéreas ao mesmo tempo (TOT vira
-// TQT, não soma); ainda dá pra trocar no mesmo dia (retira e insere de novo),
-// só não acumular dois "instalados".
-const PERMITE_MULTIPLOS = new Set<TipoDispositivo>(['CVC', 'DRENO', 'AVP', 'OUTRO'])
+// CVC/PICC/DRENO/OUTRO podem ter mais de um simultâneo (múltiplos sítios/
+// lumens/drenos ao mesmo tempo é rotina). SVD/PAI/CDL/GTT/TOT/TQT ficam
+// travados a 1 por vez — clinicamente não há cenário de duas vias aéreas ao
+// mesmo tempo (TOT vira TQT, não soma); ainda dá pra trocar no mesmo dia
+// (retira e insere de novo), só não acumular dois "instalados".
+const PERMITE_MULTIPLOS = new Set<TipoDispositivo>(['CVC', 'PICC', 'DRENO', 'AVP', 'OUTRO'])
 
-// Sítio de inserção (CVC/PAI/CDL/AVP) é opcional; descrição de DRENO/OUTRO é o
-// que dá sentido ao registro, por isso obrigatória.
+// Sítio de inserção (CVC/PICC/PAI/CDL/AVP) é opcional; descrição de
+// DRENO/OUTRO é o que dá sentido ao registro, por isso obrigatória.
 const OBS_OBRIGATORIA = new Set<TipoDispositivo>(['DRENO', 'OUTRO'])
 const OBS_LABEL: Record<TipoDispositivo, string> = {
-  AVP: 'Sítio de inserção', CVC: 'Sítio de inserção', SVD: 'Observação', CISTO: 'Observação', PAI: 'Sítio de inserção',
-  CDL: 'Sítio de inserção', DRENO: 'Qual dreno e onde está inserido',
+  AVP: 'Sítio de inserção', PICC: 'Sítio de inserção', CVC: 'Sítio de inserção', SVD: 'Observação', CISTO: 'Observação', PAI: 'Sítio de inserção',
+  CDL: 'Sítio de inserção', DRENO: 'Qual dreno e onde está inserido', GTT: 'Observação',
   TOT: 'Observação (nº, fixação)', TQT: 'Observação', OUTRO: 'Descrição',
 }
 const OBS_PLACEHOLDER: Record<TipoDispositivo, string> = {
-  AVP: 'Ex: dorso da mão direita', CVC: 'Ex: jugular direita', SVD: '', CISTO: '', PAI: 'Ex: radial esquerda',
-  CDL: 'Ex: femoral direita', DRENO: 'Ex: Penrose em flanco direito',
+  AVP: 'Ex: dorso da mão direita', PICC: 'Ex: basílica direita', CVC: 'Ex: jugular direita', SVD: '', CISTO: '', PAI: 'Ex: radial esquerda',
+  CDL: 'Ex: femoral direita', DRENO: 'Ex: Penrose em flanco direito', GTT: '',
   TOT: 'Ex: nº 7,5, fixado em 22cm', TQT: '', OUTRO: 'Descreva o dispositivo',
 }
 

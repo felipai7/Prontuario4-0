@@ -256,10 +256,11 @@ export const MODULOS: readonly ModuloDef[] = [
     id: 'enfermagem',
     label: '💉 Enfermagem',
     profissaoDona: 'enfermeiro',
-    // Balanço e Sinais Vitais entram porque já são preenchidos pela enfermagem
-    // na prática; o dono deles continua sendo o módulo médico, então aqui
+    // Balanço, Sinais Vitais e Exames Laboratoriais entram porque já são
+    // consultados (e os dois primeiros preenchidos) pela enfermagem na
+    // prática; o dono deles continua sendo o módulo médico, então aqui
     // aparecem em leitura até decidirmos mover o registro.
-    tabs: [pendenciasOrientacoes, enfermagem, balanco, sinais],
+    tabs: [pendenciasOrientacoes, enfermagem, balanco, sinais, examesLab],
   },
   {
     id: 'nutricao',
