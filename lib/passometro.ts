@@ -52,12 +52,16 @@ export interface LinhaPassometro {
   viaDiurese: string
   acesso: string
   hgt: string
+  /** Mín–máx das últimas 24h (não uma aferição isolada). */
   temp: string
-  /** Classificação rápida da última PA/FC — "↑ hipertenso", "→ normal" etc.,
-   *  pedido do Felipe: "resumo visual... pra já saber quem tá taqui ou
-   *  bradicárdico, hipo ou hipertenso" — não é o valor bruto, é a leitura. */
-  paTendencia: string
-  fcTendencia: string
+  /** Livre — o Felipe preenche à mão a via respiratória/ventilatória atual. */
+  respiracao: string
+  /** Min-méd-máx das últimas 24h, já com o rótulo embutido ("FC 72-85-98"),
+   *  substituindo a antiga classificação por seta ("↑ taquicárdico" etc.) —
+   *  pedido do Felipe: números direto, não mais nomenclatura de tendência. */
+  fcResumo: string
+  pasResumo: string
+  padResumo: string
   evac: string
   /** >= 3 dias sem evacuar (ou nunca desde a admissão, se já faz 3+ dias) —
    *  destaca a célula em vermelho no Excel. */
@@ -70,6 +74,8 @@ export interface LinhaPassometro {
    *  fala sobre IBP... a de baixo sobre anticoagulantes". */
   ibp: string
   anticoag: string
+  /** Negrito na linha de anticoagulante quando é terapêutico (não profilático). */
+  anticoagTerapeutico: boolean
   labs: Record<string, string>
   pendencias: string
   previsaoAlta: string
@@ -128,43 +134,67 @@ function dataCurta(dataISO: string): string {
   return `${dia}/${mes}`
 }
 
-function classificarPA(s: SinalVital | undefined): string {
-  if (!s) return ''
-  if ((s.pas != null && s.pas < 90) || (s.pam != null && s.pam < 65)) return '↓ hipotenso'
-  if ((s.pas != null && s.pas > 140) || (s.pad != null && s.pad > 90)) return '↑ hipertenso'
-  if (s.pas == null && s.pam == null) return ''
-  return '→ normal'
+const JANELA_24H_MS = 24 * 3_600_000
+
+/** Só as aferições dentro das últimas 24h — usado por Temp./FC/PAS/PAD, que
+ *  agora mostram a faixa do dia, não uma aferição isolada. */
+function sinaisUltimas24h(sinais: SinalVital[]): SinalVital[] {
+  const limite = Date.now() - JANELA_24H_MS
+  return sinais.filter(s => new Date(s.horario).getTime() >= limite)
 }
 
-function classificarFC(s: SinalVital | undefined): string {
-  if (!s || s.fc == null) return ''
-  if (s.fc < 60) return '↓ bradicárdico'
-  if (s.fc > 100) return '↑ taquicárdico'
-  return '→ normal'
+function fmtDecimal(v: number): string {
+  return v.toFixed(1).replace('.', ',')
+}
+
+/** "36,1–37,8" (ou só "36,5" se só houve 1 aferição); "" sem nenhuma. */
+export function faixaMinMax(valores: number[]): string {
+  if (valores.length === 0) return ''
+  const min = Math.min(...valores), max = Math.max(...valores)
+  return min === max ? fmtDecimal(min) : `${fmtDecimal(min)}–${fmtDecimal(max)}`
+}
+
+/** "72-85-98" (mín-méd-máx, arredondado); "" sem nenhuma aferição. */
+export function faixaMinMedMax(valores: number[]): string {
+  if (valores.length === 0) return ''
+  const min = Math.min(...valores), max = Math.max(...valores)
+  if (min === max) return String(min)
+  const med = Math.round(valores.reduce((a, b) => a + b, 0) / valores.length)
+  return `${min}-${med}-${max}`
 }
 
 const DIAS_CONSTIPACAO = 3
+/** Cada episódio de evacuação lançado no Balanço equivale a 200mL — o campo
+ *  Evacuação guarda volume, não contagem; dividir por isso é o que dá o
+ *  número de episódios do dia. */
+const ML_POR_EPISODIO_EVACUACAO = 200
 
 /**
- * Quantas vezes e em que dia o paciente evacuou pela última vez — soma por
- * DIA (um período diurno + um noturno do mesmo dia contam juntos), marca
- * diarreica se algum período daquele dia foi flagado, e sinaliza
- * constipação (>= 3 dias sem evacuar, contando da admissão se nunca
+ * Quantas vezes (episódios) e em que dia o paciente evacuou pela última
+ * vez — soma por DIA (um período diurno + um noturno do mesmo dia contam
+ * juntos), marca diarreica se algum período daquele dia foi flagado, e
+ * sinaliza constipação (>= 3 dias sem evacuar, contando da admissão se nunca
  * evacuou) pro destaque visual na planilha.
+ *
+ * Débito de ostomia conta como evacuação pra todos esses efeitos (quem tem
+ * ostomia não evacua pelo reto) — mas, diferente do campo Evacuação, o
+ * volume da ostomia É mostrado (não convertido em episódios): o pedido foi
+ * "mostrar o volume apenas quando for proveniente de ostomia".
  */
-function ultimaEvacuacao(periodos: PeriodoBalanco[], dataInternacao: string): { texto: string; constipado: boolean } {
-  const porDia = new Map<string, { qtd: number; diarreica: boolean; data: Date }>()
+export function ultimaEvacuacao(periodos: PeriodoBalanco[], dataInternacao: string): { texto: string; constipado: boolean } {
+  const porDia = new Map<string, { episodios: number; volumeOstomia: number; diarreica: boolean; data: Date }>()
   for (const p of periodos) {
     const data = new Date(p.inicio)
     const chave = data.toDateString()
-    const atual = porDia.get(chave) ?? { qtd: 0, diarreica: false, data }
-    // Débito de ostomia conta como evacuação (quem tem ostomia não evacua
-    // pelo reto) — soma como +1 evento no dia, além do que já veio em evacuacao.
-    atual.qtd += p.evacuacao + (p.ostomia > 0 ? 1 : 0)
+    const atual = porDia.get(chave) ?? { episodios: 0, volumeOstomia: 0, diarreica: false, data }
+    if (p.evacuacao > 0) atual.episodios += Math.round(p.evacuacao / ML_POR_EPISODIO_EVACUACAO)
+    if (p.ostomia > 0) atual.volumeOstomia += p.ostomia
     if (p.diarreica_medico || p.diarreica_nutricao) atual.diarreica = true
     porDia.set(chave, atual)
   }
-  const diasComEvac = [...porDia.values()].filter(d => d.qtd > 0).sort((a, b) => b.data.getTime() - a.data.getTime())
+  const diasComEvac = [...porDia.values()]
+    .filter(d => d.episodios > 0 || d.volumeOstomia > 0)
+    .sort((a, b) => b.data.getTime() - a.data.getTime())
   const diasDesde = (data: Date) => Math.floor((Date.now() - data.getTime()) / 86400000)
 
   if (diasComEvac.length === 0) {
@@ -175,17 +205,54 @@ function ultimaEvacuacao(periodos: PeriodoBalanco[], dataInternacao: string): { 
   // Formata pela data LOCAL do Date (não toISOString, que é UTC e pode
   // virar o dia perto da meia-noite num fuso atrás de UTC como o nosso).
   const dataLocal = `${String(ultimo.data.getDate()).padStart(2, '0')}/${String(ultimo.data.getMonth() + 1).padStart(2, '0')}`
-  const texto = `${ultimo.qtd}x ${dataLocal}${ultimo.diarreica ? ' - diarreica' : ''}`
+  const partes: string[] = []
+  if (ultimo.episodios > 0) partes.push(`${ultimo.episodios}x`)
+  if (ultimo.volumeOstomia > 0) partes.push(`${ultimo.volumeOstomia}mL (ostomia)`)
+  const texto = `${partes.join(' + ')} ${dataLocal}${ultimo.diarreica ? ' - diarreica' : ''}`
   return { texto, constipado: diasDesde(ultimo.data) >= DIAS_CONSTIPACAO }
 }
 
-/** Formata "Enoxaparina 40mg 12/12h (terapêutico)" só com o que existir —
- *  profilático fica sem sufixo, igual ao "Enoxa 40" dela pra profilaxia. */
-function formatarPosologia(droga: string, doseValor: number | null, doseUnidade: string | null,
-  objetivo: 'profilatico' | 'terapeutico' | null, frequencia: string | null): string {
-  const dose = doseValor != null ? ` ${doseValor}${doseUnidade ?? ''}` : ''
-  const terapeutico = objetivo === 'terapeutico' ? ` ${frequencia ?? ''} (terapêutico)`.trimEnd() : ''
-  return `${droga}${dose}${terapeutico}`.trim()
+// "1x/dia" não aparece (é o padrão, não precisa dizer) — qualquer outra
+// frequência aparece, abreviada quando possível ("2x/dia" -> "2x").
+function frequenciaDestaque(frequencia: string | null): string {
+  if (!frequencia) return ''
+  const norm = frequencia.trim()
+  if (norm === '' || norm === '1x/dia') return ''
+  const match = /^(\d+)x\/dia$/i.exec(norm)
+  return match ? `${match[1]}x` : norm
+}
+
+const VIA_ABREVIADA: Record<string, string> = { Enteral: 'VO', Endovenoso: 'EV', Subcutâneo: 'SC' }
+
+/** "Pant 40mg VO" ou "Pant 40mg EV 2x" — a única droga que a aba de Cuidados
+ *  Horizontais permite pra IBP hoje é Pantoprazol (não há campo de escolha
+ *  de droga), daí "Pant" fixo. */
+export function formatarIbp(cuidados: CuidadosHorizontais | null): string {
+  if (!cuidados?.ibp_em_uso) return ''
+  const via = cuidados.ibp_via ? (VIA_ABREVIADA[cuidados.ibp_via] ?? cuidados.ibp_via) : ''
+  const dose = cuidados.ibp_dose_valor != null ? `${cuidados.ibp_dose_valor}${cuidados.ibp_dose_unidade ?? ''}` : ''
+  const freq = frequenciaDestaque(cuidados.ibp_frequencia)
+  return ['Pant', dose, via, freq].filter(Boolean).join(' ')
+}
+
+const DROGA_ANTICOAG_ABREVIADA: Record<string, string> = {
+  'Enoxaparina': 'Enoxa',
+  'Heparina Não Fracionada': 'HNF',
+  'Apixabana': 'Apixa',
+  'Rivaroxabana': 'Rivaroxa',
+}
+
+/** "Enoxa 40mg" ou "Rivaroxa 2,5mg 2x" — negrito (via `anticoagTerapeutico`
+ *  em LinhaPassometro) fica a cargo de quem monta a coluna, não deste texto. */
+export function formatarAnticoag(cuidados: CuidadosHorizontais | null): string {
+  if (!cuidados?.anticoag_em_uso) return ''
+  const drogaBase = cuidados.anticoag_droga === 'Outro'
+    ? (cuidados.anticoag_droga_outro ?? 'Outro')
+    : (cuidados.anticoag_droga ?? '')
+  const droga = DROGA_ANTICOAG_ABREVIADA[drogaBase] ?? drogaBase
+  const dose = cuidados.anticoag_dose_valor != null ? `${cuidados.anticoag_dose_valor}${cuidados.anticoag_dose_unidade ?? ''}` : ''
+  const freq = frequenciaDestaque(cuidados.anticoag_frequencia)
+  return [droga, dose, freq].filter(Boolean).join(' ')
 }
 
 export async function buscarDadosPassometro(
@@ -229,18 +296,19 @@ export async function buscarDadosPassometro(
     const pendencias     = pendPorPac.get(paciente.id) ?? []
     const orientacao     = (regPorPac.get(paciente.id) ?? [])[0]?.orientacoes_condutas ?? ''
 
-    // Temp.: diurno/noturno separados (2 aferições por turno, não só a mais
-    // recente geral). HGT é diferente — ela anota TODAS as aferições
-    // disponíveis no dia, não uma por turno (pode ser 2, pode ser mais).
-    const tempDiurno  = sinaisRecente.find(s => s.turno === 'diurno' && s.temperatura != null)
-    const tempNoturno = sinaisRecente.find(s => s.turno === 'noturno' && s.temperatura != null)
+    // Temp./FC/PAS/PAD: faixa (mín-méd-máx) das últimas 24h, não uma
+    // aferição isolada. HGT é diferente — ela anota TODAS as aferições
+    // disponíveis no dia, não uma janela de 24h corridas.
+    const sinais24h = sinaisUltimas24h(sinaisRecente)
+    const temps24h  = sinais24h.map(s => s.temperatura).filter((v): v is number => v != null)
+    const fcs24h    = sinais24h.map(s => s.fc).filter((v): v is number => v != null)
+    const pas24h    = sinais24h.map(s => s.pas).filter((v): v is number => v != null)
+    const pad24h    = sinais24h.map(s => s.pad).filter((v): v is number => v != null)
     const hoje = new Date().toDateString()
     const hgtHoje = sinaisRecente
       .filter(s => s.hgt != null && new Date(s.horario).toDateString() === hoje)
       .sort((a, b) => new Date(a.horario).getTime() - new Date(b.horario).getTime())
       .map(s => s.hgt)
-    const ultimoComPA = sinaisRecente.find(s => s.pas != null || s.pam != null)
-    const ultimoComFc = sinaisRecente.find(s => s.fc != null)
     const diurese    = calcDiurese24h(periodos)
     const taxaDiurese = diurese.horas > 0 && paciente.peso_kg
       ? `${(diurese.total / paciente.peso_kg / diurese.horas).toFixed(2).replace('.', ',')}mL/Kg/h` : ''
@@ -266,23 +334,20 @@ export async function buscarDadosPassometro(
       viaDiurese,
       acesso: acessoVascular.map(d => d.observacao ? `${d.tipo} (${d.observacao})` : d.tipo).join('; '),
       hgt: hgtHoje.join('/'),
-      temp: [tempDiurno?.temperatura, tempNoturno?.temperatura].filter(v => v != null).join(' / '),
-      paTendencia: classificarPA(ultimoComPA),
-      fcTendencia: classificarFC(ultimoComFc),
+      temp: faixaMinMax(temps24h),
+      respiracao: '',
+      fcResumo: fcs24h.length > 0 ? `FC ${faixaMinMedMax(fcs24h)}` : '',
+      pasResumo: pas24h.length > 0 ? `PAS ${faixaMinMedMax(pas24h)}` : '',
+      padResumo: pad24h.length > 0 ? `PAD ${faixaMinMedMax(pad24h)}` : '',
       evac: evacTexto,
       evacConstipado,
       antimicrobiano: (atbsPorPac.get(paciente.id) ?? [])
         .map(a => `${a.droga} (D${diaAtualATB(a)}${a.dias_previstos != null ? `/${a.dias_previstos}` : ''})`).join(' · '),
       dva: (dvasPorPac.get(paciente.id) ?? []).map(d => `${d.droga} ${d.fluxo_ml_h} mL/h`).join(' · '),
       corticoide: cuidados?.corticoide_em_uso ? 'Sim' : '',
-      ibp: cuidados?.ibp_em_uso
-        ? `IBP${cuidados.ibp_via ? ' ' + cuidados.ibp_via : ''}${cuidados.ibp_objetivo === 'terapeutico' ? ` ${cuidados.ibp_frequencia ?? ''} (terapêutico)`.trimEnd() : ''}`
-        : '',
-      anticoag: cuidados?.anticoag_em_uso
-        ? formatarPosologia(
-            cuidados.anticoag_droga === 'Outro' ? (cuidados.anticoag_droga_outro ?? 'Outro') : (cuidados.anticoag_droga ?? ''),
-            cuidados.anticoag_dose_valor, cuidados.anticoag_dose_unidade, cuidados.anticoag_objetivo, cuidados.anticoag_frequencia)
-        : '',
+      ibp: formatarIbp(cuidados),
+      anticoag: formatarAnticoag(cuidados),
+      anticoagTerapeutico: cuidados?.anticoag_em_uso === true && cuidados.anticoag_objetivo === 'terapeutico',
       labs,
       pendencias: [...pendencias.map(p => p.texto), orientacao].filter(Boolean).join(' · '),
       previsaoAlta: cuidados?.previsao_alta ? dataCurta(cuidados.previsao_alta) : '',
@@ -294,9 +359,9 @@ export async function buscarDadosPassometro(
 function linhaVazia(alaId: string, leito: string): LinhaPassometro {
   return {
     alaId, vazio: true, leito, nomeCurto: '', idade: '', admissao: '', hd: '', peso: '', diurese: '',
-    viaDiurese: '', acesso: '', hgt: '', temp: '', paTendencia: '', fcTendencia: '', evac: '',
-    evacConstipado: false, antimicrobiano: '', dva: '', corticoide: '', ibp: '', anticoag: '',
-    labs: {}, pendencias: '', previsaoAlta: '',
+    viaDiurese: '', acesso: '', hgt: '', temp: '', respiracao: '', fcResumo: '', pasResumo: '', padResumo: '',
+    evac: '', evacConstipado: false, antimicrobiano: '', dva: '', corticoide: '', ibp: '', anticoag: '',
+    anticoagTerapeutico: false, labs: {}, pendencias: '', previsaoAlta: '',
   }
 }
 
@@ -321,20 +386,27 @@ export function agruparPorAla(alas: Ala[], linhasPacientes: LinhaPassometro[]): 
 
 // Cada paciente ocupa 2 linhas físicas da planilha — igual ao papel do
 // Felipe. A maioria das colunas mescla as duas (1 valor só, possivelmente em
-// várias linhas de texto dentro da célula mesclada); as 4 colunas que
-// sempre têm 2 itens distintos por paciente (psicotrópico/analgesia,
-// DVA/corticoide, IBP/anticoagulante, anti-HAS/controle de FC) NÃO mesclam:
+// várias linhas de texto dentro da célula mesclada); as colunas que sempre
+// têm 2 itens distintos por paciente (Acesso/Insulina, Temp./Respiração,
+// psicotrópico/analgesia, DVA/corticoide, IBP/anticoagulante) NÃO mesclam:
 // `texto` cai na 1ª linha física, `texto2` na 2ª — cada item na própria
-// linha, sem espremer os dois num \n só.
+// linha, sem espremer os dois num \n só. O cabeçalho segue o mesmo padrão da
+// coluna (`label`/`label2`) — ver montagem do cabeçalho mais abaixo.
 interface Coluna {
   label: string
+  /** Rótulo da 2ª linha física do cabeçalho — só usado (e só faz sentido)
+   *  quando a coluna tem `texto2`. */
+  label2?: string
   width: number
   texto: (l: LinhaPassometro) => string
   texto2?: (l: LinhaPassometro) => string
-  /** Sobrepõe a fonte padrão da célula — pra destacar algo condicionalmente
-   *  (Evac. em constipação) ou dar mais espaço a um campo central (Nome).
-   *  `null` = mantém a fonte padrão daquela linha. */
+  /** Sobrepõe a fonte padrão da célula da 1ª linha física (`texto`) — pra
+   *  destacar algo condicionalmente (Evac. em constipação) ou dar mais
+   *  espaço a um campo central (Nome, Leito). `null` = fonte padrão. */
   fonte?: (l: LinhaPassometro) => Partial<ExcelJS.Font> | null
+  /** Mesma ideia, pra 2ª linha física (`texto2`) — independente de `fonte`
+   *  (ex.: negrito só na linha de anticoagulante terapêutico, não na de IBP). */
+  fonte2?: (l: LinhaPassometro) => Partial<ExcelJS.Font> | null
   /** Colunas com o mesmo `grupoCabecalho` mesclam o CABEÇALHO num título só
    *  (as células de dado continuam separadas) — usado nos 3 blocos de
    *  exames, que sozinhos cortavam o nome de cada marcador. */
@@ -344,7 +416,10 @@ interface Coluna {
 const labs = (l: LinhaPassometro, ...keys: string[]) => keys.map(k => l.labs[k] || '').join('/')
 
 const COLUNAS: Coluna[] = [
-  { label: 'Leito', width: 5, texto: l => l.leito },
+  // Leito é o dado mais consultado num relance — fonte bem maior que o resto
+  // da tabela, sem problema ficar desigual (pedido do Felipe: "prefiro ocupe
+  // mais espaço" a espremer o número num quadrado grande e vazio).
+  { label: 'Leito', width: 7, texto: l => l.leito, fonte: () => ({ size: 20, bold: true }) },
   {
     label: 'Nome/Idade\nAdmissão', width: 15, texto: l => `${l.nomeCurto}\n${l.idade}\n${l.admissao}`,
     fonte: () => ({ size: 9 }),
@@ -352,24 +427,39 @@ const COLUNAS: Coluna[] = [
   { label: 'Diagnóstico', width: 13, texto: l => l.hd },
   { label: 'Peso\nDiurese\nVia', width: 12, texto: l => `${l.peso}\n${l.diurese}\n${l.viaDiurese}` },
   // 2 linhas físicas: de cima o tipo de acesso vem automático (dispositivos
-  // ativos — AVP/CVC/PAI/CDL), hidratação fica pra completar à mão na mesma
-  // linha; de baixo já vem o roteiro de insulina pré-impresso, igual à
-  // planilha em branco que o Felipe mandou como modelo.
-  { label: 'Acesso/Hidrat./Insulina', width: 15, texto: l => l.acesso, texto2: () => 'NPH:      REG:      SOS:' },
-  { label: 'Dieta\nHGT', width: 9, texto: l => `\n${l.hgt}` },
-  { label: 'Temp.', width: 8, texto: l => l.temp },
+  // ativos — AVP/PICC/CVC/PAI/CDL), hidratação fica pra completar à mão na
+  // mesma linha; de baixo já vem o roteiro de insulina pré-impresso, um item
+  // por linha de escrita — igual à planilha em branco que o Felipe mandou.
   {
+    label: 'Acesso/Hidrat.', label2: 'Insulina', width: 15,
+    texto: l => l.acesso, texto2: () => 'NPH:\nREG:\nSOS:',
+  },
+  { label: 'Dieta\nHGT', width: 9, texto: l => `\n${l.hgt}` },
+  // 2 linhas físicas: Temp. vem automática (mín–máx das últimas 24h);
+  // Respiração fica em branco pra completar à mão a via respiratória/
+  // ventilatória atual — não é um dado que o app capta hoje.
+  { label: 'Temp.', label2: 'Respiração', width: 8, texto: l => l.temp, texto2: () => '' },
+  {
+    // Só negrito, sem cor — a impressora é preto e branco, cor não imprime
+    // como sinal (pedido do Felipe).
     label: 'Evac.', width: 10, texto: l => l.evac,
-    fonte: l => l.evacConstipado ? { bold: true, color: { argb: 'FFDC2626' } } : null,
+    fonte: l => l.evacConstipado ? { bold: true } : null,
   },
   { label: 'Antimicrob.', width: 13, texto: l => l.antimicrobiano },
   // Em branco de propósito nas duas linhas — psicotrópico/analgesia e o nome
   // do anti-hipertensivo vêm de texto livre (Medicações de Uso Contínuo),
   // que o Felipe pediu pra NÃO importar: "deixe em branco, não importe das MUC".
-  { label: 'Psicotróp./Analgesia', width: 10, texto: () => '', texto2: () => '' },
-  { label: 'DVA/Corticoide', width: 11, texto: l => l.dva, texto2: l => l.corticoide },
-  { label: 'IBP/Anticoag.', width: 12, texto: l => l.ibp, texto2: l => l.anticoag },
-  { label: 'Anti-HAS/FC', width: 11, texto: l => `PA ${l.paTendencia}`, texto2: l => `FC ${l.fcTendencia}` },
+  { label: 'Psicotróp.', label2: 'Analgesia', width: 10, texto: () => '', texto2: () => '' },
+  { label: 'DVA', label2: 'Corticoide', width: 11, texto: l => l.dva, texto2: l => l.corticoide },
+  {
+    label: 'IBP', label2: 'Anticoag.', width: 12, texto: l => l.ibp, texto2: l => l.anticoag,
+    fonte2: l => l.anticoagTerapeutico ? { bold: true } : null,
+  },
+  // Substitui a antiga classificação por seta ("↑ taquicárdico" etc.) por
+  // números direto — mín-méd-máx das últimas 24h de cada um, pedido do
+  // Felipe. Mesclada (não texto2): os 3 valores são 1 bloco só por paciente,
+  // igual ao padrão de Peso/Diurese/Via.
+  { label: 'FC / PAS / PAD\n(mín-méd-máx)', width: 15, texto: l => `${l.fcResumo}\n${l.pasResumo}\n${l.padResumo}` },
   // Nome do exame repetido em cada linha do valor (não só no cabeçalho) —
   // pedido do Felipe: rolando a planilha pra baixo, o cabeçalho já ficou
   // longe e a coluna sozinha não deixava claro o que era cada número. As 3
@@ -380,13 +470,18 @@ const COLUNAS: Coluna[] = [
   { label: '', width: 11, grupoCabecalho: 'Últimos Exames Laboratoriais', texto: l => `Ur: ${labs(l, 'ureia')}\nCreat: ${labs(l, 'creat')}\nNa: ${labs(l, 'na')}\nK: ${labs(l, 'k')}\nMg: ${labs(l, 'mg')}` },
   { label: '', width: 11, grupoCabecalho: 'Últimos Exames Laboratoriais', texto: l => `pH: ${labs(l, 'ph')}\nHCO3: ${labs(l, 'bic')}\npCO2: ${labs(l, 'pco2')}\npO2: ${labs(l, 'po2')}\nCai: ${labs(l, 'ca')}` },
   { label: 'Programações / Pendências / Condutas / Lembretes', width: 22, texto: l => l.pendencias },
-  { label: 'Previsão de Alta', width: 8, texto: l => l.previsaoAlta },
+  // Data crítica pra decisão do dia — fonte bem maior, mesmo raciocínio do Leito.
+  { label: 'Previsão de Alta', width: 10, texto: l => l.previsaoAlta, fonte: () => ({ size: 16, bold: true }) },
 ]
 
 const COR_GRUPO = 'FFEEF2FF'
 const COR_LABEL = 'FFF1F5F9'
 const COR_BORDA = { style: 'thin' as const, color: { argb: 'FFCBD5E1' } }
 const BORDA_FINA = { top: COR_BORDA, left: COR_BORDA, bottom: COR_BORDA, right: COR_BORDA }
+// Borda de baixo mais espessa que separa um paciente do próximo — pedido do
+// Felipe pra ficar mais fácil de ver onde um leito termina e o outro começa.
+const COR_BORDA_GROSSA = { style: 'medium' as const, color: { argb: 'FF64748B' } }
+const BORDA_ENTRE_PACIENTES = { ...BORDA_FINA, bottom: COR_BORDA_GROSSA }
 
 export function gerarPlanilhaPassometro(unidade: Unidade, secoes: SecaoPassometro[]): ExcelJS.Workbook {
   const wb = new ExcelJS.Workbook()
@@ -420,22 +515,37 @@ export function gerarPlanilhaPassometro(unidade: Unidade, secoes: SecaoPassometr
     cabecalhoAla.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COR_GRUPO } } })
     ws.mergeCells(cabecalhoAla.number, 1, cabecalhoAla.number, COLUNAS.length)
 
-    const linhaLabel = ws.addRow(COLUNAS.map(c => c.label))
-    linhaLabel.font = { bold: true, size: 8, color: { argb: 'FF475569' } }
-    linhaLabel.alignment = { wrapText: true, vertical: 'middle', horizontal: 'center' }
-    linhaLabel.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COR_LABEL } }; c.border = BORDA_FINA })
-    linhaLabel.height = 42
+    // Cabeçalho em 2 linhas físicas, no mesmo padrão dos dados: colunas com
+    // `texto2` (2 itens por paciente) mostram `label` em cima e `label2`
+    // embaixo, sem mesclar; colunas mescladas (1 valor só) mesclam o
+    // cabeçalho verticalmente também, igual ao bloco de dados abaixo.
+    const headerA = ws.addRow(COLUNAS.map(c => c.label))
+    const headerB = ws.addRow(COLUNAS.map(c => c.texto2 ? (c.label2 ?? '') : ''))
+    for (const r of [headerA, headerB]) {
+      r.font = { bold: true, size: 8, color: { argb: 'FF475569' } }
+      r.alignment = { wrapText: true, vertical: 'middle', horizontal: 'center' }
+      r.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COR_LABEL } }; c.border = BORDA_FINA })
+      r.height = 22
+    }
 
     // Colunas consecutivas com o mesmo `grupoCabecalho` mesclam o cabeçalho
-    // num título só (as células de dado abaixo continuam separadas).
+    // (as 2 linhas físicas E as colunas do grupo) num título só (as células
+    // de dado abaixo continuam separadas); colunas sem `texto2` mesclam só
+    // verticalmente, igual ao bloco de dados.
     for (let col = 1; col <= COLUNAS.length;) {
-      const grupo = COLUNAS[col - 1].grupoCabecalho
-      if (!grupo) { col++; continue }
-      let fim = col
-      while (fim < COLUNAS.length && COLUNAS[fim].grupoCabecalho === grupo) fim++
-      ws.mergeCells(linhaLabel.number, col, linhaLabel.number, fim)
-      linhaLabel.getCell(col).value = grupo
-      col = fim + 1
+      const coluna = COLUNAS[col - 1]
+      if (coluna.grupoCabecalho) {
+        let fim = col
+        while (fim < COLUNAS.length && COLUNAS[fim].grupoCabecalho === coluna.grupoCabecalho) fim++
+        ws.mergeCells(headerA.number, col, headerB.number, fim)
+        headerA.getCell(col).value = coluna.grupoCabecalho
+        col = fim + 1
+      } else if (!coluna.texto2) {
+        ws.mergeCells(headerA.number, col, headerB.number, col)
+        col++
+      } else {
+        col++
+      }
     }
 
     for (const linha of linhas) {
@@ -447,21 +557,23 @@ export function gerarPlanilhaPassometro(unidade: Unidade, secoes: SecaoPassometr
       // na planilha impressa.
       const rowA = ws.addRow(COLUNAS.map(c => c.texto(linha)))
       const rowB = ws.addRow(COLUNAS.map(c => c.texto2?.(linha) ?? ''))
-      for (const r of [rowA, rowB]) {
-        r.font = { size: 8 }
-        r.alignment = { wrapText: true, vertical: 'top' }
-        r.height = 27
-      }
+      rowA.font = { size: 8 }
+      rowB.font = { size: 8 }
+      for (const r of [rowA, rowB]) r.alignment = { wrapText: true, vertical: 'top' }
+      rowA.height = 27
+      // Mais alta que a de cima: precisa caber até 3 linhas curtas sozinha
+      // (NPH/REG/SOS da Insulina) — e de brinde dá mais espaço às colunas
+      // mescladas (FC/PAS/PAD, Peso/Diurese/Via, exames), que somam as duas.
+      rowB.height = 34
       COLUNAS.forEach((c, i) => {
         const col = i + 1
         if (!c.texto2) ws.mergeCells(rowA.number, col, rowB.number, col)
         rowA.getCell(col).border = BORDA_FINA
-        rowB.getCell(col).border = BORDA_FINA
-        const fonte = c.fonte?.(linha)
-        if (fonte) {
-          rowA.getCell(col).font = { ...rowA.font, ...fonte }
-          rowB.getCell(col).font = { ...rowB.font, ...fonte }
-        }
+        rowB.getCell(col).border = BORDA_ENTRE_PACIENTES
+        const fonteA = c.fonte?.(linha)
+        const fonteB = (c.fonte2 ?? c.fonte)?.(linha)
+        if (fonteA) rowA.getCell(col).font = { ...rowA.font, ...fonteA }
+        if (fonteB) rowB.getCell(col).font = { ...rowB.font, ...fonteB }
       })
     }
     ws.addRow([])
@@ -476,7 +588,7 @@ function escapeHtml(s: string): string {
 
 function corCss(fonte: Partial<ExcelJS.Font>): string {
   const argb = (fonte.color as { argb?: string } | undefined)?.argb
-  return `${fonte.bold ? 'font-weight:bold;' : ''}${argb ? `color:#${argb.slice(2)};` : ''}`
+  return `${fonte.bold ? 'font-weight:bold;' : ''}${argb ? `color:#${argb.slice(2)};` : ''}${fonte.size ? `font-size:${fonte.size}pt;` : ''}`
 }
 
 // Limite de leitos por página impressa: mesmo com quebra de página forçada
@@ -502,16 +614,30 @@ export function gerarHtmlPassometro(unidade: Unidade, secoes: SecaoPassometro[])
   const totalWidth = COLUNAS.reduce((s, c) => s + c.width, 0)
   const colgroup = COLUNAS.map(c => `<col style="width:${(c.width / totalWidth * 100).toFixed(2)}%">`).join('')
 
-  const headerCells: string[] = []
+  // Cabeçalho em 2 <tr>, no mesmo padrão dos dados: colunas com `texto2`
+  // mostram `label` numa linha e `label2` na outra, sem rowspan; colunas
+  // mescladas (1 valor só) ganham rowspan="2", igual ao bloco de dados —
+  // e os 3 blocos de exames somam colspan (horizontal) com rowspan (vertical).
+  const headerRowACells: string[] = []
+  const headerRowBCells: string[] = []
   for (let col = 0; col < COLUNAS.length;) {
-    const grupo = COLUNAS[col].grupoCabecalho
-    if (!grupo) { headerCells.push(`<th>${escapeHtml(COLUNAS[col].label).replace(/\n/g, '<br>')}</th>`); col++; continue }
-    let fim = col
-    while (fim < COLUNAS.length && COLUNAS[fim].grupoCabecalho === grupo) fim++
-    headerCells.push(`<th colspan="${fim - col}">${escapeHtml(grupo)}</th>`)
-    col = fim
+    const c = COLUNAS[col]
+    if (c.grupoCabecalho) {
+      let fim = col
+      while (fim < COLUNAS.length && COLUNAS[fim].grupoCabecalho === c.grupoCabecalho) fim++
+      headerRowACells.push(`<th colspan="${fim - col}" rowspan="2">${escapeHtml(c.grupoCabecalho)}</th>`)
+      col = fim
+      continue
+    }
+    if (c.texto2) {
+      headerRowACells.push(`<th>${escapeHtml(c.label).replace(/\n/g, '<br>')}</th>`)
+      headerRowBCells.push(`<th>${escapeHtml(c.label2 ?? '').replace(/\n/g, '<br>')}</th>`)
+    } else {
+      headerRowACells.push(`<th rowspan="2">${escapeHtml(c.label).replace(/\n/g, '<br>')}</th>`)
+    }
+    col++
   }
-  const linhaCabecalho = `<tr>${headerCells.join('')}</tr>`
+  const linhaCabecalho = `<tr>${headerRowACells.join('')}</tr><tr>${headerRowBCells.join('')}</tr>`
 
   // Cada paciente vira um <tbody> próprio (não <tr> soltos direto na tabela)
   // — é o que permite `break-inside: avoid` impedir que a impressão corte
@@ -520,13 +646,15 @@ export function gerarHtmlPassometro(unidade: Unidade, secoes: SecaoPassometro[])
     const celsA: string[] = []
     const celsB: string[] = []
     COLUNAS.forEach(c => {
-      const estilo = corCss(c.fonte?.(linha) ?? {})
-      const attr = estilo ? ` style="${estilo}"` : ''
+      const estiloA = corCss(c.fonte?.(linha) ?? {})
+      const attrA = estiloA ? ` style="${estiloA}"` : ''
       if (c.texto2) {
-        celsA.push(`<td${attr}>${escapeHtml(c.texto(linha)).replace(/\n/g, '<br>')}</td>`)
-        celsB.push(`<td${attr}>${escapeHtml(c.texto2(linha)).replace(/\n/g, '<br>')}</td>`)
+        const estiloB = corCss((c.fonte2 ?? c.fonte)?.(linha) ?? {})
+        const attrB = estiloB ? ` style="${estiloB}"` : ''
+        celsA.push(`<td${attrA}>${escapeHtml(c.texto(linha)).replace(/\n/g, '<br>')}</td>`)
+        celsB.push(`<td${attrB}>${escapeHtml(c.texto2(linha)).replace(/\n/g, '<br>')}</td>`)
       } else {
-        celsA.push(`<td rowspan="2"${attr}>${escapeHtml(c.texto(linha)).replace(/\n/g, '<br>')}</td>`)
+        celsA.push(`<td rowspan="2"${attrA}>${escapeHtml(c.texto(linha)).replace(/\n/g, '<br>')}</td>`)
       }
     })
     return `<tbody><tr>${celsA.join('')}</tr><tr>${celsB.join('')}</tr></tbody>`
@@ -569,6 +697,9 @@ export function gerarHtmlPassometro(unidade: Unidade, secoes: SecaoPassometro[])
   .pagina { page-break-after: always; break-after: page; }
   .pagina:last-child { page-break-after: auto; break-after: auto; }
   .pagina tbody { page-break-inside: avoid; break-inside: avoid; }
+  /* Borda de baixo mais espessa separando um paciente do próximo — a última
+     <tr> de cada <tbody> é sempre a 2ª linha física do paciente. */
+  .pagina tbody tr:last-child td { border-bottom: 2px solid #475569; }
 </style>
 </head><body>
   <h1>🗒️ Passômetro — ${escapeHtml(unidade.nome)}</h1>
