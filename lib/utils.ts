@@ -288,6 +288,19 @@ export function balancoDeOutrasUnidades(periodos: PeriodoBalanco[], unitId: stri
   return periodos.filter(p => p.unit_id != null && p.unit_id !== unitId)
 }
 
+/** Débito de ostomia conta como evacuação para todos os efeitos (constipação,
+ *  pergunta de diarreia, "última evacuação" nos painéis e nos indicadores) —
+ *  quem tem ostomia não evacua pelo reto, o débito da bolsa É a evacuação dele. */
+export function evacuou(p: PeriodoBalanco): boolean {
+  return p.evacuacao > 0 || p.ostomia > 0
+}
+
+/** Valor exibido nos cartões de "última evacuação": a evacuação em mL quando
+ *  houver; senão, o débito de ostomia que fez o período contar como evacuação. */
+export function fmtEvacuacao(p: PeriodoBalanco): string {
+  return p.evacuacao > 0 ? `${p.evacuacao.toFixed(0)} mL` : `${p.ostomia.toFixed(0)} mL (via ostomia)`
+}
+
 export function calcBalanco(p: PeriodoBalanco): BalancoCalculado {
   const ganhos = p.venoso + p.oral_enteral + p.agua_endogena
   const perdas = p.diurese + p.dialise + p.febre + p.evacuacao +

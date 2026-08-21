@@ -150,7 +150,9 @@ function ultimaEvacuacao(periodos: PeriodoBalanco[], dataInternacao: string): { 
     const data = new Date(p.inicio)
     const chave = data.toDateString()
     const atual = porDia.get(chave) ?? { qtd: 0, diarreica: false, data }
-    atual.qtd += p.evacuacao
+    // Débito de ostomia conta como evacuação (quem tem ostomia não evacua
+    // pelo reto) — soma como +1 evento no dia, além do que já veio em evacuacao.
+    atual.qtd += p.evacuacao + (p.ostomia > 0 ? 1 : 0)
     if (p.diarreica_medico || p.diarreica_nutricao) atual.diarreica = true
     porDia.set(chave, atual)
   }
@@ -469,6 +471,19 @@ function corCss(fonte: Partial<ExcelJS.Font>): string {
   return `${fonte.bold ? 'font-weight:bold;' : ''}${argb ? `color:#${argb.slice(2)};` : ''}`
 }
 
+// Limite de leitos por página impressa: mesmo com quebra de página forçada
+// por ala, uma ala grande ainda podia não caber inteira numa A4 — em vez de
+// deixar o navegador cortar a tabela em qualquer altura (inclusive no meio
+// de um paciente), cada ala vira 1+ páginas de no máximo esta quantidade de
+// leitos, cada uma com seu próprio cabeçalho de ala/coluna repetido.
+const LEITOS_POR_PAGINA = 10
+
+function agruparEmPaginas<T>(itens: T[], tamanho: number): T[][] {
+  const paginas: T[][] = []
+  for (let i = 0; i < itens.length; i += tamanho) paginas.push(itens.slice(i, i + tamanho))
+  return paginas
+}
+
 /**
  * Mesma estrutura do Excel (reaproveita COLUNAS), como página HTML pronta
  * pra imprimir na hora — sem baixar o .xlsx, abrir no Excel, autorizar
@@ -490,24 +505,38 @@ export function gerarHtmlPassometro(unidade: Unidade, secoes: SecaoPassometro[])
   }
   const linhaCabecalho = `<tr>${headerCells.join('')}</tr>`
 
-  const secoesHtml = secoes.map(({ ala, linhas }) => {
+  // Cada paciente vira um <tbody> próprio (não <tr> soltos direto na tabela)
+  // — é o que permite `break-inside: avoid` impedir que a impressão corte
+  // um paciente ao meio entre as duas linhas físicas dele.
+  const linhasParaHtml = (linhas: LinhaPassometro[]) => linhas.map(linha => {
+    const celsA: string[] = []
+    const celsB: string[] = []
+    COLUNAS.forEach(c => {
+      const estilo = corCss(c.fonte?.(linha) ?? {})
+      const attr = estilo ? ` style="${estilo}"` : ''
+      if (c.texto2) {
+        celsA.push(`<td${attr}>${escapeHtml(c.texto(linha)).replace(/\n/g, '<br>')}</td>`)
+        celsB.push(`<td${attr}>${escapeHtml(c.texto2(linha)).replace(/\n/g, '<br>')}</td>`)
+      } else {
+        celsA.push(`<td rowspan="2"${attr}>${escapeHtml(c.texto(linha)).replace(/\n/g, '<br>')}</td>`)
+      }
+    })
+    return `<tbody><tr>${celsA.join('')}</tr><tr>${celsB.join('')}</tr></tbody>`
+  }).join('')
+
+  // 1 página por ala — ou por bloco de até LEITOS_POR_PAGINA leitos, quando
+  // a ala tem mais do que isso — cada uma numa <table> própria dentro de um
+  // <div class="pagina"> com quebra de página explícita entre elas. Antes
+  // disso tudo vivia numa única tabela gigante e o navegador decidia sozinho
+  // onde cortar, vazando uma ala pra página da outra.
+  const paginasHtml = secoes.flatMap(({ ala, linhas }) => {
     const ocupados = linhas.filter(l => !l.vazio).length
-    const linhasHtml = linhas.map(linha => {
-      const celsA: string[] = []
-      const celsB: string[] = []
-      COLUNAS.forEach(c => {
-        const estilo = corCss(c.fonte?.(linha) ?? {})
-        const attr = estilo ? ` style="${estilo}"` : ''
-        if (c.texto2) {
-          celsA.push(`<td${attr}>${escapeHtml(c.texto(linha)).replace(/\n/g, '<br>')}</td>`)
-          celsB.push(`<td${attr}>${escapeHtml(c.texto2(linha)).replace(/\n/g, '<br>')}</td>`)
-        } else {
-          celsA.push(`<td rowspan="2"${attr}>${escapeHtml(c.texto(linha)).replace(/\n/g, '<br>')}</td>`)
-        }
-      })
-      return `<tr>${celsA.join('')}</tr><tr>${celsB.join('')}</tr>`
-    }).join('')
-    return `<tr><td class="ala" colspan="${COLUNAS.length}">${escapeHtml(ala.nome)} (${ocupados}/${linhas.length} leitos ocupados)</td></tr>${linhaCabecalho}${linhasHtml}`
+    const blocos = agruparEmPaginas(linhas, LEITOS_POR_PAGINA)
+    return blocos.map((bloco, i) => {
+      const sufixoPagina = blocos.length > 1 ? ` — página ${i + 1}/${blocos.length}` : ''
+      const cabecalhoAla = `<tr><td class="ala" colspan="${COLUNAS.length}">${escapeHtml(ala.nome)} (${ocupados}/${linhas.length} leitos ocupados)${sufixoPagina}</td></tr>`
+      return `<div class="pagina"><table><colgroup>${colgroup}</colgroup><thead>${cabecalhoAla}${linhaCabecalho}</thead>${linhasParaHtml(bloco)}</table></div>`
+    })
   }).join('')
 
   return `<!doctype html>
@@ -527,10 +556,15 @@ export function gerarHtmlPassometro(unidade: Unidade, secoes: SecaoPassometro[])
   td, th { border: 1px solid #94a3b8; padding: 2px 3px; vertical-align: top; word-wrap: break-word; }
   th { background: #f1f5f9; font-size: 7.5pt; text-align: center; font-weight: bold; }
   td.ala { background: #eef2ff; font-weight: bold; font-size: 11pt; padding: 4px; }
+  /* 1 página por ala (ou por bloco de até 10 leitos) — cada uma força quebra
+     de página, e cada paciente (1 <tbody>) não pode ser cortado ao meio. */
+  .pagina { page-break-after: always; break-after: page; }
+  .pagina:last-child { page-break-after: auto; break-after: auto; }
+  .pagina tbody { page-break-inside: avoid; break-inside: avoid; }
 </style>
 </head><body>
   <h1>🗒️ Passômetro — ${escapeHtml(unidade.nome)}</h1>
   <p class="subtitulo">Gerado em ${new Date().toLocaleString('pt-BR')}</p>
-  <table><colgroup>${colgroup}</colgroup>${secoesHtml}</table>
+  ${paginasHtml}
 </body></html>`
 }

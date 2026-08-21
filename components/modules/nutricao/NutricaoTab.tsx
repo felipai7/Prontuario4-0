@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { fmtData, diasDesde, hojeISO, balancoDaUnidade } from '@/lib/utils'
+import { fmtData, diasDesde, hojeISO, balancoDaUnidade, evacuou } from '@/lib/utils'
 import type {
   Paciente, NutricaoAvaliacao, NutricaoDia, PeriodoBalanco, SuporteVentilatorio,
   CuidadosHorizontais, AuditoriaIntensivista, ToastData,
@@ -127,7 +127,7 @@ export default function NutricaoTab({
     () => [...periodosBalanco].sort((a, b) => b.inicio.localeCompare(a.inicio)), [periodosBalanco])
 
   const ultimaEvacuacao = useMemo(
-    () => balancoOrdenado.find(p => p.evacuacao > 0) ?? null, [balancoOrdenado])
+    () => balancoOrdenado.find(evacuou) ?? null, [balancoOrdenado])
 
   // Mesmo critério de constipação usado no indicador: 72h sem evacuar. Sem
   // nenhum registro de evacuação ainda, conta a partir da admissão — mas só se

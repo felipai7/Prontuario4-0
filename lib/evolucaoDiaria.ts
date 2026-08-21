@@ -1,5 +1,5 @@
 import { resumoHemodinamica } from '@/lib/hemodinamica'
-import { fmtData, diaAtualATB, fmtNum } from '@/lib/utils'
+import { fmtData, diaAtualATB, fmtNum, evacuou } from '@/lib/utils'
 import type {
   Paciente, SinalVital, DVA, PeriodoHemodinamica, PeriodoBalanco,
   ATB, AvaliacaoNeurologica, SuporteVentilatorio, Intercorrencia,
@@ -154,11 +154,15 @@ function fraseDiurese(periodos: PeriodoBalanco[], pesoKg: number | null): string
 // ── 6. Evacuação ─────────────────────────────────────────────────────────────
 
 function fraseEvacuacao(periodos: PeriodoBalanco[]): string {
-  const comEvacuacao = periodos.filter(p => p.evacuacao > 0)
+  // Débito de ostomia conta como evacuação — quem tem ostomia não evacua
+  // pelo reto, o débito da bolsa É a evacuação dele.
+  const comEvacuacao = periodos.filter(evacuou)
   if (!comEvacuacao.length) return 'Sem evacuações desde admissão.'
   const ultimo = [...comEvacuacao].sort((a, b) => new Date(b.inicio).getTime() - new Date(a.inicio).getTime())[0]
   const dataPeriodo = fmtData(ultimo.inicio.slice(0, 10))
-  return `Última evacuação registrada de ${ultimo.evacuacao}mL no período ${ultimo.turno} de ${dataPeriodo}.`
+  const viaOstomia = ultimo.evacuacao === 0 && ultimo.ostomia > 0
+  const volume = viaOstomia ? ultimo.ostomia : ultimo.evacuacao
+  return `Última evacuação${viaOstomia ? ' (via ostomia)' : ''} registrada de ${volume}mL no período ${ultimo.turno} de ${dataPeriodo}.`
 }
 
 // ── 7. Antibioticoterapia ────────────────────────────────────────────────────

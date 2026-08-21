@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { calcBalanco, calcAcumuladoMovel, calcDiurese24h, diaAtualATB, diasDesde, fmtNum, fmtTurno, hojeISO, amanhaISO, balancoDaUnidade } from '@/lib/utils'
+import { calcBalanco, calcAcumuladoMovel, calcDiurese24h, diaAtualATB, diasDesde, fmtNum, fmtTurno, hojeISO, amanhaISO, balancoDaUnidade, evacuou, fmtEvacuacao } from '@/lib/utils'
 import { fmtData } from '@/lib/utils'
 import type { Paciente, SinalVital, DVA, PeriodoBalanco, ATB, CuidadosHorizontais, Intercorrencia, PendenciaIntensivista, RegistroIntensivista, SwabVigilancia, ExameImagem, ToastData } from '@/types'
 
@@ -130,7 +130,7 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos: perio
   const { horas: duHoras, total: duTotal } = calcDiurese24h(periodos)
   // Só usado no Hospital — lá o balanço em si perde relevância (ver
   // BalancoDiarioTab), mas diurese e última evacuação continuam úteis.
-  const ultimaEvacuacao = [...periodos].reverse().find(p => p.evacuacao > 0) ?? null
+  const ultimaEvacuacao = [...periodos].reverse().find(evacuou) ?? null
   const ultimoRegistroIntensivista = registrosIntensivista.length
     ? [...registrosIntensivista].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())[0]
     : null
@@ -204,7 +204,7 @@ export default function PlantonistaTab({ paciente, sinais, dvas, periodos: perio
                 <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">🚽 Última evacuação</p>
                 {ultimaEvacuacao ? (
                   <p className="text-sm text-slate-700">
-                    {ultimaEvacuacao.evacuacao.toFixed(0)} mL — {fmtTurno(ultimaEvacuacao.turno, ultimaEvacuacao.inicio)}
+                    {fmtEvacuacao(ultimaEvacuacao)} — {fmtTurno(ultimaEvacuacao.turno, ultimaEvacuacao.inicio)}
                   </p>
                 ) : <p className="text-sm text-slate-400">Ausente desde admissão.</p>}
               </div>

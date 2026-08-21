@@ -97,6 +97,25 @@ describe('gerarHtmlPassometro', () => {
     const html = gerarHtmlPassometro(unidadeFake, secoes)
     expect(html).toContain('color:#DC2626')
   })
+
+  it('uma ala com poucos leitos vira 1 única página, sem sufixo de página', () => {
+    const secoes: SecaoPassometro[] = [{ ala: unidadeFake.alas[0], linhas: [linhaFake(), linhaFake({ leito: '3' })] }]
+    const html = gerarHtmlPassometro(unidadeFake, secoes)
+    expect(html.match(/class="pagina"/g)).toHaveLength(1)
+    expect(html).not.toContain('página 1/')
+  })
+
+  it('uma ala com mais de 10 leitos vira várias páginas, com cabeçalho repetido em cada uma', () => {
+    const alaGrande = { ...unidadeFake.alas[0], leitos: Array.from({ length: 12 }, (_, i) => String(i + 1)) }
+    const linhas = alaGrande.leitos.map(leito => linhaFake({ leito }))
+    const secoes: SecaoPassometro[] = [{ ala: alaGrande, linhas }]
+    const html = gerarHtmlPassometro(unidadeFake, secoes)
+
+    expect(html.match(/class="pagina"/g)).toHaveLength(2)
+    expect(html).toContain('página 1/2')
+    expect(html).toContain('página 2/2')
+    expect(html.match(/<thead>/g)).toHaveLength(2) // cabeçalho de ala+coluna repetido em cada página
+  })
 })
 
 describe('agruparPorAla', () => {

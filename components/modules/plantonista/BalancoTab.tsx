@@ -5,7 +5,7 @@ import {
   calcAguaEndogena, calcPerdasInsensiveis, calcBalanco,
   calcAcumuladoTotal, calcAcumuladoMovel, calcDiurese24h, calcFirstPeriod, calcNextPeriod,
   fmtTurno, colorParcial, getTurno, fmtNum, boundaryStart, fmtDataHora, hojeISO,
-  balancoDaUnidade, balancoDeOutrasUnidades,
+  balancoDaUnidade, balancoDeOutrasUnidades, evacuou, fmtEvacuacao,
 } from '@/lib/utils'
 import TabelaRolavel from '@/components/ui/TabelaRolavel'
 import BalancoAnteriorLeitura from './BalancoAnteriorLeitura'
@@ -149,7 +149,7 @@ export default function BalancoTab({ paciente, periodos: periodosTodos, onRefres
     : duHoras > 0 ? `Débito Urinário (últ. ${duHoras.toFixed(0)}h)` : 'Débito Urinário'
 
   // Última evacuação
-  const lastEvac = [...sorted].reverse().find(p => p.evacuacao > 0)
+  const lastEvac = [...sorted].reverse().find(evacuou)
 
   // Última diálise: mesmo campo `dialise` (UF) já lançado a cada turno — não é
   // um dado novo, só um recorte do turno mais recente em que ele foi > 0.
@@ -226,7 +226,7 @@ export default function BalancoTab({ paciente, periodos: periodosTodos, onRefres
       perdas_insensiveis: perdIns,
       // Null quando não houve evacuação: "não se aplica" é diferente de "não foi
       // diarreica", e só a segunda deve contar como avaliada.
-      diarreica_medico: evalMath(form.evacuacao) > 0 ? diarreica : null,
+      diarreica_medico: (evalMath(form.evacuacao) > 0 || evalMath(form.ostomia) > 0) ? diarreica : null,
     })
     setSaving(false)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
@@ -265,7 +265,7 @@ export default function BalancoTab({ paciente, periodos: periodosTodos, onRefres
       outros: evalMath(form.outros),
       outros_nome: evalMath(form.outros) > 0 ? (form.outros_nome.trim() || null) : null,
       perdas_insensiveis: perdIns,
-      diarreica_medico: evalMath(form.evacuacao) > 0 ? diarreica : null,
+      diarreica_medico: (evalMath(form.evacuacao) > 0 || evalMath(form.ostomia) > 0) ? diarreica : null,
     }).eq('id', editingPeriodo.id)
     setSaving(false)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
@@ -381,7 +381,7 @@ export default function BalancoTab({ paciente, periodos: periodosTodos, onRefres
             <p className={`text-xs font-semibold mb-1 ${lastEvac ? 'text-amber-600' : 'text-slate-500'}`}>🚽 Última Evacuação</p>
             {lastEvac ? (
               <>
-                <p className="text-2xl font-black text-amber-800">{lastEvac.evacuacao.toFixed(0)} mL</p>
+                <p className="text-2xl font-black text-amber-800">{fmtEvacuacao(lastEvac)}</p>
                 {/* fmtTurno(turno, INÍCIO) — a mesma função do cabeçalho da tabela.
                     Antes esta linha formatava a data à mão a partir de `fim`, e o
                     turno noturno (19:00 → 07:00 do dia seguinte) aparecia com a
@@ -511,9 +511,10 @@ export default function BalancoTab({ paciente, periodos: periodosTodos, onRefres
             </div>
           )}
 
-          {/* Só aparece quando houve evacuação: perguntar sobre algo que não
-              aconteceu é ruído. Alimenta os indicadores de diarreia da Nutrição. */}
-          {evalMath(form.evacuacao) > 0 && (
+          {/* Só aparece quando houve evacuação (ou débito de ostomia, que conta
+              como evacuação): perguntar sobre algo que não aconteceu é ruído.
+              Alimenta os indicadores de diarreia da Nutrição. */}
+          {(evalMath(form.evacuacao) > 0 || evalMath(form.ostomia) > 0) && (
             <div className="border border-amber-200 bg-amber-50 rounded-lg px-3 py-2.5">
               <p className="text-sm font-medium text-amber-900 mb-1.5">A evacuação foi diarreica?</p>
               <div className="flex gap-2">

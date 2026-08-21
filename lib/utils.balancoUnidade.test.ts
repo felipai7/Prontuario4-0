@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { balancoDaUnidade, balancoDeOutrasUnidades } from './utils'
+import { balancoDaUnidade, balancoDeOutrasUnidades, evacuou, fmtEvacuacao } from './utils'
 import type { PeriodoBalanco } from '@/types'
 
 /**
@@ -40,5 +40,33 @@ describe('balancoDeOutrasUnidades', () => {
   it('unit_id nulo nunca aparece como "de outra unidade"', () => {
     const periodos = [periodo(null), periodo('hospital')]
     expect(balancoDeOutrasUnidades(periodos, 'uti').map(p => p.unit_id)).toEqual(['hospital'])
+  })
+})
+
+/**
+ * Débito de ostomia conta como evacuação para todos os efeitos — quem tem
+ * ostomia não evacua pelo reto, o débito da bolsa É a evacuação dele.
+ */
+describe('evacuou', () => {
+  it('conta como evacuação quando só a ostomia teve débito', () => {
+    expect(evacuou({ ...periodo('uti'), evacuacao: 0, ostomia: 150 })).toBe(true)
+  })
+
+  it('conta como evacuação no caminho tradicional (campo Evacuação)', () => {
+    expect(evacuou({ ...periodo('uti'), evacuacao: 200, ostomia: 0 })).toBe(true)
+  })
+
+  it('não conta quando nenhum dos dois teve débito', () => {
+    expect(evacuou({ ...periodo('uti'), evacuacao: 0, ostomia: 0 })).toBe(false)
+  })
+})
+
+describe('fmtEvacuacao', () => {
+  it('mostra o valor de Evacuação quando ele existe', () => {
+    expect(fmtEvacuacao({ ...periodo('uti'), evacuacao: 200, ostomia: 0 })).toBe('200 mL')
+  })
+
+  it('cai para o débito de ostomia, rotulado, quando Evacuação está zerada', () => {
+    expect(fmtEvacuacao({ ...periodo('uti'), evacuacao: 0, ostomia: 150 })).toBe('150 mL (via ostomia)')
   })
 })

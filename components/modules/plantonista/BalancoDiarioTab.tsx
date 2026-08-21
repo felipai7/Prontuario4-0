@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   calcDiurese24h, fmtTurno, fmtNum, hojeISO, boundaryStart,
-  balancoDaUnidade, balancoDeOutrasUnidades,
+  balancoDaUnidade, balancoDeOutrasUnidades, evacuou, fmtEvacuacao,
 } from '@/lib/utils'
 import TabelaRolavel from '@/components/ui/TabelaRolavel'
 import BalancoAnteriorLeitura from './BalancoAnteriorLeitura'
@@ -101,7 +101,7 @@ export default function BalancoDiarioTab({ paciente, periodos: periodosTodos, on
   const sortedDesc = [...sorted].reverse()
 
   const { horas: duHoras, total: duTotal } = calcDiurese24h(periodos)
-  const lastEvac    = [...sorted].reverse().find(p => p.evacuacao > 0)
+  const lastEvac    = [...sorted].reverse().find(evacuou)
   const lastDialise = [...sorted].reverse().find(p => p.dialise > 0)
 
   // Sugestão: o dia seguinte ao último lançado (capado em hoje) — ou hoje,
@@ -148,7 +148,7 @@ export default function BalancoDiarioTab({ paciente, periodos: periodosTodos, on
       outros: evalMath(form.outros),
       outros_nome: evalMath(form.outros) > 0 ? (form.outros_nome.trim() || null) : null,
       perdas_insensiveis: 0,
-      diarreica_medico: evalMath(form.evacuacao) > 0 ? diarreica : null,
+      diarreica_medico: (evalMath(form.evacuacao) > 0 || evalMath(form.ostomia) > 0) ? diarreica : null,
     })
     setSaving(false)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
@@ -185,7 +185,7 @@ export default function BalancoDiarioTab({ paciente, periodos: periodosTodos, on
       sne_sng: evalMath(form.sne_sng), ostomia: evalMath(form.ostomia),
       outros: evalMath(form.outros),
       outros_nome: evalMath(form.outros) > 0 ? (form.outros_nome.trim() || null) : null,
-      diarreica_medico: evalMath(form.evacuacao) > 0 ? diarreica : null,
+      diarreica_medico: (evalMath(form.evacuacao) > 0 || evalMath(form.ostomia) > 0) ? diarreica : null,
     }).eq('id', editingPeriodo.id)
     setSaving(false)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
@@ -245,7 +245,7 @@ export default function BalancoDiarioTab({ paciente, periodos: periodosTodos, on
           <p className={`text-xs font-semibold mb-1 ${lastEvac ? 'text-amber-600' : 'text-slate-500'}`}>🚽 Última Evacuação</p>
           {lastEvac ? (
             <>
-              <p className="text-2xl font-black text-amber-800">{lastEvac.evacuacao.toFixed(0)} mL</p>
+              <p className="text-2xl font-black text-amber-800">{fmtEvacuacao(lastEvac)}</p>
               <p className="text-xs text-amber-600 mt-0.5">{fmtTurno(lastEvac.turno, lastEvac.inicio)}</p>
             </>
           ) : <p className="text-sm font-semibold text-slate-500">Ausente desde admissão</p>}
@@ -334,7 +334,7 @@ export default function BalancoDiarioTab({ paciente, periodos: periodosTodos, on
             </div>
           )}
 
-          {evalMath(form.evacuacao) > 0 && (
+          {(evalMath(form.evacuacao) > 0 || evalMath(form.ostomia) > 0) && (
             <div className="border border-amber-200 bg-amber-50 rounded-lg px-3 py-2.5">
               <p className="text-sm font-medium text-amber-900 mb-1.5">A evacuação foi diarreica?</p>
               <div className="flex gap-2">
