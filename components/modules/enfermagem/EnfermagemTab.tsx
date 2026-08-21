@@ -20,9 +20,14 @@ interface Props {
 
 // Ícones revisados pra cada um ter uma associação clínica própria — antes
 // AVP/CVC dividiam 💉 e SVD/CISTO dividiam 🩺, sem nada distinguir um do outro.
+// PICC e TOT trocados de novo (💪/🌬️ eram vagos demais, sem ligação clara com
+// o dispositivo): PICC agora é 🧵 — é literalmente um cateter longo e fino
+// "enfiado" pela veia periférica até um vaso central, e TOT é 👄 — "oro"
+// traqueal = via a boca, em contraste direto com TQT (🫁, via traqueostomia
+// no pescoço, sem passar pela boca).
 const TIPOS: { id: TipoDispositivo; label: string; emoji: string }[] = [
   { id: 'AVP',   label: 'Acesso venoso periférico',           emoji: '💉' },
-  { id: 'PICC',  label: 'Cateter central de inserção periférica', emoji: '💪' },
+  { id: 'PICC',  label: 'Cateter central de inserção periférica', emoji: '🧵' },
   { id: 'CVC',   label: 'Cateter venoso central',             emoji: '🫀' },
   { id: 'SVD',   label: 'Sonda vesical de demora',            emoji: '🚽' },
   { id: 'CISTO', label: 'Cistostomia',                        emoji: '💧' },
@@ -30,7 +35,7 @@ const TIPOS: { id: TipoDispositivo; label: string; emoji: string }[] = [
   { id: 'CDL',   label: 'Cateter de diálise',                 emoji: '🩸' },
   { id: 'DRENO', label: 'Dreno',                              emoji: '🪣' },
   { id: 'GTT',   label: 'Gastrostomia',                       emoji: '🍽️' },
-  { id: 'TOT',   label: 'Tubo orotraqueal',                   emoji: '🌬️' },
+  { id: 'TOT',   label: 'Tubo orotraqueal',                   emoji: '👄' },
   { id: 'TQT',   label: 'Traqueostomia',                      emoji: '🫁' },
   { id: 'OUTRO', label: 'Outro dispositivo',                  emoji: '🔧' },
 ]
@@ -72,6 +77,15 @@ export default function EnfermagemTab({
   const [dataInsercao, setDataInsercao] = useState(hojeISO)
   const [obsNovo, setObsNovo] = useState('')
   const [saving, setSaving] = useState(false)
+
+  // Edição de datas/observação de um dispositivo já lançado (instalado ou
+  // retirado) — corrige inserção/retirada marcadas errado, inclusive
+  // "reabrir" um dispositivo retirado por engano (limpando a data de retirada).
+  const [editandoDisp, setEditandoDisp] = useState<Dispositivo | null>(null)
+  const [editInsercao, setEditInsercao] = useState('')
+  const [editRemocao, setEditRemocao] = useState('')
+  const [editObs, setEditObs] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
 
   const [lppAberto, setLppAberto] = useState(false)
   const [lppData, setLppData] = useState(hojeISO)
@@ -123,6 +137,28 @@ export default function EnfermagemTab({
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
     showToast(`${d.tipo} retirado hoje`)
     onRefresh()
+  }
+
+  const abrirEdicaoDisp = (d: Dispositivo) => {
+    setEditandoDisp(d)
+    setEditInsercao(d.data_insercao)
+    setEditRemocao(d.data_remocao ?? '')
+    setEditObs(d.observacao ?? '')
+  }
+
+  const handleSalvarEdicaoDisp = async () => {
+    if (!editandoDisp) return
+    if (!editInsercao) { showToast('Informe a data de inserção', 'error'); return }
+    setEditSaving(true)
+    const { error } = await supabase.from('dispositivos').update({
+      data_insercao: editInsercao,
+      data_remocao: editRemocao || null,
+      observacao: editObs.trim() || null,
+    }).eq('id', editandoDisp.id)
+    setEditSaving(false)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    showToast('Dispositivo atualizado!')
+    setEditandoDisp(null); onRefresh()
   }
 
   const handleSalvarLpp = async () => {
@@ -208,10 +244,16 @@ export default function EnfermagemTab({
                   </p>
                 </div>
                 {podeEditar && (
-                  <button onClick={() => handleRetirar(d)}
-                    className="text-xs font-medium text-emerald-700 border border-emerald-300 hover:bg-emerald-100 rounded-lg px-2.5 py-1.5">
-                    Retirar hoje
-                  </button>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button onClick={() => abrirEdicaoDisp(d)} title="Editar datas/observação"
+                      className="text-xs text-emerald-700 border border-emerald-300 hover:bg-emerald-100 rounded-lg px-2 py-1.5">
+                      ✏️
+                    </button>
+                    <button onClick={() => handleRetirar(d)}
+                      className="text-xs font-medium text-emerald-700 border border-emerald-300 hover:bg-emerald-100 rounded-lg px-2.5 py-1.5">
+                      Retirar hoje
+                    </button>
+                  </div>
                 )}
               </li>
             ))}
@@ -269,8 +311,12 @@ export default function EnfermagemTab({
           <h3 className="font-semibold text-slate-700 text-sm">Dispositivos retirados</h3>
           <ul className="space-y-1">
             {retirados.map(d => (
-              <li key={d.id} className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
-                {d.tipo}{d.observacao && ` (${d.observacao})`} · {fmtData(d.data_insercao)} a {fmtData(d.data_remocao!)}
+              <li key={d.id} className="flex items-center justify-between gap-2 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+                <span>{d.tipo}{d.observacao && ` (${d.observacao})`} · {fmtData(d.data_insercao)} a {fmtData(d.data_remocao!)}</span>
+                {podeEditar && (
+                  <button onClick={() => abrirEdicaoDisp(d)} title="Editar datas/observação — ex.: retirada marcada por engano"
+                    className="text-indigo-400 hover:text-indigo-700 flex-shrink-0">✏️</button>
+                )}
               </li>
             ))}
           </ul>
@@ -417,6 +463,54 @@ export default function EnfermagemTab({
           </ul>
         )}
       </section>
+
+      {/* Editar dispositivo: corrige data de inserção/retirada ou observação
+          já lançadas — inclusive "reabrir" um retirado por engano, limpando
+          a data de retirada. */}
+      {editandoDisp && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+          onClick={e => e.target === e.currentTarget && setEditandoDisp(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="font-bold text-slate-800">
+                ✏️ Editar {TIPOS.find(t => t.id === editandoDisp.tipo)?.emoji} {editandoDisp.tipo}
+              </p>
+              <button onClick={() => setEditandoDisp(null)} className="text-slate-400 hover:text-slate-700 text-lg">✕</button>
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 font-medium block mb-1">Data de inserção</label>
+              <input type="date" value={editInsercao} max={hojeISO()}
+                onChange={e => setEditInsercao(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 font-medium block mb-1">Data de retirada</label>
+              <input type="date" value={editRemocao} min={editInsercao} max={hojeISO()}
+                onChange={e => setEditRemocao(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+              <p className="text-xs text-slate-500 mt-1">
+                Deixe em branco se o dispositivo ainda está instalado (ex.: retirada marcada por engano).
+              </p>
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 font-medium block mb-1">{OBS_LABEL[editandoDisp.tipo]}</label>
+              <input type="text" value={editObs} onChange={e => setEditObs(e.target.value)}
+                placeholder={OBS_PLACEHOLDER[editandoDisp.tipo]}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setEditandoDisp(null)}
+                className="flex-1 border border-slate-300 text-slate-600 text-sm font-semibold py-2 rounded-lg hover:bg-slate-50">
+                Cancelar
+              </button>
+              <button onClick={handleSalvarEdicaoDisp} disabled={editSaving}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-semibold py-2 rounded-lg">
+                {editSaving ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

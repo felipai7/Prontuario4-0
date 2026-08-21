@@ -69,28 +69,34 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
   const [atbDiaInicial, setAtbDiaInicial] = useState<0 | 1>(0)
   const [atbDias,       setAtbDias]       = useState('')
   const [atbFoco,       setAtbFoco]       = useState('')
+  const [atbFim,        setAtbFim]        = useState('')
   const [atbSaving,     setAtbSaving]     = useState(false)
   const [atbRemoving,   setAtbRemoving]   = useState<string | null>(null)
   const [historyOpen,   setHistoryOpen]   = useState(false)
   // Id do ATB sendo editado — null quando o form aberto é para um novo registro.
   const [atbEditingId,  setAtbEditingId]  = useState<string | null>(null)
+  // true quando o ATB em edição já está encerrado — só aí faz sentido mostrar
+  // (e deixar corrigir) a data de encerramento.
+  const [atbEditandoEncerrado, setAtbEditandoEncerrado] = useState(false)
 
   const ativosATB = atbs.filter(a => a.ativo)
   const historicoATB = atbs.filter(a => !a.ativo)
 
   const resetAtbForm = () => {
-    setAtbFormOpen(false); setAtbEditingId(null)
-    setAtbDroga(''); setAtbDias(''); setAtbFoco(''); setAtbDiaInicial(0)
+    setAtbFormOpen(false); setAtbEditingId(null); setAtbEditandoEncerrado(false)
+    setAtbDroga(''); setAtbDias(''); setAtbFoco(''); setAtbDiaInicial(0); setAtbFim('')
     setAtbInicio(hojeISO())
   }
 
   const handleEditarATB = (atb: ATB) => {
     setAtbEditingId(atb.id)
+    setAtbEditandoEncerrado(!atb.ativo)
     setAtbDroga(atb.droga)
     setAtbInicio(atb.data_inicio)
     setAtbDiaInicial(atb.dia_inicial)
     setAtbDias(atb.dias_previstos != null ? String(atb.dias_previstos) : '')
     setAtbFoco(atb.foco ?? '')
+    setAtbFim(atb.data_fim ?? '')
     setAtbFormOpen(true)
   }
 
@@ -98,13 +104,17 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
     if (!atbDroga.trim()) { showToast('Informe o nome do ATB', 'error'); return }
     if (!atbInicio) { showToast('Informe a data de início', 'error'); return }
     setAtbSaving(true)
-    const payload = {
+    const payload: Record<string, unknown> = {
       droga:          atbDroga.trim(),
       data_inicio:    atbInicio,
       dia_inicial:    atbDiaInicial,
       dias_previstos: atbDias ? parseFloat(atbDias) : null,
       foco:           atbFoco.trim() || null,
     }
+    // Data de encerramento só entra no payload quando o ATB editado já estava
+    // encerrado — editar um ATB ativo não deve mexer nela (isso é papel do
+    // botão "Encerrar").
+    if (atbEditandoEncerrado) payload.data_fim = atbFim || null
     const { error } = atbEditingId
       ? await supabase.from('atbs').update(payload).eq('id', atbEditingId)
       : await supabase.from('atbs').insert({ ...payload, paciente_id: paciente.id, ativo: true })
@@ -118,10 +128,22 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
   const handleEncerrarATB = async (id: string) => {
     if (!confirm('Encerrar este ATB?')) return
     setAtbRemoving(id)
-    const { error } = await supabase.from('atbs').update({ ativo: false }).eq('id', id)
+    const { error } = await supabase.from('atbs').update({ ativo: false, data_fim: hojeISO() }).eq('id', id)
     setAtbRemoving(null)
     if (error) { showToast('Erro: ' + error.message, 'error'); return }
     showToast('ATB encerrado'); onRefresh()
+  }
+
+  // Desfaz um encerramento feito por engano (ex.: "marquei que tinha encerrado
+  // mas na verdade o ATB continua em uso") sem perder o histórico — volta a
+  // ativo, limpa a data de encerramento.
+  const handleReabrirATB = async (id: string) => {
+    if (!confirm('Reabrir este ATB como ativo?')) return
+    setAtbRemoving(id)
+    const { error } = await supabase.from('atbs').update({ ativo: true, data_fim: null }).eq('id', id)
+    setAtbRemoving(null)
+    if (error) { showToast('Erro: ' + error.message, 'error'); return }
+    showToast('ATB reaberto'); onRefresh()
   }
 
   // ── Cuidados horizontais (estado atual, upsert) ────────────────────────────
@@ -420,6 +442,13 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
                 <Combobox value={atbFoco} onChange={setAtbFoco} options={FOCOS_INFECCIOSOS}
                   placeholder="ex: Pulmonar (ou digite outro)" className={inputCls} />
               </div>
+              {atbEditandoEncerrado && (
+                <div>
+                  <label className={labelCls}>Data de encerramento</label>
+                  <input type="date" value={atbFim} min={atbInicio} onChange={e => setAtbFim(e.target.value)} className={inputCls} />
+                  <p className="text-xs text-slate-500 mt-1">Pra reabrir este ATB como ativo, use "↩️ Reabrir" na lista, não aqui.</p>
+                </div>
+              )}
             </div>
             <button onClick={handleSaveATB} disabled={atbSaving}
               className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors">
@@ -434,12 +463,20 @@ export default function IntensivistaTab({ paciente, atbs, cuidados, pendencias, 
               <div key={atb.id} className="flex items-start justify-between gap-2 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-2">
                 <div className="min-w-0">
                   <span className="font-semibold text-slate-700">{atb.droga}</span> — {fmtData(atb.data_inicio)}
+                  {atb.data_fim && ` a ${fmtData(atb.data_fim)}`}
                   {atb.dias_previstos != null && ` · previsto: ${atb.dias_previstos}d`}
                   {atb.foco && ` · foco: ${atb.foco}`}
                 </div>
                 {podeEditar && (
-                  <button onClick={() => handleEditarATB(atb)} title="Editar ATB"
-                    className="text-indigo-400 hover:text-indigo-700 flex-shrink-0">✏️</button>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button onClick={() => handleEditarATB(atb)} title="Editar ATB"
+                      className="text-indigo-400 hover:text-indigo-700">✏️</button>
+                    <button onClick={() => handleReabrirATB(atb.id)} disabled={atbRemoving === atb.id}
+                      title="Reabrir como ativo (ex.: foi encerrado por engano)"
+                      className="text-emerald-500 hover:text-emerald-700 font-semibold whitespace-nowrap">
+                      {atbRemoving === atb.id ? '⏳' : '↩️ Reabrir'}
+                    </button>
+                  </div>
                 )}
               </div>
             ))}

@@ -251,6 +251,8 @@ export interface ATB {
   dias_previstos: number | null
   foco: string | null
   ativo: boolean
+  /** Preenchida ao encerrar; editável (e limpável, pra "reabrir") como correção. */
+  data_fim: string | null
   created_at: string
   updated_at: string
 }
