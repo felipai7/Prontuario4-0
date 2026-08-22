@@ -2,10 +2,11 @@ import { describe, it, expect } from 'vitest'
 import {
   gerarPlanilhaPassometro, gerarHtmlPassometro, agruparPorAla, ordenarExamesRecentes,
   faixaMinMax, blocoVital, ultimaEvacuacao, formatarIbp, formatarAnticoag, formatarRespiracao,
+  valorLabsMaisRecente,
   type LinhaPassometro, type SecaoPassometro,
 } from '@/lib/passometro'
 import type { Unidade } from '@/lib/unidade'
-import type { Exame, PeriodoBalanco, CuidadosHorizontais, SuporteVentilatorio } from '@/types'
+import type { Exame, PeriodoBalanco, CuidadosHorizontais, SuporteVentilatorio, ResultadoExame } from '@/types'
 
 function linhaFake(overrides: Partial<LinhaPassometro> = {}): LinhaPassometro {
   return {
@@ -436,5 +437,53 @@ describe('formatarRespiracao', () => {
   it('vazio sem nenhum registro', () => {
     expect(formatarRespiracao(null)).toBe('')
     expect(formatarRespiracao(ventFake({ modalidade: null }))).toBe('')
+  })
+})
+
+function resultadoFake(analito_id: string, valor: string): ResultadoExame {
+  return { nome: analito_id, valor, unidade: null, referencia: null, alterado: false, direcao: 'normal', analito_id }
+}
+
+/**
+ * Regressão do bug relatado: pH/HCO3(Bic)/pCO2/pO2/Lactato só buscavam a
+ * variante `.serum` no catálogo, mas gasometria grava `.art`/`.ven` — a
+ * coluna de exames do passômetro nunca mostrava nenhum dado de gasometria.
+ * Também trava a preferência pedida: arterial > venosa > soro, DENTRO do
+ * mesmo exame (não entre exames de dias diferentes).
+ */
+describe('valorLabsMaisRecente', () => {
+  const variantesPh = { serum: 'ph.serum', art: 'ph.art', ven: 'ph.ven' }
+
+  it('encontra o valor quando o exame só tem a variante arterial (bug: antes só buscava .serum)', () => {
+    const exame = { ...exameFake(), resultados: [resultadoFake('ph.art', '7,38')] }
+    expect(valorLabsMaisRecente([exame], variantesPh)).toBe('7,38')
+  })
+
+  it('encontra o valor quando o exame só tem a variante venosa', () => {
+    const exame = { ...exameFake(), resultados: [resultadoFake('ph.ven', '7,32')] }
+    expect(valorLabsMaisRecente([exame], variantesPh)).toBe('7,32')
+  })
+
+  it('quando o mesmo exame tem arterial E venosa, usa só a arterial', () => {
+    const exame = { ...exameFake(), resultados: [resultadoFake('ph.ven', '7,32'), resultadoFake('ph.art', '7,38')] }
+    expect(valorLabsMaisRecente([exame], variantesPh)).toBe('7,38')
+  })
+
+  it('soro é o último critério — só usado quando não há arterial nem venosa naquele exame', () => {
+    const exame = { ...exameFake(), resultados: [resultadoFake('ph.serum', '7,40')] }
+    expect(valorLabsMaisRecente([exame], variantesPh)).toBe('7,40')
+  })
+
+  it('não mistura exames — a preferência arterial>venosa vale dentro do exame mais recente, não entre exames', () => {
+    // Exame mais antigo só tem arterial; o mais recente só tem venosa — o
+    // mais recente vence (é o mesmo comportamento de "mais recente" de sempre).
+    const antigo = { ...exameFake({ id: 'antigo', data_exame: '01/08/2026' }), resultados: [resultadoFake('ph.art', '7,20')] }
+    const recente = { ...exameFake({ id: 'recente', data_exame: '20/08/2026' }), resultados: [resultadoFake('ph.ven', '7,35')] }
+    expect(valorLabsMaisRecente([recente, antigo], variantesPh)).toBe('7,35')
+  })
+
+  it('vazio quando nenhum exame tem a variante buscada', () => {
+    const exame = { ...exameFake(), resultados: [resultadoFake('creatinina.serum', '0,8')] }
+    expect(valorLabsMaisRecente([exame], variantesPh)).toBe('')
   })
 })

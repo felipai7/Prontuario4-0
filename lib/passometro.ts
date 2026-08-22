@@ -9,30 +9,31 @@ import type {
   SinalVital, Exame, PendenciaIntensivista, RegistroIntensivista, SuporteVentilatorio,
 } from '@/types'
 
-// Os 15 marcadores do passômetro batem 1:1 com o catálogo de analitos usado
-// na extração de exames (lib/exames/extracao/catalogo/analitos.json) — o
-// mesmo id que a IA reconhece no laudo é o que buscamos aqui. Na, K e Ca
-// iônico têm ids separados por origem (soro/arterial/venoso) no catálogo —
-// pro passômetro (visão rápida) qualquer um serve, então cada um lista os 3;
-// se a última dosagem só veio de gasometria (sem bioquímica no mesmo dia),
-// ainda assim entra.
-const ANALITOS_LABS: { key: string; label: string; ids: string[] }[] = [
-  { key: 'hb', label: 'Hb', ids: ['hemoglobina.serum'] },
-  { key: 'ht', label: 'Ht', ids: ['hematocrito.serum'] },
-  { key: 'leuco', label: 'Leuco', ids: ['leucocitos.serum'] },
-  { key: 'plaq', label: 'Plaq', ids: ['plaquetas.serum'] },
-  { key: 'pcr', label: 'PCR', ids: ['pcr.serum'] },
-  { key: 'lactato', label: 'Lactato', ids: ['lactato.serum'] },
-  { key: 'ureia', label: 'Ureia', ids: ['ureia.serum'] },
-  { key: 'creat', label: 'Creat', ids: ['creatinina.serum'] },
-  { key: 'na', label: 'Na', ids: ['sodio.serum', 'sodio.art', 'sodio.ven'] },
-  { key: 'k', label: 'K', ids: ['potassio.serum', 'potassio.art', 'potassio.ven'] },
-  { key: 'mg', label: 'Mg', ids: ['magnesio.serum'] },
-  { key: 'ph', label: 'pH', ids: ['ph.serum'] },
-  { key: 'bic', label: 'Bic', ids: ['hco3.serum'] },
-  { key: 'pco2', label: 'pCO2', ids: ['pco2.serum'] },
-  { key: 'po2', label: 'pO2', ids: ['po2.serum'] },
-  { key: 'ca', label: 'Ca', ids: ['calcio.ionico.serum', 'calcio.ionico.art', 'calcio.ionico.ven'] },
+// Os marcadores do passômetro batem 1:1 com o catálogo de analitos usado na
+// extração de exames (lib/exames/extracao/catalogo/analitos.json) — o mesmo
+// id que a IA reconhece no laudo é o que buscamos aqui. Vários têm variantes
+// por origem no catálogo (soro/arterial/venoso): Na, K e Ca iônico já tinham
+// isso mapeado, mas pH, HCO3 (Bic), pCO2, pO2 e Lactato NÃO tinham — só
+// `.serum` estava listado, e gasometria nunca grava nesse id (grava
+// `.art`/`.ven`), daí a coluna de exames nunca mostrar gasometria nenhuma.
+// Corrigido incluindo as 3 variantes onde o catálogo as tem.
+const ANALITOS_LABS: { key: string; label: string; serum?: string; art?: string; ven?: string }[] = [
+  { key: 'hb', label: 'Hb', serum: 'hemoglobina.serum' },
+  { key: 'ht', label: 'Ht', serum: 'hematocrito.serum' },
+  { key: 'leuco', label: 'Leuco', serum: 'leucocitos.serum' },
+  { key: 'plaq', label: 'Plaq', serum: 'plaquetas.serum' },
+  { key: 'pcr', label: 'PCR', serum: 'pcr.serum' },
+  { key: 'lactato', label: 'Lactato', serum: 'lactato.serum', art: 'lactato.art', ven: 'lactato.ven' },
+  { key: 'ureia', label: 'Ureia', serum: 'ureia.serum' },
+  { key: 'creat', label: 'Creat', serum: 'creatinina.serum' },
+  { key: 'na', label: 'Na', serum: 'sodio.serum', art: 'sodio.art', ven: 'sodio.ven' },
+  { key: 'k', label: 'K', serum: 'potassio.serum', art: 'potassio.art', ven: 'potassio.ven' },
+  { key: 'mg', label: 'Mg', serum: 'magnesio.serum' },
+  { key: 'ph', label: 'pH', serum: 'ph.serum', art: 'ph.art', ven: 'ph.ven' },
+  { key: 'bic', label: 'Bic', serum: 'hco3.serum', art: 'hco3.art', ven: 'hco3.ven' },
+  { key: 'pco2', label: 'pCO2', serum: 'pco2.serum', art: 'pco2.art', ven: 'pco2.ven' },
+  { key: 'po2', label: 'pO2', serum: 'po2.serum', art: 'po2.art', ven: 'po2.ven' },
+  { key: 'ca', label: 'Ca', serum: 'calcio.ionico.serum', art: 'calcio.ionico.art', ven: 'calcio.ionico.ven' },
 ]
 
 export interface LinhaPassometro {
@@ -111,13 +112,23 @@ export function ordenarExamesRecentes(exames: Exame[]): Exame[] {
   return [...exames].sort((a, b) => parseExameTimestamp(b) - parseExameTimestamp(a))
 }
 
-// Só o valor, sem unidade (mmol, mg/dL...) — a coluna já deixa claro o que é
-// cada marcador (rótulo impresso), a unidade só ocupava espaço à toa.
-function valorLabsMaisRecente(examesOrdenados: Exame[], ids: string[]): string {
+/**
+ * Só o valor, sem unidade (mmol, mg/dL...) — a coluna já deixa claro o que é
+ * cada marcador (rótulo impresso), a unidade só ocupava espaço à toa.
+ *
+ * Dentro do exame mais recente que tiver QUALQUER uma das variantes, prioriza
+ * arterial > venosa > soro — pedido do Felipe: "caso tenha gasometria venosa
+ * e arterial, exiba os dados apenas da arterial; caso tenha apenas uma das
+ * duas, exiba daquela que existe". Soro entra como 3º critério pros
+ * marcadores que também podem vir de bioquímica comum (Na/K/Ca), não só de
+ * gasometria.
+ */
+export function valorLabsMaisRecente(examesOrdenados: Exame[], variantes: { serum?: string; art?: string; ven?: string }): string {
   for (const exame of examesOrdenados) {
-    for (const r of exame.resultados ?? []) {
-      if (r.analito_id && ids.includes(r.analito_id)) return r.valor
-    }
+    const porId = new Map((exame.resultados ?? []).map(r => [r.analito_id, r.valor]))
+    if (variantes.art && porId.has(variantes.art)) return porId.get(variantes.art)!
+    if (variantes.ven && porId.has(variantes.ven)) return porId.get(variantes.ven)!
+    if (variantes.serum && porId.has(variantes.serum)) return porId.get(variantes.serum)!
   }
   return ''
 }
@@ -346,7 +357,7 @@ export async function buscarDadosPassometro(
     const acessoVascular = dispositivos.filter(d => d.tipo === 'AVP' || d.tipo === 'PICC' || d.tipo === 'CVC' || d.tipo === 'PAI' || d.tipo === 'CDL')
 
     const labs: Record<string, string> = {}
-    for (const a of ANALITOS_LABS) labs[a.key] = valorLabsMaisRecente(examesOrd, a.ids)
+    for (const a of ANALITOS_LABS) labs[a.key] = valorLabsMaisRecente(examesOrd, a)
 
     const linha: LinhaPassometro = {
       alaId: paciente.ala_id,
