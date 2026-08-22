@@ -91,7 +91,7 @@ export interface SecaoPassometro {
   linhas: LinhaPassometro[]
 }
 
-function porPacienteId<T extends { paciente_id: string }>(linhas: T[]): Map<string, T[]> {
+export function porPacienteId<T extends { paciente_id: string }>(linhas: T[]): Map<string, T[]> {
   const mapa = new Map<string, T[]>()
   for (const l of linhas) {
     const grupo = mapa.get(l.paciente_id)
@@ -136,7 +136,7 @@ export function valorLabsMaisRecente(examesOrdenados: Exame[], variantes: { seru
 
 /** "2026-08-16" -> "16/08" — ano e hora não importam pro passômetro do dia,
  *  só atrapalham a leitura rápida (vale pra admissão e previsão de alta). */
-function dataCurta(dataISO: string): string {
+export function dataCurta(dataISO: string): string {
   const [, mes, dia] = dataISO.split('-')
   return `${dia}/${mes}`
 }
