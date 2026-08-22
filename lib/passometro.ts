@@ -195,7 +195,7 @@ export function blocoPA(pasValores: number[], padValores: number[]): string {
   const pad = resumo(padValores)
   const par = (a: number | undefined, b: number | undefined) =>
     a != null && b != null ? `${a}x${b}` : a != null ? `${a}` : b != null ? `x${b}` : '—'
-  return `Máx: ${par(pas?.max, pad?.max)}\nMéd: ${par(pas?.med, pad?.med)}\nMín: ${par(pas?.min, pad?.min)}`
+  return `PA Máx: ${par(pas?.max, pad?.max)}\nPA Méd: ${par(pas?.med, pad?.med)}\nPA Mín: ${par(pas?.min, pad?.min)}`
 }
 
 const DIAS_CONSTIPACAO = 3
@@ -634,11 +634,13 @@ export function gerarPlanilhaPassometro(unidade: Unidade, secoes: SecaoPassometr
       rowA.font = { size: 8 }
       rowB.font = { size: 8 }
       for (const r of [rowA, rowB]) r.alignment = { wrapText: true, vertical: 'top' }
-      // Ambas cabem até 3 linhas curtas sozinhas (rowA: PA combinado,
-      // Nome/Idade/Admissão; rowB: NPH/REG/SOS da Insulina, ou FC) — com
-      // altura fixa (Excel não faz auto-fit quando ela é setada
-      // manualmente), 27/34pt dão folga de sobra pra 3 linhas de 8pt.
-      rowA.height = 27
+      // rowA (PA combinado, Nome/Idade/Admissão) e rowB (NPH/REG/SOS da
+      // Insulina, ou FC) precisam da MESMA altura — as duas cabem até 3
+      // linhas curtas sozinhas. 27pt (o que rowA tinha) só dava pra ~2
+      // linhas e cortava "PA Mín" (a 3ª); 34pt (o que rowB já usava, sem
+      // reclamação de corte) cobre 3 linhas de 8pt com folga — Excel não
+      // faz auto-fit de altura quando ela é setada manualmente.
+      rowA.height = 34
       rowB.height = 34
       COLUNAS.forEach((c, i) => {
         const col = i + 1
@@ -688,6 +690,14 @@ function agruparEmPaginas<T>(itens: T[], tamanho: number): T[][] {
 export function gerarHtmlPassometro(unidade: Unidade, secoes: SecaoPassometro[]): string {
   const totalWidth = COLUNAS.reduce((s, c) => s + c.width, 0)
   const colgroup = COLUNAS.map(c => `<col style="width:${(c.width / totalWidth * 100).toFixed(2)}%">`).join('')
+  // Largura NATURAL da tabela (em mm), aproximando a mesma conversão que o
+  // Excel usa de "largura em caracteres" pra pixels — é o que faz esta
+  // tabela nascer do MESMO tamanho "cheio" que o Excel usa antes de encolher
+  // pra caber na página (fitToWidth). Antes a tabela nascia já fixa em
+  // 281mm (a largura da página), then o script de auto-escala só sobrava
+  // pra encolher a ALTURA — dobrando o encolhimento e deixando o texto bem
+  // menor/mais apertado do que o mesmo arquivo impresso a partir do Excel.
+  const larguraNaturalMm = COLUNAS.reduce((s, c) => s + (c.width * 7 + 5) * 25.4 / 96, 0)
 
   // Cabeçalho em 2 <tr>, no mesmo padrão dos dados: colunas com `texto2`
   // mostram `label` numa linha e `label2` na outra, sem rowspan; colunas
@@ -773,20 +783,19 @@ export function gerarHtmlPassometro(unidade: Unidade, secoes: SecaoPassometro[])
   body { font-family: Arial, Helvetica, sans-serif; font-size: 8pt; margin: 0; color: #0f172a; }
   h1 { font-size: 13pt; margin: 0 0 2px; }
   .subtitulo { font-size: 8pt; color: #64748b; font-style: italic; margin: 0 0 6px; }
-  table { border-collapse: collapse; width: 281mm; table-layout: fixed; }
+  table { border-collapse: collapse; width: ${larguraNaturalMm.toFixed(1)}mm; table-layout: fixed; }
   td, th { border: 1px solid #94a3b8; padding: 2px 3px; vertical-align: top; word-wrap: break-word; }
   th { background: #f1f5f9; font-size: 7.5pt; text-align: center; font-weight: bold; }
   td.ala { background: #eef2ff; font-weight: bold; font-size: 11pt; padding: 4px; }
   /* 1 página por ala (ou por bloco de até 10 leitos) — cada uma força quebra
      de página, e cada paciente (1 <tbody>) não pode ser cortado ao meio.
-     .pagina-conteudo (título + tabela) vira o alvo do transform: scale()
-     calculado em runtime (script no fim do body) — sem isso, uma ala cheia
-     com as fontes grandes do cabeçalho/leito/previsão de alta vaza pra uma
-     2ª página, diferente do caminho do Excel (que sempre encolhe pra caber,
-     via fitToWidth). */
+     .pagina-conteudo (título + tabela) nasce na largura NATURAL (acima) e o
+     script de auto-escala (fim do body) encolhe ela pra caber na página —
+     o mesmo "ajustar à página" que o Excel já faz sozinho (fitToWidth),
+     calculado aqui a partir do tamanho real renderizado. */
   .pagina { page-break-after: always; break-after: page; overflow: hidden; }
   .pagina:last-child { page-break-after: auto; break-after: auto; }
-  .pagina-conteudo { width: 281mm; transform-origin: top left; }
+  .pagina-conteudo { width: ${larguraNaturalMm.toFixed(1)}mm; transform-origin: top left; }
   .pagina tbody { page-break-inside: avoid; break-inside: avoid; }
   /* Borda de baixo mais espessa separando um paciente do próximo — a última
      <tr> de cada <tbody> é sempre a 2ª linha física do paciente. */

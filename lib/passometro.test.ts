@@ -14,7 +14,7 @@ function linhaFake(overrides: Partial<LinhaPassometro> = {}): LinhaPassometro {
     hd: 'PNM??', peso: '65Kg', diurese: '400mL(24h) 0,26mL/Kg/h', viaDiurese: 'Espontânea', acesso: 'AVP',
     hgt: '85/100', temp: '36,1–37,4', respiracao: 'C.N. 2 L/min',
     fcResumo: 'FC Máx: 98\nFC Méd: 85\nFC Mín: 72',
-    paResumo: 'Máx: 145x90\nMéd: 130x78\nMín: 110x65',
+    paResumo: 'PA Máx: 145x90\nPA Méd: 130x78\nPA Mín: 110x65',
     evac: '2x 19/08', evacConstipado: false, antimicrobiano: 'Mero D2', dva: '', corticoide: '',
     ibp: 'Pant 40mg VO', anticoag: 'Enoxa 40mg', anticoagTerapeutico: false,
     labs: { leuco: '4710', hb: '8,9', ht: '28', plaq: '290', pcr: '157', lactato: '1,68', ureia: '37', creat: '0,5', na: '138', k: '2,95', mg: '2,0', ph: '7,46', bic: '33', pco2: '49', po2: '50', ca: '1,15' },
@@ -302,17 +302,17 @@ describe('blocoVital (FC)', () => {
 
 describe('blocoPA (PAS/PAD combinados)', () => {
   it('exemplo do pedido: 150x70, 140x80, 142x82 → Máx 150x82, Méd 144x77, Mín 140x70', () => {
-    expect(blocoPA([150, 140, 142], [70, 80, 82])).toBe('Máx: 150x82\nMéd: 144x77\nMín: 140x70')
+    expect(blocoPA([150, 140, 142], [70, 80, 82])).toBe('PA Máx: 150x82\nPA Méd: 144x77\nPA Mín: 140x70')
   })
   it('extremos e média de cada componente são independentes — não vêm da mesma aferição', () => {
     // Máx PAS (150) veio da aferição 150x70, Máx PAD (82) veio de 142x82 —
     // combinados como "150x82" mesmo sem terem sido medidos juntos.
     const r = blocoPA([150, 140], [70, 82])
-    expect(r).toContain('Máx: 150x82')
-    expect(r).toContain('Mín: 140x70')
+    expect(r).toContain('PA Máx: 150x82')
+    expect(r).toContain('PA Mín: 140x70')
   })
   it('não colapsa com uma única aferição — formato fixo de 3 linhas', () => {
-    expect(blocoPA([120], [80])).toBe('Máx: 120x80\nMéd: 120x80\nMín: 120x80')
+    expect(blocoPA([120], [80])).toBe('PA Máx: 120x80\nPA Méd: 120x80\nPA Mín: 120x80')
   })
   it('vazio sem nenhuma aferição de PA', () => {
     expect(blocoPA([], [])).toBe('')
