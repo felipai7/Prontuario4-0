@@ -24,6 +24,7 @@ export interface LinhaPassometroEnfermagem {
   nome: string
   idade: string
   admissao: string
+  hd: string
   ventilatorio: string
   dispositivos: string
   dieta: string
@@ -42,7 +43,7 @@ export interface SecaoPassometroEnfermagem {
 
 function linhaVaziaEnfermagem(alaId: string, leito: string): LinhaPassometroEnfermagem {
   return {
-    alaId, vazio: true, leito, nome: '', idade: '', admissao: '',
+    alaId, vazio: true, leito, nome: '', idade: '', admissao: '', hd: '',
     ventilatorio: '', dispositivos: '', dieta: '', diurese: '', curativos: '',
     antimicrobiano: '',
   }
@@ -128,6 +129,7 @@ export async function buscarDadosPassometroEnfermagem(
       nome: paciente.nome.trim(),
       idade: calcAge(paciente.data_nascimento),
       admissao: dataCurta(paciente.data_internacao),
+      hd: paciente.hipoteses ?? '',
       ventilatorio: formatarRespiracao(ventAtual),
       dispositivos: dispositivos.map(d => `${d.tipo} (${dataCurta(d.data_insercao)})`).join(', '),
       dieta: formatarDieta(nutriPorPac.get(paciente.id) ?? null),
@@ -179,12 +181,19 @@ interface ColunaEnf {
 
 const COLUNAS_ENF: ColunaEnf[] = [
   {
-    label: 'Leito', width: 7,
+    // Estreitada (era 7) pra abrir espaço pra coluna de Hipótese
+    // Diagnóstica nova, sem aumentar a largura total do documento.
+    label: 'Leito', width: 6,
     blocos: l => [{ linhas: 4, texto: () => l.leito, fonte: { size: 18, bold: true } }],
   },
   {
-    label: 'Nome / Idade / Internação', width: 16,
+    // Estreitada (era 16), mesmo motivo da coluna Leito.
+    label: 'Nome / Idade / Internação', width: 13,
     blocos: l => [{ linhas: 4, texto: () => `${l.nome}\n${l.idade}\n${l.admissao}`, fonte: { size: 10, bold: true } }],
+  },
+  {
+    label: 'Hipótese Diagnóstica', width: 10,
+    blocos: l => [{ linhas: 4, texto: () => l.hd }],
   },
   {
     // Mais larga (era 30) — a pedido, pra sobrar espaço pra Dispositivos
@@ -215,7 +224,9 @@ const COLUNAS_ENF: ColunaEnf[] = [
     // Colunas 6 (Pendências da Visita, importada do intensivista) e 7
     // (Pendências e Programações, em branco) viraram uma só — a pedido,
     // sem mais importar nada: fica inteira em branco pra escrita à mão.
-    label: 'Pendências e Programações', width: 30,
+    // Estreitada de 30 pra 24 pra compensar a coluna de Hipótese
+    // Diagnóstica nova, mantendo a largura total do documento igual.
+    label: 'Pendências e Programações', width: 24,
     blocos: () => [{ linhas: 4, texto: () => '' }],
   },
 ]

@@ -10,6 +10,7 @@ import type { Dispositivo, LppEvento, NutricaoDia } from '@/types'
 function linhaFake(overrides: Partial<LinhaPassometroEnfermagem> = {}): LinhaPassometroEnfermagem {
   return {
     alaId: 'ala-1', vazio: false, leito: '2', nome: 'Fulana da Silva Tal', idade: '76 anos', admissao: '16/08',
+    hd: 'IAM anterior extenso',
     ventilatorio: 'C.N. 2 L/min', dispositivos: 'CVC (12/08), SVD (15/08)',
     dieta: 'NE 100%', diurese: '1200mL(24h) 0,77mL/Kg/h · SVD 15/08',
     curativos: '⚠️ LPP grau 2 (sacral)\n⚠️ CVC, SVD',
@@ -90,7 +91,7 @@ describe('agruparPorAlaEnfermagem', () => {
 describe('gerarPlanilhaPassometroEnfermagem', () => {
   it('gera o workbook sem lançar erro, com paciente cheio e leito vazio', () => {
     const secoes: SecaoPassometroEnfermagem[] = [
-      { ala: unidadeFake.alas[0], linhas: [linhaFake(), linhaFake({ leito: '1', vazio: true, nome: '', idade: '', admissao: '', ventilatorio: '', dispositivos: '', dieta: '', diurese: '', curativos: '', antimicrobiano: '' })] },
+      { ala: unidadeFake.alas[0], linhas: [linhaFake(), linhaFake({ leito: '1', vazio: true, nome: '', idade: '', admissao: '', hd: '', ventilatorio: '', dispositivos: '', dieta: '', diurese: '', curativos: '', antimicrobiano: '' })] },
     ]
     expect(() => gerarPlanilhaPassometroEnfermagem(unidadeFake, secoes)).not.toThrow()
   })
@@ -114,35 +115,45 @@ describe('gerarPlanilhaPassometroEnfermagem', () => {
     expect(ws.getCell(5, 3).font?.size).toBe(8) // resto continua no tamanho padrão da linha
   })
 
+  it('coluna Hipótese Diagnóstica, mesclada nas 4 linhas físicas', () => {
+    const secoes: SecaoPassometroEnfermagem[] = [{ ala: unidadeFake.alas[0], linhas: [linhaFake()] }]
+    const wb = gerarPlanilhaPassometroEnfermagem(unidadeFake, secoes)
+    const ws = wb.getWorksheet('Passômetro Enfermagem')!
+    expect(ws.getCell(4, 3).value).toBe('Hipótese Diagnóstica') // cabeçalho
+    expect(ws.getCell(5, 3).value).toBe('IAM anterior extenso')
+    expect(ws.getCell(5, 3).isMerged).toBe(true)
+    expect(ws.getCell(8, 3).isMerged).toBe(true) // última das 4 continua mesclada com a 1ª
+  })
+
   it('colunas 6 e 7 viraram uma só, em branco (sem mais importar pendências do intensivista)', () => {
     const secoes: SecaoPassometroEnfermagem[] = [{ ala: unidadeFake.alas[0], linhas: [linhaFake()] }]
     const wb = gerarPlanilhaPassometroEnfermagem(unidadeFake, secoes)
     const ws = wb.getWorksheet('Passômetro Enfermagem')!
-    expect(ws.columnCount).toBe(6) // era 7 antes da fusão
-    expect(ws.getCell(4, 6).value).toBe('Pendências e Programações') // cabeçalho
-    expect(ws.getCell(5, 6).value).toBe('') // sem import — em branco
-    expect(ws.getCell(5, 6).isMerged).toBe(true) // mesclada nas 4 linhas físicas
+    expect(ws.columnCount).toBe(7) // era 7 antes da fusão + 1 (Hipótese Diagnóstica)
+    expect(ws.getCell(4, 7).value).toBe('Pendências e Programações') // cabeçalho
+    expect(ws.getCell(5, 7).value).toBe('') // sem import — em branco
+    expect(ws.getCell(5, 7).isMerged).toBe(true) // mesclada nas 4 linhas físicas
   })
 
   it('coluna Ventilatório/Dispositivos/Dieta/Diurese: 1 item por linha física, com rótulo', () => {
     const secoes: SecaoPassometroEnfermagem[] = [{ ala: unidadeFake.alas[0], linhas: [linhaFake()] }]
     const wb = gerarPlanilhaPassometroEnfermagem(unidadeFake, secoes)
     const ws = wb.getWorksheet('Passômetro Enfermagem')!
-    // Coluna 3 = Ventilatório/Dispositivos/Dieta/Diurese; linhas 5,6,7,8.
-    expect(ws.getCell(5, 3).value).toBe('Ventilatório: C.N. 2 L/min')
-    expect(ws.getCell(6, 3).value).toBe('Dispositivos: CVC (12/08), SVD (15/08)')
-    expect(ws.getCell(7, 3).value).toBe('Dieta: NE 100%')
-    expect(ws.getCell(8, 3).value).toBe('Diurese: 1200mL(24h) 0,77mL/Kg/h · SVD 15/08')
+    // Coluna 4 = Ventilatório/Dispositivos/Dieta/Diurese; linhas 5,6,7,8.
+    expect(ws.getCell(5, 4).value).toBe('Ventilatório: C.N. 2 L/min')
+    expect(ws.getCell(6, 4).value).toBe('Dispositivos: CVC (12/08), SVD (15/08)')
+    expect(ws.getCell(7, 4).value).toBe('Dieta: NE 100%')
+    expect(ws.getCell(8, 4).value).toBe('Diurese: 1200mL(24h) 0,77mL/Kg/h · SVD 15/08')
   })
 
   it('coluna ATB/BIC: ATB nas 2 primeiras linhas mescladas, BIC nas 2 últimas (em branco)', () => {
     const secoes: SecaoPassometroEnfermagem[] = [{ ala: unidadeFake.alas[0], linhas: [linhaFake()] }]
     const wb = gerarPlanilhaPassometroEnfermagem(unidadeFake, secoes)
     const ws = wb.getWorksheet('Passômetro Enfermagem')!
-    expect(ws.getCell(5, 5).value).toBe('ATB: Meropenem (D2/7)')
-    expect(ws.getCell(5, 5).isMerged).toBe(true)
-    expect(ws.getCell(7, 5).value).toBe('BIC: ')
-    expect(ws.getCell(7, 5).isMerged).toBe(true)
+    expect(ws.getCell(5, 6).value).toBe('ATB: Meropenem (D2/7)')
+    expect(ws.getCell(5, 6).isMerged).toBe(true)
+    expect(ws.getCell(7, 6).value).toBe('BIC: ')
+    expect(ws.getCell(7, 6).isMerged).toBe(true)
   })
 
   it('quebra manual a cada 6 leitos — nunca no meio de um paciente', () => {
@@ -169,6 +180,8 @@ describe('gerarHtmlPassometroEnfermagem', () => {
     const secoes: SecaoPassometroEnfermagem[] = [{ ala: unidadeFake.alas[0], linhas: [linhaFake()] }]
     const html = gerarHtmlPassometroEnfermagem(unidadeFake, secoes)
     expect(html).toContain('Passômetro de Enfermagem')
+    expect(html).toContain('Hipótese Diagnóstica')
+    expect(html).toContain('IAM anterior extenso')
     expect(html).toContain('Ventilatório: C.N. 2 L/min')
     expect(html).toContain('Dieta: NE 100%')
     expect(html).toContain('ATB: Meropenem (D2/7)')
