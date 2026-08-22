@@ -55,11 +55,13 @@ export default function PassometroButton({ unidade, showToast }: Props) {
         showToast('Nenhum leito cadastrado nessa ala.', 'error')
         return
       }
+      // O próprio HTML gerado calcula a escala pra caber numa página e
+      // dispara window.print()/fecha a janela sozinho (ver gerarHtmlPassometro)
+      // — chamar print() daqui, antes do layout medir a altura real do
+      // conteúdo, voltaria a imprimir sem o ajuste de escala.
       janela.document.write(gerarHtmlPassometro(unidade, secoes))
       janela.document.close()
-      janela.onafterprint = () => janela.close()
       janela.focus()
-      janela.print()
       setAberto(false)
     } catch (err) {
       janela.close()

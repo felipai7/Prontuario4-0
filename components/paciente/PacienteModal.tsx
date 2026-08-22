@@ -323,6 +323,15 @@ export default function PacienteModal({
   // com um formulário de edição aberto, ou uma avaliação de IA em
   // andamento, depois de trocar de leito misturaria dado de duas pessoas.
   useEffect(() => {
+    // `loading` some daqui, não só do início de loadData(): trocar de leito
+    // sem desmontar o modal (setas de navegação) re-renderiza com a
+    // identidade do paciente NOVO (nome, leito) já atualizada por setPac,
+    // mas exames/cuidados/etc. só são sobrescritos quando o efeito de
+    // loadData (abaixo, com dep [pac.id]) roda — um passo de render depois.
+    // Sem travar `loading` aqui, esse intervalo pintava a tela com o cabeçalho
+    // do paciente novo e os dados clínicos (ex.: cuidados_horizontais, o
+    // corticoide/opioide da Nutrição) ainda do paciente ANTERIOR.
+    setLoading(true)
     setPac(paciente)
     setEditing(false)
     setEditErrors({})

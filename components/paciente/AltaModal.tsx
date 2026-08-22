@@ -86,15 +86,16 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
       // Lista TODAS as unidades ativas do tipo oposto, não só as que a própria
       // pessoa tem vínculo de staff — transferir daqui pra lá não exige ser
       // staff de lá também (é a unidade de ORIGEM que autoriza a ação, e essa
-      // já é checada por posso_ver_paciente dentro da RPC). units.select tem
-      // policy aberta pra qualquer autenticado (precisa pro seletor de unidade).
-      const { data } = await supabase
-        .from('units')
-        .select('id, name')
-        .eq('active', true).eq('tipo_unidade', tipoAlvo).neq('id', paciente.unit_id)
-        .order('name')
+      // já é checada por posso_ver_paciente dentro da RPC). `units` SELECT é
+      // restrito a sou_da_unidade(id) (multiunidade_3_units.sql), então uma
+      // query direta na tabela ficava sempre vazia pra quem não tinha vínculo
+      // na unidade destino — usa a RPC security definer que já existe pra
+      // primeiro acesso, que contorna essa RLS de propósito.
+      const { data } = await supabase.rpc('listar_unidades_ativas')
       if (cancelado) return
-      const lista = (data ?? []).map(u => ({ id: u.id, nome: u.name }))
+      const lista = ((data ?? []) as { id: string; name: string; tipo_unidade: string }[])
+        .filter(u => u.tipo_unidade === tipoAlvo && u.id !== paciente.unit_id)
+        .map(u => ({ id: u.id, nome: u.name }))
       setUnidadesDestino(lista)
       setUnitDestinoId(lista.length === 1 ? lista[0].id : '')
       setLoadingUnidades(false)
@@ -307,8 +308,8 @@ export default function AltaModal({ paciente, exames, periodos, sinais, examesIm
                     <p className="text-sm text-slate-400">Carregando unidades...</p>
                   ) : unidadesDestino.length === 0 ? (
                     <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                      Você não tem vínculo de staff em nenhuma unidade do tipo certo pra receber —
-                      peça pro chefe te adicionar em Escalas antes de transferir.
+                      Nenhuma unidade do tipo certo pra receber está cadastrada e ativa —
+                      peça pro chefe criar/ativar uma em Unidade antes de transferir.
                     </p>
                   ) : (
                     <select value={unitDestinoId} onChange={e => setUnitDestinoId(e.target.value)}

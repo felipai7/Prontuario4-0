@@ -37,12 +37,26 @@ function opioideInfo(cuidados: CuidadosHorizontais | null, auditoria: AuditoriaI
     .filter(a => a.tabela === 'cuidados_horizontais')
     .sort((a, b) => a.changed_at.localeCompare(b.changed_at))
 
-  // Data da última TRANSIÇÃO do campo (de/para o valor atual).
+  // Data da última TRANSIÇÃO do campo (de/para o valor atual). A criação do
+  // registro (INSERT) não é uma transição quando nasce "false" — é só o
+  // valor inicial, ninguém desligou nada — senão TODO paciente cujo opioide
+  // nunca foi mexido aparecia como "marcado até [data de admissão]" (bug
+  // real visto em produção: leito recém-admitido, opioide nunca tocado,
+  // aparecendo com aviso de opioide). Só conta como transição real: um
+  // UPDATE (mudança de verdade) ou um INSERT que já nasce "true" (aí sim
+  // significa "em uso desde a admissão").
   let ultimaMudanca: string | null = null
   let anterior: boolean | null = null
+  let visto = false
   for (const a of audit) {
     const v = (a.dados_novos?.opioide_em_uso ?? null) as boolean | null
     if (v == null) continue
+    if (!visto) {
+      visto = true
+      anterior = v
+      if (v === true) ultimaMudanca = a.changed_at
+      continue
+    }
     if (v !== anterior) ultimaMudanca = a.changed_at
     anterior = v
   }

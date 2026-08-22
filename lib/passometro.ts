@@ -739,14 +739,19 @@ export function gerarHtmlPassometro(unidade: Unidade, secoes: SecaoPassometro[])
   body { font-family: Arial, Helvetica, sans-serif; font-size: 8pt; margin: 0; color: #0f172a; }
   h1 { font-size: 13pt; margin: 0 0 2px; }
   .subtitulo { font-size: 8pt; color: #64748b; font-style: italic; margin: 0 0 6px; }
-  table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+  table { border-collapse: collapse; width: 281mm; table-layout: fixed; }
   td, th { border: 1px solid #94a3b8; padding: 2px 3px; vertical-align: top; word-wrap: break-word; }
   th { background: #f1f5f9; font-size: 7.5pt; text-align: center; font-weight: bold; }
   td.ala { background: #eef2ff; font-weight: bold; font-size: 11pt; padding: 4px; }
   /* 1 página por ala (ou por bloco de até 10 leitos) — cada uma força quebra
-     de página, e cada paciente (1 <tbody>) não pode ser cortado ao meio. */
-  .pagina { page-break-after: always; break-after: page; }
+     de página, e cada paciente (1 <tbody>) não pode ser cortado ao meio.
+     table.escala vira o alvo do transform: scale() calculado em runtime
+     (script no fim do body) — sem isso, uma ala cheia com as fontes grandes
+     do cabeçalho/leito/previsão de alta vaza pra uma 2ª página, diferente do
+     caminho do Excel (que sempre encolhe pra caber, via fitToWidth). */
+  .pagina { page-break-after: always; break-after: page; overflow: hidden; }
   .pagina:last-child { page-break-after: auto; break-after: auto; }
+  .pagina table { transform-origin: top left; }
   .pagina tbody { page-break-inside: avoid; break-inside: avoid; }
   /* Borda de baixo mais espessa separando um paciente do próximo — a última
      <tr> de cada <tbody> é sempre a 2ª linha física do paciente. */
@@ -756,5 +761,45 @@ export function gerarHtmlPassometro(unidade: Unidade, secoes: SecaoPassometro[])
   <h1>🗒️ Passômetro — ${escapeHtml(unidade.nome)}</h1>
   <p class="subtitulo">Gerado em ${new Date().toLocaleString('pt-BR')}</p>
   ${paginasHtml}
+  <script>
+  (function () {
+    // Mede quantos px o navegador usa por mm (evita supor 96dpi) e encolhe
+    // cada página, via transform: scale(), até caber na área imprimível de
+    // uma A4 paisagem com margem de 8mm (297x210mm - 16mm = 281x194mm) —
+    // o mesmo espírito do "ajustar à página" que o Excel já faz sozinho
+    // (fitToWidth), só que aqui calculado pro conteúdo real renderizado.
+    function pxPorMm() {
+      var sonda = document.createElement('div')
+      sonda.style.cssText = 'position:absolute;visibility:hidden;height:100mm;width:0;padding:0;margin:0;border:0;'
+      document.body.appendChild(sonda)
+      var px = sonda.getBoundingClientRect().height / 100
+      document.body.removeChild(sonda)
+      return px || (96 / 25.4)
+    }
+    function ajustarPaginas() {
+      var ppmm = pxPorMm()
+      var margem = 2 * ppmm // folga p/ arredondamento não estourar a página
+      var larguraPx = 281 * ppmm - margem
+      var alturaPx = 194 * ppmm - margem
+      document.querySelectorAll('.pagina').forEach(function (pagina) {
+        var tabela = pagina.querySelector('table')
+        if (!tabela) return
+        tabela.style.transform = 'none'
+        var altura = tabela.getBoundingClientRect().height
+        var largura = tabela.getBoundingClientRect().width
+        var escala = Math.min(1, alturaPx / altura, larguraPx / largura)
+        if (escala < 1) {
+          tabela.style.transform = 'scale(' + escala + ')'
+          pagina.style.height = (altura * escala) + 'px'
+        }
+      })
+    }
+    window.addEventListener('load', function () {
+      ajustarPaginas()
+      setTimeout(function () { window.print() }, 50)
+    })
+    window.onafterprint = function () { window.close() }
+  })()
+  </script>
 </body></html>`
 }
