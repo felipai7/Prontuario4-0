@@ -172,7 +172,7 @@ export function blocoVital(nome: string, valores: number[]): string {
   if (valores.length === 0) return ''
   const min = Math.min(...valores), max = Math.max(...valores)
   const med = Math.round(valores.reduce((a, b) => a + b, 0) / valores.length)
-  return `${nome} Mín: ${min}\n${nome} Méd: ${med}\n${nome} Máx: ${max}`
+  return `${nome} Máx: ${max}\n${nome} Méd: ${med}\n${nome} Mín: ${min}`
 }
 
 const DIAS_CONSTIPACAO = 3
@@ -611,10 +611,15 @@ export function gerarPlanilhaPassometro(unidade: Unidade, secoes: SecaoPassometr
       rowA.font = { size: 8 }
       rowB.font = { size: 8 }
       for (const r of [rowA, rowB]) r.alignment = { wrapText: true, vertical: 'top' }
-      rowA.height = 27
-      // Mais alta que a de cima: precisa caber até 3 linhas curtas sozinha
-      // (NPH/REG/SOS da Insulina) — e de brinde dá mais espaço às colunas
-      // mescladas (FC/PAS/PAD, Peso/Diurese/Via, exames), que somam as duas.
+      // rowA precisa caber a coluna PAS/PAD, que empilha os 2 blocos de 3
+      // linhas (6 linhas ao todo) na MESMA célula — com altura fixa (Excel
+      // não faz auto-fit de altura quando ela é setada manualmente), 27pt só
+      // dava pra ~3 linhas e cortava "PA Máx" no meio. 62pt cobre as 6 linhas
+      // de 8pt com folga de sobra.
+      rowA.height = 62
+      // Só precisa caber até 3 linhas curtas sozinha (NPH/REG/SOS da
+      // Insulina, ou FC) — e de brinde dá espaço às colunas mescladas
+      // (Peso/Diurese/Via, exames), que somam rowA+rowB.
       rowB.height = 34
       COLUNAS.forEach((c, i) => {
         const col = i + 1
@@ -716,13 +721,23 @@ export function gerarHtmlPassometro(unidade: Unidade, secoes: SecaoPassometro[])
   // <div class="pagina"> com quebra de página explícita entre elas. Antes
   // disso tudo vivia numa única tabela gigante e o navegador decidia sozinho
   // onde cortar, vazando uma ala pra página da outra.
+  //
+  // Título + "gerado em" entram DENTRO de cada .pagina (repetidos por
+  // página), não uma vez só no topo do body: viviam fora antes, e por isso
+  // sua altura não contava no cálculo de "encolher pra caber numa página"
+  // (script no fim do body) — sobrava só pro conteúdo da 1ª página, que
+  // vazava pra uma 2ª mesmo já escalado.
   const paginasHtml = secoes.flatMap(({ ala, linhas }) => {
     const ocupados = linhas.filter(l => !l.vazio).length
     const blocos = agruparEmPaginas(linhas, LEITOS_POR_PAGINA)
     return blocos.map((bloco, i) => {
       const sufixoPagina = blocos.length > 1 ? ` — página ${i + 1}/${blocos.length}` : ''
       const cabecalhoAla = `<tr><td class="ala" colspan="${COLUNAS.length}">${escapeHtml(ala.nome)} (${ocupados}/${linhas.length} leitos ocupados)${sufixoPagina}</td></tr>`
-      return `<div class="pagina"><table><colgroup>${colgroup}</colgroup><thead>${cabecalhoAla}${linhaCabecalho}</thead>${linhasParaHtml(bloco)}</table></div>`
+      return `<div class="pagina"><div class="pagina-conteudo">
+        <h1>🗒️ Passômetro — ${escapeHtml(unidade.nome)}</h1>
+        <p class="subtitulo">Gerado em ${new Date().toLocaleString('pt-BR')}</p>
+        <table><colgroup>${colgroup}</colgroup><thead>${cabecalhoAla}${linhaCabecalho}</thead>${linhasParaHtml(bloco)}</table>
+      </div></div>`
     })
   }).join('')
 
@@ -745,21 +760,20 @@ export function gerarHtmlPassometro(unidade: Unidade, secoes: SecaoPassometro[])
   td.ala { background: #eef2ff; font-weight: bold; font-size: 11pt; padding: 4px; }
   /* 1 página por ala (ou por bloco de até 10 leitos) — cada uma força quebra
      de página, e cada paciente (1 <tbody>) não pode ser cortado ao meio.
-     table.escala vira o alvo do transform: scale() calculado em runtime
-     (script no fim do body) — sem isso, uma ala cheia com as fontes grandes
-     do cabeçalho/leito/previsão de alta vaza pra uma 2ª página, diferente do
-     caminho do Excel (que sempre encolhe pra caber, via fitToWidth). */
+     .pagina-conteudo (título + tabela) vira o alvo do transform: scale()
+     calculado em runtime (script no fim do body) — sem isso, uma ala cheia
+     com as fontes grandes do cabeçalho/leito/previsão de alta vaza pra uma
+     2ª página, diferente do caminho do Excel (que sempre encolhe pra caber,
+     via fitToWidth). */
   .pagina { page-break-after: always; break-after: page; overflow: hidden; }
   .pagina:last-child { page-break-after: auto; break-after: auto; }
-  .pagina table { transform-origin: top left; }
+  .pagina-conteudo { width: 281mm; transform-origin: top left; }
   .pagina tbody { page-break-inside: avoid; break-inside: avoid; }
   /* Borda de baixo mais espessa separando um paciente do próximo — a última
      <tr> de cada <tbody> é sempre a 2ª linha física do paciente. */
   .pagina tbody tr:last-child td { border-bottom: 2px solid #475569; }
 </style>
 </head><body>
-  <h1>🗒️ Passômetro — ${escapeHtml(unidade.nome)}</h1>
-  <p class="subtitulo">Gerado em ${new Date().toLocaleString('pt-BR')}</p>
   ${paginasHtml}
   <script>
   (function () {
@@ -767,7 +781,8 @@ export function gerarHtmlPassometro(unidade: Unidade, secoes: SecaoPassometro[])
     // cada página, via transform: scale(), até caber na área imprimível de
     // uma A4 paisagem com margem de 8mm (297x210mm - 16mm = 281x194mm) —
     // o mesmo espírito do "ajustar à página" que o Excel já faz sozinho
-    // (fitToWidth), só que aqui calculado pro conteúdo real renderizado.
+    // (fitToWidth), só que aqui calculado pro conteúdo real renderizado
+    // (título + tabela juntos — os dois vivem dentro de .pagina-conteudo).
     function pxPorMm() {
       var sonda = document.createElement('div')
       sonda.style.cssText = 'position:absolute;visibility:hidden;height:100mm;width:0;padding:0;margin:0;border:0;'
@@ -782,14 +797,14 @@ export function gerarHtmlPassometro(unidade: Unidade, secoes: SecaoPassometro[])
       var larguraPx = 281 * ppmm - margem
       var alturaPx = 194 * ppmm - margem
       document.querySelectorAll('.pagina').forEach(function (pagina) {
-        var tabela = pagina.querySelector('table')
-        if (!tabela) return
-        tabela.style.transform = 'none'
-        var altura = tabela.getBoundingClientRect().height
-        var largura = tabela.getBoundingClientRect().width
+        var conteudo = pagina.querySelector('.pagina-conteudo')
+        if (!conteudo) return
+        conteudo.style.transform = 'none'
+        var altura = conteudo.getBoundingClientRect().height
+        var largura = conteudo.getBoundingClientRect().width
         var escala = Math.min(1, alturaPx / altura, larguraPx / largura)
         if (escala < 1) {
-          tabela.style.transform = 'scale(' + escala + ')'
+          conteudo.style.transform = 'scale(' + escala + ')'
           pagina.style.height = (altura * escala) + 'px'
         }
       })

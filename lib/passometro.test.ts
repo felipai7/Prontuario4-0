@@ -13,9 +13,9 @@ function linhaFake(overrides: Partial<LinhaPassometro> = {}): LinhaPassometro {
     alaId: 'ala-1', vazio: false, leito: '2', nome: 'Fulana da Silva Tal', idade: '76 anos', admissao: '16/08',
     hd: 'PNM??', peso: '65Kg', diurese: '400mL(24h) 0,26mL/Kg/h', viaDiurese: 'Espontânea', acesso: 'AVP',
     hgt: '85/100', temp: '36,1–37,4', respiracao: 'C.N. 2 L/min',
-    fcResumo: 'FC Mín: 72\nFC Méd: 85\nFC Máx: 98',
-    pasResumo: 'PAS Mín: 110\nPAS Méd: 130\nPAS Máx: 145',
-    padResumo: 'PAD Mín: 65\nPAD Méd: 78\nPAD Máx: 90',
+    fcResumo: 'FC Máx: 98\nFC Méd: 85\nFC Mín: 72',
+    pasResumo: 'PAS Máx: 145\nPAS Méd: 130\nPAS Mín: 110',
+    padResumo: 'PAD Máx: 90\nPAD Méd: 78\nPAD Mín: 65',
     evac: '2x 19/08', evacConstipado: false, antimicrobiano: 'Mero D2', dva: '', corticoide: '',
     ibp: 'Pant 40mg VO', anticoag: 'Enoxa 40mg', anticoagTerapeutico: false,
     labs: { leuco: '4710', hb: '8,9', ht: '28', plaq: '290', pcr: '157', lactato: '1,68', ureia: '37', creat: '0,5', na: '138', k: '2,95', mg: '2,0', ph: '7,46', bic: '33', pco2: '49', po2: '50', ca: '1,15' },
@@ -290,11 +290,11 @@ describe('faixaMinMax (Temp.)', () => {
 })
 
 describe('blocoVital (FC/PAS/PAD)', () => {
-  it('sempre as 3 linhas (Mín/Méd/Máx), com o nome do vital em cada uma', () => {
-    expect(blocoVital('FC', [70, 90, 100])).toBe('FC Mín: 70\nFC Méd: 87\nFC Máx: 100')
+  it('sempre as 3 linhas (Máx/Méd/Mín, nessa ordem), com o nome do vital em cada uma', () => {
+    expect(blocoVital('FC', [70, 90, 100])).toBe('FC Máx: 100\nFC Méd: 87\nFC Mín: 70')
   })
   it('não colapsa mesmo quando todas as aferições deram o mesmo valor — formato fixo de 3 linhas', () => {
-    expect(blocoVital('PAS', [120])).toBe('PAS Mín: 120\nPAS Méd: 120\nPAS Máx: 120')
+    expect(blocoVital('PAS', [120])).toBe('PAS Máx: 120\nPAS Méd: 120\nPAS Mín: 120')
   })
   it('vazio sem nenhuma aferição', () => {
     expect(blocoVital('FC', [])).toBe('')
