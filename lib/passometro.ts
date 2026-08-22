@@ -58,12 +58,13 @@ export interface LinhaPassometro {
   /** Da aba de Ventilatório (registro mais recente) — "A.A.", "C.N. 2 L/min",
    *  "MNR 10 L/min", "VM TOT" etc. Vazio quando não há registro ainda. */
   respiracao: string
-  /** Bloco de 3 linhas cada, já com "Mín/Méd/Máx" embutido (ex.:
-   *  "FC Mín: 72\nFC Méd: 85\nFC Máx: 98") — substitui a antiga classificação
+  /** Bloco de 3 linhas, já com "Máx/Méd/Mín" embutido (ex.:
+   *  "FC Máx: 98\nFC Méd: 85\nFC Mín: 72") — substitui a antiga classificação
    *  por seta ("↑ taquicárdico" etc.), pedido do Felipe: números direto. */
   fcResumo: string
-  pasResumo: string
-  padResumo: string
+  /** PAS e PAD combinados numa única linha por posição ("150x82"), cada
+   *  componente resumido de forma independente — ver blocoPA(). */
+  paResumo: string
   evac: string
   /** >= 3 dias sem evacuar (ou nunca desde a admissão, se já faz 3+ dias) —
    *  destaca a célula em vermelho no Excel. */
@@ -161,18 +162,40 @@ export function faixaMinMax(valores: number[]): string {
 }
 
 /**
- * Bloco de 3 linhas pra um vital (FC, PAS ou PAD) — sempre as 3 (mín, méd,
- * máx), mesmo quando todas as aferições deram o mesmo valor: o pedido foi
- * "3 linhas... uma pra cada min, med, max", um formato fixo, não um resumo
- * que colapsa. O nome do vital entra em cada linha (não só uma vez no topo)
- * porque a coluna empilha PAS e PAD juntos — sem repetir, ficaria ambíguo
- * qual bloco de 3 números é qual.
+ * Bloco de 3 linhas pra um vital (hoje só FC — PAS/PAD usam blocoPA) —
+ * sempre as 3 (máx, méd, mín), mesmo quando todas as aferições deram o
+ * mesmo valor: o pedido foi "3 linhas... uma pra cada min, med, max", um
+ * formato fixo, não um resumo que colapsa.
  */
 export function blocoVital(nome: string, valores: number[]): string {
   if (valores.length === 0) return ''
   const min = Math.min(...valores), max = Math.max(...valores)
   const med = Math.round(valores.reduce((a, b) => a + b, 0) / valores.length)
   return `${nome} Máx: ${max}\n${nome} Méd: ${med}\n${nome} Mín: ${min}`
+}
+
+/**
+ * PAS e PAD combinados numa única linha por posição ("150x82"), 3 linhas
+ * (Máx/Méd/Mín) em vez dos 6 de dois blocos separados — poluía demais.
+ * Cada componente é resumido de forma INDEPENDENTE (a maior PAS entre as
+ * aferições x a maior PAD entre as aferições, não necessariamente da mesma
+ * aferição) — pedido explícito: "junte a menor PAS com a menor PAD e a
+ * maior PAS com a maior PAD... como se a maior aferição de PA fosse
+ * aquela". Ex.: aferições 150x70, 140x80, 142x82 → Máx 150x82, Mín 140x70,
+ * Méd = média das sistólicas x média das diastólicas.
+ */
+export function blocoPA(pasValores: number[], padValores: number[]): string {
+  if (pasValores.length === 0 && padValores.length === 0) return ''
+  const resumo = (valores: number[]) => valores.length === 0 ? null : {
+    max: Math.max(...valores),
+    min: Math.min(...valores),
+    med: Math.round(valores.reduce((a, b) => a + b, 0) / valores.length),
+  }
+  const pas = resumo(pasValores)
+  const pad = resumo(padValores)
+  const par = (a: number | undefined, b: number | undefined) =>
+    a != null && b != null ? `${a}x${b}` : a != null ? `${a}` : b != null ? `x${b}` : '—'
+  return `Máx: ${par(pas?.max, pad?.max)}\nMéd: ${par(pas?.med, pad?.med)}\nMín: ${par(pas?.min, pad?.min)}`
 }
 
 const DIAS_CONSTIPACAO = 3
@@ -377,8 +400,7 @@ export async function buscarDadosPassometro(
       temp: faixaMinMax(temps24h),
       respiracao: formatarRespiracao(ventAtual),
       fcResumo: blocoVital('FC', fcs24h),
-      pasResumo: blocoVital('PAS', pas24h),
-      padResumo: blocoVital('PAD', pad24h),
+      paResumo: blocoPA(pas24h, pad24h),
       evac: evacTexto,
       evacConstipado,
       antimicrobiano: (atbsPorPac.get(paciente.id) ?? [])
@@ -400,7 +422,7 @@ export async function buscarDadosPassometro(
 function linhaVazia(alaId: string, leito: string): LinhaPassometro {
   return {
     alaId, vazio: true, leito, nome: '', idade: '', admissao: '', hd: '', peso: '', diurese: '',
-    viaDiurese: '', acesso: '', hgt: '', temp: '', respiracao: '', fcResumo: '', pasResumo: '', padResumo: '',
+    viaDiurese: '', acesso: '', hgt: '', temp: '', respiracao: '', fcResumo: '', paResumo: '',
     evac: '', evacConstipado: false, antimicrobiano: '', dva: '', corticoide: '', ibp: '', anticoag: '',
     anticoagTerapeutico: false, labs: {}, pendencias: '', previsaoAlta: '', previsaoAltaHoje: false,
   }
@@ -497,13 +519,14 @@ const COLUNAS: Coluna[] = [
     fonte2: l => l.anticoagTerapeutico ? { bold: true } : null,
   },
   // Substitui a antiga classificação por seta ("↑ taquicárdico" etc.) por
-  // números direto. 2 linhas físicas, mesmo padrão do resto: em cima PAS
-  // (3 linhas) + PAD (3 linhas) = 6 linhas; embaixo FC (3 linhas). Largura
-  // bem maior que o normal — pedido do Felipe, pra sobrar espaço de escrever
-  // à mão as medicações que impactam FC/PA ao lado dos números.
+  // números direto. 2 linhas físicas, mesmo padrão do resto: em cima PA
+  // (3 linhas, PAS e PAD combinados como "150x82" — ver blocoPA); embaixo FC
+  // (3 linhas). Largura bem maior que o normal — pedido do Felipe, pra
+  // sobrar espaço de escrever à mão as medicações que impactam FC/PA ao
+  // lado dos números.
   {
-    label: 'PAS / PAD', label2: 'FC', width: 24,
-    texto: l => [l.pasResumo, l.padResumo].filter(Boolean).join('\n'),
+    label: 'PA (PASxPAD)', label2: 'FC', width: 24,
+    texto: l => l.paResumo,
     texto2: l => l.fcResumo,
   },
   // Nome do exame repetido em cada linha do valor (não só no cabeçalho) —
@@ -611,15 +634,11 @@ export function gerarPlanilhaPassometro(unidade: Unidade, secoes: SecaoPassometr
       rowA.font = { size: 8 }
       rowB.font = { size: 8 }
       for (const r of [rowA, rowB]) r.alignment = { wrapText: true, vertical: 'top' }
-      // rowA precisa caber a coluna PAS/PAD, que empilha os 2 blocos de 3
-      // linhas (6 linhas ao todo) na MESMA célula — com altura fixa (Excel
-      // não faz auto-fit de altura quando ela é setada manualmente), 27pt só
-      // dava pra ~3 linhas e cortava "PA Máx" no meio. 62pt cobre as 6 linhas
-      // de 8pt com folga de sobra.
-      rowA.height = 62
-      // Só precisa caber até 3 linhas curtas sozinha (NPH/REG/SOS da
-      // Insulina, ou FC) — e de brinde dá espaço às colunas mescladas
-      // (Peso/Diurese/Via, exames), que somam rowA+rowB.
+      // Ambas cabem até 3 linhas curtas sozinhas (rowA: PA combinado,
+      // Nome/Idade/Admissão; rowB: NPH/REG/SOS da Insulina, ou FC) — com
+      // altura fixa (Excel não faz auto-fit quando ela é setada
+      // manualmente), 27/34pt dão folga de sobra pra 3 linhas de 8pt.
+      rowA.height = 27
       rowB.height = 34
       COLUNAS.forEach((c, i) => {
         const col = i + 1
