@@ -797,6 +797,13 @@ export function gerarHtmlPassometro(unidade: Unidade, secoes: SecaoPassometro[])
   .pagina:last-child { page-break-after: auto; break-after: auto; }
   .pagina-conteudo { width: ${larguraNaturalMm.toFixed(1)}mm; transform-origin: top left; }
   .pagina tbody { page-break-inside: avoid; break-inside: avoid; }
+  /* Altura mínima nas 2 linhas físicas de cada paciente — sem isso, um
+     leito vazio (todo campo em branco, só o número do leito com rowspan=2
+     em fonte 20pt) deixava o navegador jogar quase toda a altura pra linha
+     de baixo e encolher a de cima quase a zero (distribuição de rowspan
+     entre as duas <tr>, sem nenhum outro conteúdo pra sustentar a de
+     cima). 34pt casa com a altura de linha do Excel (rowA/rowB). */
+  .pagina tbody tr { height: 34pt; }
   /* Borda de baixo mais espessa separando um paciente do próximo — a última
      <tr> de cada <tbody> é sempre a 2ª linha física do paciente. */
   .pagina tbody tr:last-child td { border-bottom: 2px solid #475569; }
