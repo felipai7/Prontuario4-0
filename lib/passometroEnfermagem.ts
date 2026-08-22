@@ -264,47 +264,70 @@ export function gerarPlanilhaPassometroEnfermagem(unidade: Unidade, secoes: Seca
   subtitulo.getCell(1).font = { italic: true, size: 8, color: { argb: 'FF64748B' } }
   ws.mergeCells(subtitulo.number, 1, subtitulo.number, COLUNAS_ENF.length)
 
-  for (const { ala, linhas } of secoes) {
+  // Excel não tem como medir o layout renderizado igual o script da
+  // impressão direta faz (esse aqui só descobre o zoom real quando ALGUÉM
+  // manda imprimir, já fora do nosso controle) — sem quebra manual, o
+  // fitToHeight:0 deixava a quebra automática cair em QUALQUER linha,
+  // inclusive no meio de um paciente (visto em produção: leito 07 cortado
+  // ao meio). 6 leitos por página é o número que a Enfermagem confirmou
+  // caber de verdade numa A4 nesse layout — quebra manual a cada 6, com o
+  // cabeçalho repetido em cada página, garante que a quebra nunca cai no
+  // meio de um paciente.
+  const LEITOS_POR_PAGINA_EXCEL = 6
+
+  secoes.forEach(({ ala, linhas }, alaIdx) => {
     const ocupados = linhas.filter(l => !l.vazio).length
-    const cabecalhoAla = ws.addRow([`${ala.nome} (${ocupados}/${linhas.length} leitos ocupados)`])
-    cabecalhoAla.font = { bold: true, size: 11 }
-    cabecalhoAla.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COR_GRUPO } } })
-    ws.mergeCells(cabecalhoAla.number, 1, cabecalhoAla.number, COLUNAS_ENF.length)
+    const blocos = agruparEmPaginas(linhas, LEITOS_POR_PAGINA_EXCEL)
 
-    const header = ws.addRow(COLUNAS_ENF.map(c => c.label))
-    header.font = { bold: true, size: 8, color: { argb: 'FF475569' } }
-    header.alignment = { wrapText: true, vertical: 'middle', horizontal: 'center' }
-    header.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COR_LABEL } }; c.border = BORDA_FINA })
-    header.height = 26
+    blocos.forEach((bloco, blocoIdx) => {
+      const sufixoPagina = blocos.length > 1 ? ` — página ${blocoIdx + 1}/${blocos.length}` : ''
+      const cabecalhoAla = ws.addRow([`${ala.nome} (${ocupados}/${linhas.length} leitos ocupados)${sufixoPagina}`])
+      cabecalhoAla.font = { bold: true, size: 11 }
+      cabecalhoAla.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COR_GRUPO } } })
+      ws.mergeCells(cabecalhoAla.number, 1, cabecalhoAla.number, COLUNAS_ENF.length)
 
-    for (const linha of linhas) {
-      const rows = [1, 2, 3, 4].map(() => ws.addRow(COLUNAS_ENF.map(() => '')))
-      for (const r of rows) { r.font = { size: 8 }; r.alignment = { wrapText: true, vertical: 'top' }; r.height = ALTURA_LINHA }
+      const header = ws.addRow(COLUNAS_ENF.map(c => c.label))
+      header.font = { bold: true, size: 8, color: { argb: 'FF475569' } }
+      header.alignment = { wrapText: true, vertical: 'middle', horizontal: 'center' }
+      header.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COR_LABEL } }; c.border = BORDA_FINA })
+      header.height = 26
 
-      COLUNAS_ENF.forEach((coluna, colIdx) => {
-        const col = colIdx + 1
-        const expandido = expandirBlocos(coluna.blocos(linha))
-        let i = 0
-        while (i < 4) {
-          const { bloco, inicio } = expandido[i]
-          if (inicio) {
-            const cell = rows[i].getCell(col)
-            cell.value = textoBloco(bloco, linha)
-            if (bloco.fonte) cell.font = { ...rows[i].font, ...bloco.fonte }
-            if (bloco.linhas > 1) ws.mergeCells(rows[i].number, col, rows[i + bloco.linhas - 1].number, col)
+      let ultimaLinhaDoPaciente: ExcelJS.Row | null = null
+      for (const linha of bloco) {
+        const rows = [1, 2, 3, 4].map(() => ws.addRow(COLUNAS_ENF.map(() => '')))
+        for (const r of rows) { r.font = { size: 8 }; r.alignment = { wrapText: true, vertical: 'top' }; r.height = ALTURA_LINHA }
+
+        COLUNAS_ENF.forEach((coluna, colIdx) => {
+          const col = colIdx + 1
+          const expandido = expandirBlocos(coluna.blocos(linha))
+          let i = 0
+          while (i < 4) {
+            const { bloco: blocoColuna, inicio } = expandido[i]
+            if (inicio) {
+              const cell = rows[i].getCell(col)
+              cell.value = textoBloco(blocoColuna, linha)
+              if (blocoColuna.fonte) cell.font = { ...rows[i].font, ...blocoColuna.fonte }
+              if (blocoColuna.linhas > 1) ws.mergeCells(rows[i].number, col, rows[i + blocoColuna.linhas - 1].number, col)
+            }
+            i++
           }
-          i++
-        }
-      })
-
-      for (let i = 0; i < 4; i++) {
-        COLUNAS_ENF.forEach((_, colIdx) => {
-          rows[i].getCell(colIdx + 1).border = i === 3 ? BORDA_ENTRE_PACIENTES : BORDA_FINA
         })
+
+        for (let i = 0; i < 4; i++) {
+          COLUNAS_ENF.forEach((_, colIdx) => {
+            rows[i].getCell(colIdx + 1).border = i === 3 ? BORDA_ENTRE_PACIENTES : BORDA_FINA
+          })
+        }
+        ultimaLinhaDoPaciente = rows[3]
       }
-    }
+
+      // Quebra de página manual depois do último paciente do bloco — exceto
+      // no fim de tudo (não faz sentido uma página em branco no final).
+      const ehUltimoBlocoDaUltimaAla = alaIdx === secoes.length - 1 && blocoIdx === blocos.length - 1
+      if (!ehUltimoBlocoDaUltimaAla) ultimaLinhaDoPaciente?.addPageBreak()
+    })
     ws.addRow([])
-  }
+  })
 
   return wb
 }
@@ -427,10 +450,19 @@ export function gerarHtmlPassometroEnfermagem(unidade: Unidade, secoes: SecaoPas
         conteudo.style.transform = 'none'
         var altura = conteudo.getBoundingClientRect().height
         var largura = conteudo.getBoundingClientRect().width
-        var escala = Math.min(1, alturaPx / altura, larguraPx / largura)
-        if (escala < 1) {
-          conteudo.style.transform = 'scale(' + escala + ')'
-          pagina.style.height = (altura * escala) + 'px'
+        // Escala X e Y INDEPENDENTES (não uma só pras duas): a tabela da
+        // Enfermagem tem poucas colunas e cabe de largura sem precisar
+        // encolher, mas precisa encolher de altura (4 linhas por paciente).
+        // Com uma escala ÚNICA (min de largura e altura), a mesma redução
+        // exigida pela altura também encolhia a largura desnecessariamente,
+        // sobrando bastante espaço em branco à direita da página. Elimina
+        // isso: a largura estica/encolhe pra preencher a página inteira,
+        // independente do quanto a altura precisou encolher.
+        var escalaX = larguraPx / largura
+        var escalaY = Math.min(1, alturaPx / altura)
+        if (escalaX !== 1 || escalaY < 1) {
+          conteudo.style.transform = 'scale(' + escalaX + ', ' + escalaY + ')'
+          pagina.style.height = (altura * escalaY) + 'px'
         }
       })
     }

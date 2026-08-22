@@ -144,6 +144,24 @@ describe('gerarPlanilhaPassometroEnfermagem', () => {
     expect(ws.getCell(7, 5).value).toBe('BIC: ')
     expect(ws.getCell(7, 5).isMerged).toBe(true)
   })
+
+  it('quebra manual a cada 6 leitos — nunca no meio de um paciente', () => {
+    const linhas = Array.from({ length: 9 }, (_, i) => linhaFake({ leito: String(i + 1) }))
+    const secoes: SecaoPassometroEnfermagem[] = [{ ala: unidadeFake.alas[0], linhas }]
+    const wb = gerarPlanilhaPassometroEnfermagem(unidadeFake, secoes)
+    const ws = wb.getWorksheet('Passômetro Enfermagem')!
+    // 1º bloco: título(1)/subtítulo(2)/ala(3)/cabeçalho(4)/6 pacientes(5-28,
+    // 4 linhas cada) — a quebra manual fica na última linha do 6º paciente.
+    const linhaQuebra = 4 + 6 * 4 // = 28
+    const rowBreaks = (ws as unknown as { rowBreaks: { id: number }[] }).rowBreaks
+    expect(rowBreaks?.some(b => b.id === linhaQuebra)).toBe(true)
+    // Cabeçalho repete no 2º bloco, com sufixo de página.
+    expect(ws.getCell(linhaQuebra + 1, 1).value).toContain('página 2/2')
+    expect(ws.getCell(linhaQuebra + 2, 1).value).toBe('Leito')
+    // Sem quebra sobrando depois do último paciente (não deixa página em branco no fim).
+    const ultimaLinha = linhaQuebra + 2 + 3 * 4
+    expect(rowBreaks?.some(b => b.id === ultimaLinha)).toBe(false)
+  })
 })
 
 describe('gerarHtmlPassometroEnfermagem', () => {
@@ -167,5 +185,13 @@ describe('gerarHtmlPassometroEnfermagem', () => {
     const secoes: SecaoPassometroEnfermagem[] = [{ ala: unidadeFake.alas[0], linhas }]
     const html = gerarHtmlPassometroEnfermagem(unidadeFake, secoes)
     expect((html.match(/class="pagina"/g) ?? []).length).toBe(1)
+  })
+
+  it('escala largura e altura de forma independente (scale(x, y)), não uma escala só', () => {
+    const secoes: SecaoPassometroEnfermagem[] = [{ ala: unidadeFake.alas[0], linhas: [linhaFake()] }]
+    const html = gerarHtmlPassometroEnfermagem(unidadeFake, secoes)
+    expect(html).toContain('escalaX')
+    expect(html).toContain('escalaY')
+    expect(html).toContain("'scale(' + escalaX + ', ' + escalaY + ')'")
   })
 })
