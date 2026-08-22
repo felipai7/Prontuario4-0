@@ -2,11 +2,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import ExcelJS from 'exceljs'
 import type { Ala, Unidade } from '@/lib/unidade'
 import { compararLeitos } from '@/lib/unidade'
-import { calcAge, diaAtualATB, calcDiurese24h, balancoDaUnidade } from '@/lib/utils'
+import { calcAge, diaAtualATB, calcDiurese24h, balancoDaUnidade, hojeISO, ultimoPorTurno } from '@/lib/utils'
 import { parseExameTimestamp } from '@/lib/exames/agrupamento'
 import type {
   Paciente, ATB, DVA, CuidadosHorizontais, Dispositivo, PeriodoBalanco,
-  SinalVital, Exame, PendenciaIntensivista, RegistroIntensivista,
+  SinalVital, Exame, PendenciaIntensivista, RegistroIntensivista, SuporteVentilatorio,
 } from '@/types'
 
 // Os 15 marcadores do passômetro batem 1:1 com o catálogo de analitos usado
@@ -41,7 +41,7 @@ export interface LinhaPassometro {
    *  branco (pedido do Felipe: "gere as linhas dos leitos vazios também"). */
   vazio: boolean
   leito: string
-  nomeCurto: string
+  nome: string
   idade: string
   admissao: string
   hd: string
@@ -54,11 +54,12 @@ export interface LinhaPassometro {
   hgt: string
   /** Mín–máx das últimas 24h (não uma aferição isolada). */
   temp: string
-  /** Livre — o Felipe preenche à mão a via respiratória/ventilatória atual. */
+  /** Da aba de Ventilatório (registro mais recente) — "A.A.", "C.N. 2 L/min",
+   *  "MNR 10 L/min", "VM TOT" etc. Vazio quando não há registro ainda. */
   respiracao: string
-  /** Min-méd-máx das últimas 24h, já com o rótulo embutido ("FC 72-85-98"),
-   *  substituindo a antiga classificação por seta ("↑ taquicárdico" etc.) —
-   *  pedido do Felipe: números direto, não mais nomenclatura de tendência. */
+  /** Bloco de 3 linhas cada, já com "Mín/Méd/Máx" embutido (ex.:
+   *  "FC Mín: 72\nFC Méd: 85\nFC Máx: 98") — substitui a antiga classificação
+   *  por seta ("↑ taquicárdico" etc.), pedido do Felipe: números direto. */
   fcResumo: string
   pasResumo: string
   padResumo: string
@@ -79,6 +80,8 @@ export interface LinhaPassometro {
   labs: Record<string, string>
   pendencias: string
   previsaoAlta: string
+  /** Destaca "Hoje!" abaixo da data quando a previsão cai no dia da geração. */
+  previsaoAltaHoje: boolean
 }
 
 export interface SecaoPassometro {
@@ -119,14 +122,6 @@ function valorLabsMaisRecente(examesOrdenados: Exame[], ids: string[]): string {
   return ''
 }
 
-/** "Graciema Peixoto Rodrigues" -> "Graciema Rodrigues" — nome completo não
- *  cabe na densidade do passômetro; primeiro + último nome já identifica o
- *  leito sem competir por espaço com o resto da linha. */
-function primeiroUltimoNome(nomeCompleto: string): string {
-  const partes = nomeCompleto.trim().split(/\s+/)
-  return partes.length <= 1 ? nomeCompleto : `${partes[0]} ${partes[partes.length - 1]}`
-}
-
 /** "2026-08-16" -> "16/08" — ano e hora não importam pro passômetro do dia,
  *  só atrapalham a leitura rápida (vale pra admissão e previsão de alta). */
 function dataCurta(dataISO: string): string {
@@ -154,13 +149,19 @@ export function faixaMinMax(valores: number[]): string {
   return min === max ? fmtDecimal(min) : `${fmtDecimal(min)}–${fmtDecimal(max)}`
 }
 
-/** "72-85-98" (mín-méd-máx, arredondado); "" sem nenhuma aferição. */
-export function faixaMinMedMax(valores: number[]): string {
+/**
+ * Bloco de 3 linhas pra um vital (FC, PAS ou PAD) — sempre as 3 (mín, méd,
+ * máx), mesmo quando todas as aferições deram o mesmo valor: o pedido foi
+ * "3 linhas... uma pra cada min, med, max", um formato fixo, não um resumo
+ * que colapsa. O nome do vital entra em cada linha (não só uma vez no topo)
+ * porque a coluna empilha PAS e PAD juntos — sem repetir, ficaria ambíguo
+ * qual bloco de 3 números é qual.
+ */
+export function blocoVital(nome: string, valores: number[]): string {
   if (valores.length === 0) return ''
   const min = Math.min(...valores), max = Math.max(...valores)
-  if (min === max) return String(min)
   const med = Math.round(valores.reduce((a, b) => a + b, 0) / valores.length)
-  return `${min}-${med}-${max}`
+  return `${nome} Mín: ${min}\n${nome} Méd: ${med}\n${nome} Máx: ${max}`
 }
 
 const DIAS_CONSTIPACAO = 3
@@ -255,6 +256,29 @@ export function formatarAnticoag(cuidados: CuidadosHorizontais | null): string {
   return [droga, dose, freq].filter(Boolean).join(' ')
 }
 
+// Abreviação do dispositivo de O2 suplementar — mesmo padrão do exemplo do
+// Felipe ("C.N." pra Cateter nasal, "MNR" pra Máscara com reservatório, que
+// na beira do leito é chamada de "máscara não reinalante").
+const O2_DISPOSITIVO_ABREVIADO: Record<string, string> = {
+  'Cateter nasal': 'C.N.',
+  'Máscara facial': 'M.F.',
+  'Máscara com reservatório': 'MNR',
+  'CNAF': 'CNAF',
+  'VNI': 'VNI',
+}
+
+/** "A.A." / "C.N. 2 L/min" / "MNR 10 L/min" / "VM TOT" — a partir do
+ *  registro mais recente da aba Ventilatório (mesmo critério de "atual" que
+ *  `EnfermagemTab` já usa: `ultimoPorTurno`). */
+export function formatarRespiracao(vent: SuporteVentilatorio | null): string {
+  if (!vent?.modalidade) return ''
+  if (vent.modalidade === 'ar_ambiente') return 'A.A.'
+  if (vent.modalidade === 'ventilacao_mecanica') return ['VM', vent.vm_via].filter(Boolean).join(' ')
+  const abrev = vent.o2_dispositivo ? (O2_DISPOSITIVO_ABREVIADO[vent.o2_dispositivo] ?? vent.o2_dispositivo) : ''
+  const fluxo = vent.o2_fluxo_l_min != null ? `${vent.o2_fluxo_l_min} L/min` : ''
+  return [abrev, fluxo].filter(Boolean).join(' ')
+}
+
 export async function buscarDadosPassometro(
   supabase: SupabaseClient, unitId: string, alaId?: string,
 ): Promise<LinhaPassometro[]> {
@@ -265,7 +289,7 @@ export async function buscarDadosPassometro(
   if (pacientes.length === 0) return []
   const ids = pacientes.map(p => p.id)
 
-  const [atbsR, dvasR, cuidadosR, dispR, balancoR, sinaisR, examesR, pendR, regR] = await Promise.all([
+  const [atbsR, dvasR, cuidadosR, dispR, balancoR, sinaisR, examesR, pendR, regR, ventR] = await Promise.all([
     supabase.from('atbs').select('*').in('paciente_id', ids).eq('ativo', true),
     supabase.from('dvas').select('*').in('paciente_id', ids).eq('ativo', true),
     supabase.from('cuidados_horizontais').select('*').in('paciente_id', ids),
@@ -275,6 +299,7 @@ export async function buscarDadosPassometro(
     supabase.from('exames').select('*').in('paciente_id', ids),
     supabase.from('pendencias_intensivista').select('*').in('paciente_id', ids).eq('resolvida', false),
     supabase.from('registros_intensivista').select('*').in('paciente_id', ids).order('data', { ascending: false }),
+    supabase.from('suportes_ventilatorios').select('*').in('paciente_id', ids),
   ])
 
   const atbsPorPac     = porPacienteId((atbsR.data ?? []) as ATB[])
@@ -286,6 +311,7 @@ export async function buscarDadosPassometro(
   const examesPorPac   = porPacienteId((examesR.data ?? []) as Exame[])
   const pendPorPac     = porPacienteId((pendR.data ?? []) as PendenciaIntensivista[])
   const regPorPac      = porPacienteId((regR.data ?? []) as RegistroIntensivista[])
+  const ventPorPac     = porPacienteId((ventR.data ?? []) as SuporteVentilatorio[])
 
   return pacientes.map(paciente => {
     const cuidados      = cuidadosPorPac.get(paciente.id) ?? null
@@ -295,6 +321,7 @@ export async function buscarDadosPassometro(
     const examesOrd      = ordenarExamesRecentes(examesPorPac.get(paciente.id) ?? [])
     const pendencias     = pendPorPac.get(paciente.id) ?? []
     const orientacao     = (regPorPac.get(paciente.id) ?? [])[0]?.orientacoes_condutas ?? ''
+    const ventAtual      = ultimoPorTurno(ventPorPac.get(paciente.id) ?? [])
 
     // Temp./FC/PAS/PAD: faixa (mín-méd-máx) das últimas 24h, não uma
     // aferição isolada. HGT é diferente — ela anota TODAS as aferições
@@ -313,9 +340,9 @@ export async function buscarDadosPassometro(
     const taxaDiurese = diurese.horas > 0 && paciente.peso_kg
       ? `${(diurese.total / paciente.peso_kg / diurese.horas).toFixed(2).replace('.', ',')}mL/Kg/h` : ''
     const { texto: evacTexto, constipado: evacConstipado } = ultimaEvacuacao(periodos, paciente.data_internacao)
-    const temSVD   = dispositivos.some(d => d.tipo === 'SVD')
-    const temCisto = dispositivos.some(d => d.tipo === 'CISTO')
-    const viaDiurese = temSVD ? 'SVD' : temCisto ? 'Cistostomia' : 'Espontânea'
+    const svd       = dispositivos.find(d => d.tipo === 'SVD')
+    const temCisto  = dispositivos.some(d => d.tipo === 'CISTO')
+    const viaDiurese = svd ? `SVD ${dataCurta(svd.data_insercao)}` : temCisto ? 'Cistostomia' : 'Espontânea'
     const acessoVascular = dispositivos.filter(d => d.tipo === 'AVP' || d.tipo === 'PICC' || d.tipo === 'CVC' || d.tipo === 'PAI' || d.tipo === 'CDL')
 
     const labs: Record<string, string> = {}
@@ -325,20 +352,22 @@ export async function buscarDadosPassometro(
       alaId: paciente.ala_id,
       vazio: false,
       leito: paciente.numero_leito,
-      nomeCurto: primeiroUltimoNome(paciente.nome),
+      nome: paciente.nome.trim(),
       idade: calcAge(paciente.data_nascimento),
       admissao: dataCurta(paciente.data_internacao),
       hd: paciente.hipoteses ?? '',
       peso: paciente.peso_kg != null ? `${paciente.peso_kg}Kg` : '',
       diurese: diurese.horas > 0 ? `${diurese.total}mL(${diurese.horas}h)${taxaDiurese ? ' ' + taxaDiurese : ''}` : '',
       viaDiurese,
-      acesso: acessoVascular.map(d => d.observacao ? `${d.tipo} (${d.observacao})` : d.tipo).join('; '),
+      acesso: acessoVascular
+        .map(d => (d.tipo === 'CVC' || d.tipo === 'PICC') ? `${d.tipo} ${dataCurta(d.data_insercao)}` : d.tipo)
+        .join('; '),
       hgt: hgtHoje.join('/'),
       temp: faixaMinMax(temps24h),
-      respiracao: '',
-      fcResumo: fcs24h.length > 0 ? `FC ${faixaMinMedMax(fcs24h)}` : '',
-      pasResumo: pas24h.length > 0 ? `PAS ${faixaMinMedMax(pas24h)}` : '',
-      padResumo: pad24h.length > 0 ? `PAD ${faixaMinMedMax(pad24h)}` : '',
+      respiracao: formatarRespiracao(ventAtual),
+      fcResumo: blocoVital('FC', fcs24h),
+      pasResumo: blocoVital('PAS', pas24h),
+      padResumo: blocoVital('PAD', pad24h),
       evac: evacTexto,
       evacConstipado,
       antimicrobiano: (atbsPorPac.get(paciente.id) ?? [])
@@ -351,6 +380,7 @@ export async function buscarDadosPassometro(
       labs,
       pendencias: [...pendencias.map(p => p.texto), orientacao].filter(Boolean).join(' · '),
       previsaoAlta: cuidados?.previsao_alta ? dataCurta(cuidados.previsao_alta) : '',
+      previsaoAltaHoje: cuidados?.previsao_alta === hojeISO(),
     }
     return linha
   })
@@ -358,10 +388,10 @@ export async function buscarDadosPassometro(
 
 function linhaVazia(alaId: string, leito: string): LinhaPassometro {
   return {
-    alaId, vazio: true, leito, nomeCurto: '', idade: '', admissao: '', hd: '', peso: '', diurese: '',
+    alaId, vazio: true, leito, nome: '', idade: '', admissao: '', hd: '', peso: '', diurese: '',
     viaDiurese: '', acesso: '', hgt: '', temp: '', respiracao: '', fcResumo: '', pasResumo: '', padResumo: '',
     evac: '', evacConstipado: false, antimicrobiano: '', dva: '', corticoide: '', ibp: '', anticoag: '',
-    anticoagTerapeutico: false, labs: {}, pendencias: '', previsaoAlta: '',
+    anticoagTerapeutico: false, labs: {}, pendencias: '', previsaoAlta: '', previsaoAltaHoje: false,
   }
 }
 
@@ -421,7 +451,7 @@ const COLUNAS: Coluna[] = [
   // mais espaço" a espremer o número num quadrado grande e vazio).
   { label: 'Leito', width: 7, texto: l => l.leito, fonte: () => ({ size: 20, bold: true }) },
   {
-    label: 'Nome/Idade\nAdmissão', width: 15, texto: l => `${l.nomeCurto}\n${l.idade}\n${l.admissao}`,
+    label: 'Nome/Idade\nAdmissão', width: 15, texto: l => `${l.nome}\n${l.idade}\n${l.admissao}`,
     fonte: () => ({ size: 9 }),
   },
   { label: 'Diagnóstico', width: 13, texto: l => l.hd },
@@ -435,10 +465,10 @@ const COLUNAS: Coluna[] = [
     texto: l => l.acesso, texto2: () => 'NPH:\nREG:\nSOS:',
   },
   { label: 'Dieta\nHGT', width: 9, texto: l => `\n${l.hgt}` },
-  // 2 linhas físicas: Temp. vem automática (mín–máx das últimas 24h);
-  // Respiração fica em branco pra completar à mão a via respiratória/
-  // ventilatória atual — não é um dado que o app capta hoje.
-  { label: 'Temp.', label2: 'Respiração', width: 8, texto: l => l.temp, texto2: () => '' },
+  // 2 linhas físicas, ambas automáticas: Temp. (mín–máx das últimas 24h) e
+  // Respiração (registro mais recente da aba Ventilatório — "A.A.", "C.N. 2
+  // L/min", "VM TOT" etc.).
+  { label: 'Temp.', label2: 'Respiração', width: 8, texto: l => l.temp, texto2: l => l.respiracao },
   {
     // Só negrito, sem cor — a impressora é preto e branco, cor não imprime
     // como sinal (pedido do Felipe).
@@ -456,10 +486,15 @@ const COLUNAS: Coluna[] = [
     fonte2: l => l.anticoagTerapeutico ? { bold: true } : null,
   },
   // Substitui a antiga classificação por seta ("↑ taquicárdico" etc.) por
-  // números direto — mín-méd-máx das últimas 24h de cada um, pedido do
-  // Felipe. Mesclada (não texto2): os 3 valores são 1 bloco só por paciente,
-  // igual ao padrão de Peso/Diurese/Via.
-  { label: 'FC / PAS / PAD\n(mín-méd-máx)', width: 15, texto: l => `${l.fcResumo}\n${l.pasResumo}\n${l.padResumo}` },
+  // números direto. 2 linhas físicas, mesmo padrão do resto: em cima PAS
+  // (3 linhas) + PAD (3 linhas) = 6 linhas; embaixo FC (3 linhas). Largura
+  // bem maior que o normal — pedido do Felipe, pra sobrar espaço de escrever
+  // à mão as medicações que impactam FC/PA ao lado dos números.
+  {
+    label: 'PAS / PAD', label2: 'FC', width: 24,
+    texto: l => [l.pasResumo, l.padResumo].filter(Boolean).join('\n'),
+    texto2: l => l.fcResumo,
+  },
   // Nome do exame repetido em cada linha do valor (não só no cabeçalho) —
   // pedido do Felipe: rolando a planilha pra baixo, o cabeçalho já ficou
   // longe e a coluna sozinha não deixava claro o que era cada número. As 3
@@ -470,8 +505,13 @@ const COLUNAS: Coluna[] = [
   { label: '', width: 11, grupoCabecalho: 'Últimos Exames Laboratoriais', texto: l => `Ur: ${labs(l, 'ureia')}\nCreat: ${labs(l, 'creat')}\nNa: ${labs(l, 'na')}\nK: ${labs(l, 'k')}\nMg: ${labs(l, 'mg')}` },
   { label: '', width: 11, grupoCabecalho: 'Últimos Exames Laboratoriais', texto: l => `pH: ${labs(l, 'ph')}\nHCO3: ${labs(l, 'bic')}\npCO2: ${labs(l, 'pco2')}\npO2: ${labs(l, 'po2')}\nCai: ${labs(l, 'ca')}` },
   { label: 'Programações / Pendências / Condutas / Lembretes', width: 22, texto: l => l.pendencias },
-  // Data crítica pra decisão do dia — fonte bem maior, mesmo raciocínio do Leito.
-  { label: 'Previsão de Alta', width: 10, texto: l => l.previsaoAlta, fonte: () => ({ size: 16, bold: true }) },
+  // Data crítica pra decisão do dia — fonte bem maior, mesmo raciocínio do
+  // Leito. "Hoje!" abaixo da data quando a previsão cai no dia da geração.
+  {
+    label: 'Previsão de Alta', width: 10,
+    texto: l => l.previsaoAlta + (l.previsaoAltaHoje ? '\nHoje!' : ''),
+    fonte: () => ({ size: 16, bold: true }),
+  },
 ]
 
 const COR_GRUPO = 'FFEEF2FF'

@@ -1,22 +1,24 @@
 import { describe, it, expect } from 'vitest'
 import {
   gerarPlanilhaPassometro, gerarHtmlPassometro, agruparPorAla, ordenarExamesRecentes,
-  faixaMinMax, faixaMinMedMax, ultimaEvacuacao, formatarIbp, formatarAnticoag,
+  faixaMinMax, blocoVital, ultimaEvacuacao, formatarIbp, formatarAnticoag, formatarRespiracao,
   type LinhaPassometro, type SecaoPassometro,
 } from '@/lib/passometro'
 import type { Unidade } from '@/lib/unidade'
-import type { Exame, PeriodoBalanco, CuidadosHorizontais } from '@/types'
+import type { Exame, PeriodoBalanco, CuidadosHorizontais, SuporteVentilatorio } from '@/types'
 
 function linhaFake(overrides: Partial<LinhaPassometro> = {}): LinhaPassometro {
   return {
-    alaId: 'ala-1', vazio: false, leito: '2', nomeCurto: 'Fulana Tal', idade: '76 anos', admissao: '16/08',
+    alaId: 'ala-1', vazio: false, leito: '2', nome: 'Fulana da Silva Tal', idade: '76 anos', admissao: '16/08',
     hd: 'PNM??', peso: '65Kg', diurese: '400mL(24h) 0,26mL/Kg/h', viaDiurese: 'Espontânea', acesso: 'AVP',
-    hgt: '85/100', temp: '36,1–37,4', respiracao: '',
-    fcResumo: 'FC 72-85-98', pasResumo: 'PAS 110-130-145', padResumo: 'PAD 65-78-90',
+    hgt: '85/100', temp: '36,1–37,4', respiracao: 'C.N. 2 L/min',
+    fcResumo: 'FC Mín: 72\nFC Méd: 85\nFC Máx: 98',
+    pasResumo: 'PAS Mín: 110\nPAS Méd: 130\nPAS Máx: 145',
+    padResumo: 'PAD Mín: 65\nPAD Méd: 78\nPAD Máx: 90',
     evac: '2x 19/08', evacConstipado: false, antimicrobiano: 'Mero D2', dva: '', corticoide: '',
     ibp: 'Pant 40mg VO', anticoag: 'Enoxa 40mg', anticoagTerapeutico: false,
     labs: { leuco: '4710', hb: '8,9', ht: '28', plaq: '290', pcr: '157', lactato: '1,68', ureia: '37', creat: '0,5', na: '138', k: '2,95', mg: '2,0', ph: '7,46', bic: '33', pco2: '49', po2: '50', ca: '1,15' },
-    pendencias: 'Tirar HGT de horário', previsaoAlta: '',
+    pendencias: 'Tirar HGT de horário', previsaoAlta: '', previsaoAltaHoje: false,
     ...overrides,
   }
 }
@@ -92,6 +94,11 @@ describe('gerarPlanilhaPassometro', () => {
     expect(ws.getCell(5, 11).value).toBe('Corticoide')
     expect(ws.getCell(4, 11).isMerged).toBe(false)
     expect(ws.getCell(5, 11).isMerged).toBe(false)
+
+    // Coluna 13 = PAS/PAD (em cima) / FC (embaixo) — também dividida.
+    expect(ws.getCell(4, 13).value).toBe('PAS / PAD')
+    expect(ws.getCell(5, 13).value).toBe('FC')
+    expect(ws.getCell(4, 13).isMerged).toBe(false)
   })
 
   it('destaca a célula de Evac. em negrito (sem cor — a impressora é P&B) quando o paciente está constipado', () => {
@@ -111,6 +118,15 @@ describe('gerarPlanilhaPassometro', () => {
     expect(ws.getCell(6, 18).font?.size).toBe(16) // Previsão de Alta
   })
 
+  it('destaca "Hoje!" na Previsão de Alta quando a alta é prevista pro dia da geração', () => {
+    const comHoje = [{ ala: unidadeFake.alas[0], linhas: [linhaFake({ previsaoAlta: '22/08', previsaoAltaHoje: true })] }]
+    const semHoje = [{ ala: unidadeFake.alas[0], linhas: [linhaFake({ previsaoAlta: '22/08', previsaoAltaHoje: false })] }]
+    const wbComHoje = gerarPlanilhaPassometro(unidadeFake, comHoje)
+    const wbSemHoje = gerarPlanilhaPassometro(unidadeFake, semHoje)
+    expect(wbComHoje.getWorksheet('Passômetro')!.getCell(6, 18).value).toBe('22/08\nHoje!')
+    expect(wbSemHoje.getWorksheet('Passômetro')!.getCell(6, 18).value).toBe('22/08')
+  })
+
   it('negrito só na linha de anticoagulante quando é terapêutico, não na de IBP', () => {
     const secoes: SecaoPassometro[] = [{ ala: unidadeFake.alas[0], linhas: [linhaFake({ anticoagTerapeutico: true })] }]
     const wb = gerarPlanilhaPassometro(unidadeFake, secoes)
@@ -118,6 +134,13 @@ describe('gerarPlanilhaPassometro', () => {
     // Coluna 12 = IBP/Anticoag.; rowA (linha 6) = IBP, rowB (linha 7) = anticoagulante.
     expect(ws.getCell(6, 12).font?.bold).toBeFalsy()
     expect(ws.getCell(7, 12).font?.bold).toBe(true)
+  })
+
+  it('não trunca mais o nome do paciente (nome completo, não só primeiro+último)', () => {
+    const secoes: SecaoPassometro[] = [{ ala: unidadeFake.alas[0], linhas: [linhaFake({ nome: 'Graciema Peixoto Rodrigues Souza' })] }]
+    const wb = gerarPlanilhaPassometro(unidadeFake, secoes)
+    const ws = wb.getWorksheet('Passômetro')!
+    expect(ws.getCell(6, 2).value).toContain('Graciema Peixoto Rodrigues Souza')
   })
 })
 
@@ -140,6 +163,8 @@ describe('gerarHtmlPassometro', () => {
     expect(html).toContain('<th>Corticoide</th>')
     expect(html).toContain('<th>Insulina</th>')
     expect(html).toContain('<th>Respiração</th>')
+    expect(html).toContain('<th>PAS / PAD</th>')
+    expect(html).toContain('<th>FC</th>')
   })
 
   it('destaca a célula de Evac. em negrito (sem cor — a impressora é P&B) quando constipado', () => {
@@ -156,11 +181,23 @@ describe('gerarHtmlPassometro', () => {
     expect(html).toContain('font-size:16pt')
   })
 
+  it('destaca "Hoje!" na Previsão de Alta quando a alta é prevista pro dia da geração', () => {
+    const secoes: SecaoPassometro[] = [{ ala: unidadeFake.alas[0], linhas: [linhaFake({ previsaoAlta: '22/08', previsaoAltaHoje: true })] }]
+    const html = gerarHtmlPassometro(unidadeFake, secoes)
+    expect(html).toContain('22/08<br>Hoje!')
+  })
+
   it('negrito só na linha de anticoagulante terapêutico, não na de IBP', () => {
     const terapeutico = gerarHtmlPassometro(unidadeFake, [{ ala: unidadeFake.alas[0], linhas: [linhaFake({ anticoagTerapeutico: true })] }])
     const profilatico = gerarHtmlPassometro(unidadeFake, [{ ala: unidadeFake.alas[0], linhas: [linhaFake({ anticoagTerapeutico: false })] }])
     expect(terapeutico).toContain('font-weight:bold;">Enoxa 40mg')
     expect(profilatico).not.toContain('font-weight:bold;">Enoxa 40mg')
+  })
+
+  it('não trunca mais o nome do paciente (nome completo, não só primeiro+último)', () => {
+    const secoes: SecaoPassometro[] = [{ ala: unidadeFake.alas[0], linhas: [linhaFake({ nome: 'Graciema Peixoto Rodrigues Souza' })] }]
+    const html = gerarHtmlPassometro(unidadeFake, secoes)
+    expect(html).toContain('Graciema Peixoto Rodrigues Souza')
   })
 
   it('uma ala com poucos leitos vira 1 única página, sem sufixo de página', () => {
@@ -251,15 +288,15 @@ describe('faixaMinMax (Temp.)', () => {
   })
 })
 
-describe('faixaMinMedMax (FC/PAS/PAD)', () => {
-  it('mín-méd-máx arredondado quando há mais de uma aferição', () => {
-    expect(faixaMinMedMax([70, 90, 100])).toBe('70-87-100')
+describe('blocoVital (FC/PAS/PAD)', () => {
+  it('sempre as 3 linhas (Mín/Méd/Máx), com o nome do vital em cada uma', () => {
+    expect(blocoVital('FC', [70, 90, 100])).toBe('FC Mín: 70\nFC Méd: 87\nFC Máx: 100')
   })
-  it('só o valor quando há 1 única aferição', () => {
-    expect(faixaMinMedMax([88])).toBe('88')
+  it('não colapsa mesmo quando todas as aferições deram o mesmo valor — formato fixo de 3 linhas', () => {
+    expect(blocoVital('PAS', [120])).toBe('PAS Mín: 120\nPAS Méd: 120\nPAS Máx: 120')
   })
   it('vazio sem nenhuma aferição', () => {
-    expect(faixaMinMedMax([])).toBe('')
+    expect(blocoVital('FC', [])).toBe('')
   })
 })
 
@@ -364,5 +401,40 @@ describe('formatarAnticoag', () => {
   it('vazio quando não está em uso', () => {
     expect(formatarAnticoag(cuidadosFake({ anticoag_em_uso: false }))).toBe('')
     expect(formatarAnticoag(null)).toBe('')
+  })
+})
+
+function ventFake(overrides: Partial<SuporteVentilatorio> = {}): SuporteVentilatorio {
+  return {
+    id: 'v1', paciente_id: 'pac-1', data: '2026-08-20', turno: 'diurno',
+    modalidade: null, o2_dispositivo: null, o2_fluxo_l_min: null, vm_data_inicio: null, vm_via: null,
+    created_at: '2026-08-20T07:00:00', updated_at: '2026-08-20T07:00:00',
+    ...overrides,
+  }
+}
+
+describe('formatarRespiracao', () => {
+  it('"A.A." pra ar ambiente', () => {
+    expect(formatarRespiracao(ventFake({ modalidade: 'ar_ambiente' }))).toBe('A.A.')
+  })
+
+  it('"C.N. X L/min" pra cateter nasal', () => {
+    const texto = formatarRespiracao(ventFake({ modalidade: 'o2_suplementar', o2_dispositivo: 'Cateter nasal', o2_fluxo_l_min: 2 }))
+    expect(texto).toBe('C.N. 2 L/min')
+  })
+
+  it('"MNR Y L/min" pra máscara com reservatório (máscara não reinalante)', () => {
+    const texto = formatarRespiracao(ventFake({ modalidade: 'o2_suplementar', o2_dispositivo: 'Máscara com reservatório', o2_fluxo_l_min: 10 }))
+    expect(texto).toBe('MNR 10 L/min')
+  })
+
+  it('"VM TOT" ou "VM TQT" pra ventilação mecânica, seguindo a via aérea', () => {
+    expect(formatarRespiracao(ventFake({ modalidade: 'ventilacao_mecanica', vm_via: 'TOT' }))).toBe('VM TOT')
+    expect(formatarRespiracao(ventFake({ modalidade: 'ventilacao_mecanica', vm_via: 'TQT' }))).toBe('VM TQT')
+  })
+
+  it('vazio sem nenhum registro', () => {
+    expect(formatarRespiracao(null)).toBe('')
+    expect(formatarRespiracao(ventFake({ modalidade: null }))).toBe('')
   })
 })
