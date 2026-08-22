@@ -14,7 +14,6 @@ function linhaFake(overrides: Partial<LinhaPassometroEnfermagem> = {}): LinhaPas
     dieta: 'NE 100%', diurese: '1200mL(24h) 0,77mL/Kg/h · SVD 15/08',
     curativos: '⚠️ LPP grau 2 (sacral)\n⚠️ CVC, SVD',
     antimicrobiano: 'Meropenem (D2/7)',
-    pendenciasVisita: 'Tirar HGT de horário',
     ...overrides,
   }
 }
@@ -91,7 +90,7 @@ describe('agruparPorAlaEnfermagem', () => {
 describe('gerarPlanilhaPassometroEnfermagem', () => {
   it('gera o workbook sem lançar erro, com paciente cheio e leito vazio', () => {
     const secoes: SecaoPassometroEnfermagem[] = [
-      { ala: unidadeFake.alas[0], linhas: [linhaFake(), linhaFake({ leito: '1', vazio: true, nome: '', idade: '', admissao: '', ventilatorio: '', dispositivos: '', dieta: '', diurese: '', curativos: '', antimicrobiano: '', pendenciasVisita: '' })] },
+      { ala: unidadeFake.alas[0], linhas: [linhaFake(), linhaFake({ leito: '1', vazio: true, nome: '', idade: '', admissao: '', ventilatorio: '', dispositivos: '', dieta: '', diurese: '', curativos: '', antimicrobiano: '' })] },
     ]
     expect(() => gerarPlanilhaPassometroEnfermagem(unidadeFake, secoes)).not.toThrow()
   })
@@ -104,6 +103,25 @@ describe('gerarPlanilhaPassometroEnfermagem', () => {
     expect(ws.getCell(5, 1).value).toBe('2') // leito, na 1ª das 4 linhas físicas
     expect(ws.getCell(5, 1).isMerged).toBe(true)
     expect(ws.getCell(8, 1).isMerged).toBe(true) // última das 4 continua mesclada com a 1ª
+  })
+
+  it('leito e nome/idade/internação em fonte maior que o resto', () => {
+    const secoes: SecaoPassometroEnfermagem[] = [{ ala: unidadeFake.alas[0], linhas: [linhaFake()] }]
+    const wb = gerarPlanilhaPassometroEnfermagem(unidadeFake, secoes)
+    const ws = wb.getWorksheet('Passômetro Enfermagem')!
+    expect(ws.getCell(5, 1).font?.size).toBe(18) // Leito
+    expect(ws.getCell(5, 2).font?.size).toBe(10) // Nome/Idade/Internação
+    expect(ws.getCell(5, 3).font?.size).toBe(8) // resto continua no tamanho padrão da linha
+  })
+
+  it('colunas 6 e 7 viraram uma só, em branco (sem mais importar pendências do intensivista)', () => {
+    const secoes: SecaoPassometroEnfermagem[] = [{ ala: unidadeFake.alas[0], linhas: [linhaFake()] }]
+    const wb = gerarPlanilhaPassometroEnfermagem(unidadeFake, secoes)
+    const ws = wb.getWorksheet('Passômetro Enfermagem')!
+    expect(ws.columnCount).toBe(6) // era 7 antes da fusão
+    expect(ws.getCell(4, 6).value).toBe('Pendências e Programações') // cabeçalho
+    expect(ws.getCell(5, 6).value).toBe('') // sem import — em branco
+    expect(ws.getCell(5, 6).isMerged).toBe(true) // mesclada nas 4 linhas físicas
   })
 
   it('coluna Ventilatório/Dispositivos/Dieta/Diurese: 1 item por linha física, com rótulo', () => {
@@ -137,6 +155,10 @@ describe('gerarHtmlPassometroEnfermagem', () => {
     expect(html).toContain('Dieta: NE 100%')
     expect(html).toContain('ATB: Meropenem (D2/7)')
     expect(html).toContain('BIC: ')
+    expect(html).toContain('Pendências e Programações')
+    expect(html).not.toContain('Pendências da Visita')
+    expect(html).toContain('font-size:18pt') // Leito
+    expect(html).toContain('font-size:10pt') // Nome/Idade/Internação
     expect((html.match(/<tbody>/g) ?? []).length).toBe(1)
   })
 

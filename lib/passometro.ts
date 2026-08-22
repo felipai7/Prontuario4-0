@@ -846,7 +846,15 @@ export function gerarHtmlPassometro(unidade: Unidade, secoes: SecaoPassometro[])
     }
     window.addEventListener('load', function () {
       ajustarPaginas()
-      setTimeout(function () { window.print() }, 50)
+      // 2 frames pintados de verdade com a escala já aplicada antes de
+      // imprimir — um setTimeout de tempo fixo corria risco de disparar o
+      // print antes do navegador terminar de recalcular o layout numa
+      // tabela grande/pesada, imprimindo com a escala antiga (ou nenhuma)
+      // e vazando pra uma 2ª página (bug visto no passômetro de Enfermagem,
+      // que é ainda mais denso — mesmo mecanismo, mesmo risco aqui).
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () { window.print() })
+      })
     })
     window.onafterprint = function () { window.close() }
   })()

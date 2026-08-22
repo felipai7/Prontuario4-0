@@ -5,8 +5,7 @@ import { compararLeitos } from '@/lib/unidade'
 import { calcAge, diaAtualATB, calcDiurese24h, balancoDaUnidade, hojeISO, ultimoPorTurno } from '@/lib/utils'
 import { porPacienteId, dataCurta, formatarRespiracao } from '@/lib/passometro'
 import type {
-  Paciente, ATB, Dispositivo, PeriodoBalanco, PendenciaIntensivista,
-  RegistroIntensivista, SuporteVentilatorio, LppEvento, NutricaoDia,
+  Paciente, ATB, Dispositivo, PeriodoBalanco, SuporteVentilatorio, LppEvento, NutricaoDia,
 } from '@/types'
 
 /**
@@ -34,9 +33,6 @@ export interface LinhaPassometroEnfermagem {
    *  pra anotar o curativo à mão. */
   curativos: string
   antimicrobiano: string
-  /** Pendências deixadas pelo médico intensivista (mesma fonte usada no
-   *  passômetro do médico: pendências em aberto + última orientação). */
-  pendenciasVisita: string
 }
 
 export interface SecaoPassometroEnfermagem {
@@ -48,7 +44,7 @@ function linhaVaziaEnfermagem(alaId: string, leito: string): LinhaPassometroEnfe
   return {
     alaId, vazio: true, leito, nome: '', idade: '', admissao: '',
     ventilatorio: '', dispositivos: '', dieta: '', diurese: '', curativos: '',
-    antimicrobiano: '', pendenciasVisita: '',
+    antimicrobiano: '',
   }
 }
 
@@ -94,15 +90,13 @@ export async function buscarDadosPassometroEnfermagem(
   const ids = pacientes.map(p => p.id)
 
   const hoje = hojeISO()
-  const [atbsR, dispR, balancoR, pendR, regR, ventR, lppR, nutriR] = await Promise.all([
+  const [atbsR, dispR, balancoR, ventR, lppR, nutriR] = await Promise.all([
     supabase.from('atbs').select('*').in('paciente_id', ids).eq('ativo', true),
     // Diferente do passômetro do médico (que só traz acessos vasculares),
     // aqui entra QUALQUER dispositivo ativo — é a Enfermagem quem cuida de
     // todos eles, não só os vasculares.
     supabase.from('dispositivos').select('*').in('paciente_id', ids).is('data_remocao', null),
     supabase.from('periodos_balanco').select('*').in('paciente_id', ids).order('inicio', { ascending: false }),
-    supabase.from('pendencias_intensivista').select('*').in('paciente_id', ids).eq('resolvida', false),
-    supabase.from('registros_intensivista').select('*').in('paciente_id', ids).order('data', { ascending: false }),
     supabase.from('suportes_ventilatorios').select('*').in('paciente_id', ids),
     supabase.from('lpp_eventos').select('*').in('paciente_id', ids),
     supabase.from('nutricao_dia').select('*').in('paciente_id', ids).eq('data', hoje),
@@ -111,8 +105,6 @@ export async function buscarDadosPassometroEnfermagem(
   const atbsPorPac    = porPacienteId((atbsR.data ?? []) as ATB[])
   const dispPorPac    = porPacienteId((dispR.data ?? []) as Dispositivo[])
   const balancoPorPac = porPacienteId((balancoR.data ?? []) as PeriodoBalanco[])
-  const pendPorPac    = porPacienteId((pendR.data ?? []) as PendenciaIntensivista[])
-  const regPorPac     = porPacienteId((regR.data ?? []) as RegistroIntensivista[])
   const ventPorPac    = porPacienteId((ventR.data ?? []) as SuporteVentilatorio[])
   const lppPorPac     = porPacienteId((lppR.data ?? []) as LppEvento[])
   const nutriPorPac   = new Map(((nutriR.data ?? []) as NutricaoDia[]).map(n => [n.paciente_id, n]))
@@ -120,8 +112,6 @@ export async function buscarDadosPassometroEnfermagem(
   return pacientes.map(paciente => {
     const dispositivos = dispPorPac.get(paciente.id) ?? []
     const periodos      = balancoDaUnidade(balancoPorPac.get(paciente.id) ?? [], paciente.unit_id)
-    const pendencias    = pendPorPac.get(paciente.id) ?? []
-    const orientacao    = (regPorPac.get(paciente.id) ?? [])[0]?.orientacoes_condutas ?? ''
     const ventAtual     = ultimoPorTurno(ventPorPac.get(paciente.id) ?? [])
 
     const diurese = calcDiurese24h(periodos)
@@ -147,7 +137,6 @@ export async function buscarDadosPassometroEnfermagem(
       curativos: formatarCurativos(lppPorPac.get(paciente.id) ?? [], dispositivos),
       antimicrobiano: (atbsPorPac.get(paciente.id) ?? [])
         .map(a => `${a.droga} (D${diaAtualATB(a)}${a.dias_previstos != null ? `/${a.dias_previstos}` : ''})`).join(' · '),
-      pendenciasVisita: [...pendencias.map(p => p.texto), orientacao].filter(Boolean).join(' · '),
     }
     return linha
   })
@@ -180,6 +169,7 @@ interface BlocoColuna {
   linhas: number
   rotulo?: string
   texto: (l: LinhaPassometroEnfermagem) => string
+  fonte?: Partial<ExcelJS.Font>
 }
 interface ColunaEnf {
   label: string
@@ -190,14 +180,16 @@ interface ColunaEnf {
 const COLUNAS_ENF: ColunaEnf[] = [
   {
     label: 'Leito', width: 7,
-    blocos: l => [{ linhas: 4, texto: () => l.leito }],
+    blocos: l => [{ linhas: 4, texto: () => l.leito, fonte: { size: 18, bold: true } }],
   },
   {
     label: 'Nome / Idade / Internação', width: 16,
-    blocos: l => [{ linhas: 4, texto: () => `${l.nome}\n${l.idade}\n${l.admissao}` }],
+    blocos: l => [{ linhas: 4, texto: () => `${l.nome}\n${l.idade}\n${l.admissao}`, fonte: { size: 10, bold: true } }],
   },
   {
-    label: 'Ventilatório / Dispositivos / Dieta / Diurese', width: 30,
+    // Mais larga (era 30) — a pedido, pra sobrar espaço pra Dispositivos
+    // (que pode listar vários) sem quebrar linha demais.
+    label: 'Ventilatório / Dispositivos / Dieta / Diurese', width: 40,
     blocos: l => [
       { linhas: 1, rotulo: 'Ventilatório', texto: () => l.ventilatorio },
       { linhas: 1, rotulo: 'Dispositivos', texto: () => l.dispositivos },
@@ -206,7 +198,10 @@ const COLUNAS_ENF: ColunaEnf[] = [
     ],
   },
   {
-    label: 'Curativos', width: 20,
+    // Quase metade da largura anterior (era 20) — a pedido; o auto-destaque
+    // (LPP/dispositivos) é curto, o espaço em branco pra escrever à mão não
+    // precisa ser tão largo quanto a coluna 3.
+    label: 'Curativos', width: 11,
     blocos: l => [{ linhas: 4, texto: () => l.curativos }],
   },
   {
@@ -217,11 +212,10 @@ const COLUNAS_ENF: ColunaEnf[] = [
     ],
   },
   {
-    label: 'Pendências da Visita', width: 20,
-    blocos: l => [{ linhas: 4, texto: () => l.pendenciasVisita }],
-  },
-  {
-    label: 'Pendências e Programações', width: 20,
+    // Colunas 6 (Pendências da Visita, importada do intensivista) e 7
+    // (Pendências e Programações, em branco) viraram uma só — a pedido,
+    // sem mais importar nada: fica inteira em branco pra escrita à mão.
+    label: 'Pendências e Programações', width: 30,
     blocos: () => [{ linhas: 4, texto: () => '' }],
   },
 ]
@@ -294,7 +288,9 @@ export function gerarPlanilhaPassometroEnfermagem(unidade: Unidade, secoes: Seca
         while (i < 4) {
           const { bloco, inicio } = expandido[i]
           if (inicio) {
-            rows[i].getCell(col).value = textoBloco(bloco, linha)
+            const cell = rows[i].getCell(col)
+            cell.value = textoBloco(bloco, linha)
+            if (bloco.fonte) cell.font = { ...rows[i].font, ...bloco.fonte }
             if (bloco.linhas > 1) ws.mergeCells(rows[i].number, col, rows[i + bloco.linhas - 1].number, col)
           }
           i++
@@ -315,6 +311,10 @@ export function gerarPlanilhaPassometroEnfermagem(unidade: Unidade, secoes: Seca
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+function corCss(fonte: Partial<ExcelJS.Font>): string {
+  return `${fonte.bold ? 'font-weight:bold;' : ''}${fonte.size ? `font-size:${fonte.size}pt;` : ''}`
 }
 
 const LEITOS_POR_PAGINA = 10
@@ -354,7 +354,9 @@ export function gerarHtmlPassometroEnfermagem(unidade: Unidade, secoes: SecaoPas
         const { bloco, inicio } = expandido[i]
         if (!inicio) continue
         const attrRowspan = bloco.linhas > 1 ? ` rowspan="${bloco.linhas}"` : ''
-        porLinhaFisica[i].push(`<td${attrRowspan}>${escapeHtml(textoBloco(bloco, linha)).replace(/\n/g, '<br>')}</td>`)
+        const estilo = bloco.fonte ? corCss(bloco.fonte) : ''
+        const attrEstilo = estilo ? ` style="${estilo}"` : ''
+        porLinhaFisica[i].push(`<td${attrRowspan}${attrEstilo}>${escapeHtml(textoBloco(bloco, linha)).replace(/\n/g, '<br>')}</td>`)
       }
     })
     const trs = porLinhaFisica.map((cels, i) => {
@@ -434,7 +436,15 @@ export function gerarHtmlPassometroEnfermagem(unidade: Unidade, secoes: SecaoPas
     }
     window.addEventListener('load', function () {
       ajustarPaginas()
-      setTimeout(function () { window.print() }, 50)
+      // Espera 2 frames de verdade serem pintados com a escala já aplicada
+      // antes de mandar imprimir — um setTimeout de tempo fixo (o que tinha
+      // antes) corria risco de disparar o print ANTES do navegador terminar
+      // de recalcular o layout numa tabela grande/pesada (Enfermagem é bem
+      // mais densa que a do médico: 4 linhas físicas por paciente), imprimindo
+      // com a escala antiga (ou nenhuma) e vazando pra uma 2ª página.
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () { window.print() })
+      })
     })
     window.onafterprint = function () { window.close() }
   })()
